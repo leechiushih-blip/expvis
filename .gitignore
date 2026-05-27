@@ -1,0 +1,7 @@
+.DS_Store
+*.swp
+*.bak
+*.backup
+*_bak*
+upgrade*.py
+split.py
