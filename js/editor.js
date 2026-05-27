@@ -3052,15 +3052,15 @@ function _applyI18n() {
           sc(t2, 2, {mode: 'pick-one'});
           // 9 text variants: 3 colors × 3 characters
           var stroopVariants = [
-            {content: '红', color: '#ff0000', key: 'a'},
-            {content: '红', color: '#0000ff', key: 'l'},
-            {content: '红', color: '#00aa00', key: 'k'},
-            {content: '蓝', color: '#ff0000', key: 'a'},
-            {content: '蓝', color: '#0000ff', key: 'l'},
-            {content: '蓝', color: '#00aa00', key: 'k'},
-            {content: '绿', color: '#ff0000', key: 'a'},
-            {content: '绿', color: '#0000ff', key: 'l'},
-            {content: '绿', color: '#00aa00', key: 'k'},
+            {content: 'RED', color: '#ff0000', key: 'a'},
+            {content: 'RED', color: '#0000ff', key: 'l'},
+            {content: 'RED', color: '#00aa00', key: 'k'},
+            {content: 'BLUE', color: '#ff0000', key: 'a'},
+            {content: 'BLUE', color: '#0000ff', key: 'l'},
+            {content: 'BLUE', color: '#00aa00', key: 'k'},
+            {content: 'GREEN', color: '#ff0000', key: 'a'},
+            {content: 'GREEN', color: '#0000ff', key: 'l'},
+            {content: 'GREEN', color: '#00aa00', key: 'k'},
           ];
           stroopVariants.forEach(function (v, vi) {
             sc(t2, 3 + vi, Object.assign({content: v.content, color: v.color, fontSize: 36, position: 'center', fontWeight: 'bold', 映射按键: v.key}, px(0.5, 0.38)));
@@ -3286,7 +3286,7 @@ function _applyI18n() {
           var t2 = findTrial(editor.selectedTrial);
           sc(t2, 0, Object.assign({duration: 500}, px(0.5, 0.45)));
           sc(t2, 1, {duration: 200});
-          sc(t2, 2, Object.assign({content: '红', color: '#ef4444', fontSize: 36, position: 'center'}, px(0.5, 0.38)));
+          sc(t2, 2, Object.assign({content: 'RED', color: '#ef4444', fontSize: 36, position: 'center'}, px(0.5, 0.38)));
           sc(t2, 3, Object.assign({keys: 'a,l', correctKey: 'a'}, px(0.5, 0.62)));
           sc(t2, 4, {condition: 'correct'}); // targetFail set below after trial IDs known
           sc(t2, 5, {count: 3});
@@ -3315,7 +3315,7 @@ function _applyI18n() {
           var t4 = findTrial(editor.selectedTrial);
           sc(t4, 0, Object.assign({duration: 500}, px(0.5, 0.45)));
           sc(t4, 1, {duration: 200});
-          sc(t4, 2, Object.assign({content: '蓝', color: '#3b82f6', fontSize: 36, position: 'center'}, px(0.5, 0.38)));
+          sc(t4, 2, Object.assign({content: 'BLUE', color: '#3b82f6', fontSize: 36, position: 'center'}, px(0.5, 0.38)));
           sc(t4, 3, Object.assign({keys: 'a,l', correctKey: 'l'}, px(0.5, 0.62)));
           sc(t4, 4, {condition: 'correct'});
           sc(t4, 5, {count: 3});
@@ -3405,29 +3405,29 @@ function _applyI18n() {
           sc(
             t3,
             3,
-            Object.assign({content: '🍎 苹果', fontSize: 30, color: '#ef4444', position: 'center'}, px(0.5, 0.2)),
+            Object.assign({content: '🍎 Apple', fontSize: 30, color: '#ef4444', position: 'center'}, px(0.5, 0.2)),
           );
           sc(
             t3,
             4,
-            Object.assign({content: '🍌 香蕉', fontSize: 30, color: '#f59e0b', position: 'center'}, px(0.5, 0.3)),
+            Object.assign({content: '🍌 Banana', fontSize: 30, color: '#f59e0b', position: 'center'}, px(0.5, 0.3)),
           );
           sc(
             t3,
             5,
-            Object.assign({content: '🍊 橙子', fontSize: 30, color: '#f97316', position: 'center'}, px(0.5, 0.4)),
+            Object.assign({content: '🍊 Orange', fontSize: 30, color: '#f97316', position: 'center'}, px(0.5, 0.4)),
           );
           sc(
             t3,
             6,
-            Object.assign({content: '🍇 葡萄', fontSize: 30, color: '#a855f7', position: 'center'}, px(0.5, 0.5)),
+            Object.assign({content: '🍇 Grape', fontSize: 30, color: '#a855f7', position: 'center'}, px(0.5, 0.5)),
           );
           sc(t3, 7, {duration: 2000});
           sc(
             t3,
             8,
             Object.assign(
-              {placeholder: 'Enter the fruits you remember', correctAnswer: '苹果,香蕉,橙子,葡萄', validation: 'contains'},
+              {placeholder: 'Enter the fruits you remember', correctAnswer: 'Apple,Banana,Orange,Grape', validation: 'contains'},
               px(0.5, 0.7),
             ),
           );
