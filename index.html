@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ExpVis — Experiment Builder</title>
+  <link rel="stylesheet" href="css/editor.css"/>
+</head>
+<body>
+<div class="splash-loading" id="splash">
+      <div class="splash-logo">ExpVis</div>
+      <div class="splash-spinner"></div>
+    </div>
+    <div class="header" id="header">
+      <div class="logo">ExpVis</div>
+      <span style="font-size: 0.75rem; color: var(--text2)">Component-based · Visual · WYSIWYG</span>
+      <div class="header-right">
+        <button class="btn btn-outline" id="undo-btn" onclick="undo()" disabled>↩ Undo</button
+        ><button class="btn btn-outline" onclick="resetEditor()">New</button
+        ><button
+          class="btn btn-outline"
+          onclick="replayOnboarding()"
+          title="Replay tutorial"
+          style="font-size: 1rem; padding: 7px 10px"
+        >
+          ❓
+        </button>
+        <select
+          id="device-select"
+          onchange="setDevice(this.value)"
+          style="
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.75rem;
+            cursor: pointer;
+          "
+        ></select>
+        <button class="btn btn-primary" onclick="previewExperiment()">▶ Preview</button>
+        <button class="btn btn-outline" onclick="showCodeEditor()" style="font-family: monospace; font-weight: 700">
+          &lt;/&gt; Code
+        </button>
+        <button class="btn btn-outline" id="save-btn" onclick="saveVersion()">💾 Save</button
+        ><button class="btn btn-outline" onclick="showVersionHistory()">🕐 Versions</button
+        ><button class="btn btn-primary" onclick="publishExperiment()">🚀 Publish</button>
+      </div>
+    </div>
+
+    <div class="main">
+      <!-- Left: Components -->
+      <div class="panel-left" id="panel-left">
+        <div class="panel-header">Component Toolbox</div>
+        <div class="panel-body">
+          <div
+            style="
+              font-size: 0.65rem;
+              color: var(--text2);
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              padding: 4px 8px;
+              margin-top: 4px;
+            "
+          >
+            📺 Display
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="text"
+            data-cat="s"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon s">📝</div>
+            <div>
+              <div class="comp-card-name">Text</div>
+              <div class="comp-card-desc">Size / Color / Weight / Position</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="shape"
+            data-cat="s"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon s">⏺️</div>
+            <div>
+              <div class="comp-card-name">Shape</div>
+              <div class="comp-card-desc">Circle / Square / Triangle / Diamond / Star</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="image"
+            data-cat="s"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon s">🖼️</div>
+            <div>
+              <div class="comp-card-name">Image</div>
+              <div class="comp-card-desc">Upload · ≤ 4MB</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="audio"
+            data-cat="s"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon s">🎵</div>
+            <div>
+              <div class="comp-card-name">Audio</div>
+              <div class="comp-card-desc">Upload · MP3 / WAV</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="video"
+            data-cat="s"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon s">🎬</div>
+            <div>
+              <div class="comp-card-name">Video</div>
+              <div class="comp-card-desc">Upload · MP4 / WebM</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="fixation"
+            data-cat="s"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon s">➕</div>
+            <div>
+              <div class="comp-card-name">Fixation</div>
+              <div class="comp-card-desc">Cross · Adjustable Duration</div>
+            </div>
+          </div>
+
+          <div
+            style="
+              font-size: 0.65rem;
+              color: var(--text2);
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              padding: 4px 8px;
+              margin-top: 10px;
+            "
+          >
+            🎮 Response
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="keyboard"
+            data-cat="r"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon r">⌨️</div>
+            <div>
+              <div class="comp-card-name">Keyboard</div>
+              <div class="comp-card-desc">Key Mapping · Correct Key / Timeout</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="button"
+            data-cat="r"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon r">🔘</div>
+            <div>
+              <div class="comp-card-name">Button</div>
+              <div class="comp-card-desc">Multi-Button · Click Response</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="slider"
+            data-cat="r"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon r">🎚️</div>
+            <div>
+              <div class="comp-card-name">Slider</div>
+              <div class="comp-card-desc">Continuous Value · Range / Step</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="click"
+            data-cat="r"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon r">👆</div>
+            <div>
+              <div class="comp-card-name">Click</div>
+              <div class="comp-card-desc">Click / Touch Anywhere</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="textInput"
+            data-cat="r"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon r">✏️</div>
+            <div>
+              <div class="comp-card-name">Text Input</div>
+              <div class="comp-card-desc">Free Input · Placeholder</div>
+            </div>
+          </div>
+          <div
+            style="
+              font-size: 0.65rem;
+              color: var(--text2);
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              padding: 4px 8px;
+              margin-top: 10px;
+            "
+          >
+            🧠 Logic
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="loop"
+            data-cat="l"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon l">🔄</div>
+            <div>
+              <div class="comp-card-name">Loop</div>
+              <div class="comp-card-desc">Repeat Trial N Times</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="branch"
+            data-cat="l"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon l">🔀</div>
+            <div>
+              <div class="comp-card-name">Branch</div>
+              <div class="comp-card-desc">Correct / Response / Variable</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="delay"
+            data-cat="l"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon l">⏱️</div>
+            <div>
+              <div class="comp-card-name">Delay</div>
+              <div class="comp-card-desc">Insert Wait (ms)</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="randomize"
+            data-cat="l"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon l">🎲</div>
+            <div>
+              <div class="comp-card-name">Randomize</div>
+              <div class="comp-card-desc">Shuffle Order Within Trial</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="variable"
+            data-cat="l"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon l">📊</div>
+            <div>
+              <div class="comp-card-name">Variable</div>
+              <div class="comp-card-desc">Score / Counter / Custom</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Flow Canvas -->
+      <div class="panel-center" ondragover="dragOver(event)" ondrop="dropOnCanvas(event)">
+        <div
+          class="canvas-toolbar"
+          id="canvas-toolbar"
+          style="
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            flex-shrink: 0;
+            display: flex;
+            gap: 8px;
+          "
+        >
+          <button class="btn btn-outline" style="font-size: 0.72rem" onclick="addPhase('instructions')">
+            + Instructions Phase
+          </button>
+          <button class="btn btn-outline" style="font-size: 0.72rem" onclick="addPhase('trials')">+ Trials Phase</button>
+          <button class="btn btn-outline" style="font-size: 0.72rem" onclick="addPhase('feedback')">+ Feedback Phase</button>
+          <button
+            class="btn btn-outline"
+            style="font-size: 0.72rem; background: #f0fdf4; border-color: rgba(34, 197, 94, 0.3); color: #16a34a"
+            onclick="quickLayout()"
+            title="Auto-arrange: stimuli on top, responses below"
+          >
+            ⚡ Quick Layout
+          </button>
+          <button
+            class="btn btn-primary"
+            style="font-size: 0.72rem; background: linear-gradient(135deg, #6366f1, #a855f7)"
+            onclick="showAIGenerate()"
+            title="Describe your experiment in natural language, AI generates it automatically"
+          >
+            🤖 AI Generate
+          </button>
+          <span style="font-size: 0.7rem; color: var(--text2); margin-left: auto">Drop components onto nodes</span>
+        </div>
+        <div class="canvas-scroll" id="canvas-scroll">
+          <div class="flow-container" id="flow-container">
+            <svg class="flow-svg" id="flow-svg"></svg>
+            <div class="empty-state" id="empty-state">
+              <div class="big-icon">🧩</div>
+              <h3>Start Building Your Experiment</h3>
+              <p>Drag components from the left, or choose a template</p>
+              <div class="template-chips" style="position: relative">
+                <div
+                  class="template-preview-chip"
+                  data-tpl="stroop"
+                  style="
+                    display: none;
+                    position: absolute;
+                    bottom: 110%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #fff;
+                    border: 1px solid #e0e0e8;
+                    border-radius: 12px;
+                    padding: 14px 18px;
+                    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
+                    z-index: 100;
+                    white-space: nowrap;
+                    pointer-events: none;
+                    font-size: 0.78rem;
+                    color: var(--text);
+                    text-align: left;
+                  "
+                ></div>
+                <button class="template-chip" data-tpl="stroop" onclick="loadTemplate('stroop')">
+                  🧠 Stroop Effect
+                </button>
+                <button class="template-chip" data-tpl="simon" onclick="loadTemplate('simon')">🎯 Simon Effect</button>
+                <button class="template-chip" data-tpl="flanker" onclick="loadTemplate('flanker')">
+                  ⬅️➡️ Flanker Task
+                </button>
+                                <button class="template-chip" data-tpl="branch-demo" onclick="loadTemplate('branch-demo')">
+                  🔀 Branch Demo
+                </button>
+                <button class="template-chip" data-tpl="randomize-demo" onclick="loadTemplate('randomize-demo')">
+                  🎲 Randomize + Variable Demo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Inspector -->
+      <div class="panel-right" id="panel-right">
+        <div class="panel-header">Properties</div>
+        <div class="panel-body" id="inspector">
+          <p style="color: var(--text2); font-size: 0.78rem; text-align: center; padding: 20px">
+            ← Click a node in the flow<br />to view and edit properties
+          </p>
+        </div>
+        <div class="panel-header" style="border-top: 1px solid var(--border)">
+          Live Preview
+          <span style="display: flex; gap: 4px; margin-left: auto"
+            ><button
+              onclick="expandPreview()"
+              style="
+                background: none;
+                border: 1px solid var(--border);
+                color: var(--accent);
+                cursor: pointer;
+                font-size: 0.6rem;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-family: inherit;
+              "
+              title="Expand to full-screen visual editor"
+            >
+              ⛶ Expand</button
+            ><button
+              onclick="togglePreviewPanel()"
+              style="
+                background: none;
+                border: none;
+                color: var(--text2);
+                cursor: pointer;
+                font-size: 0.85rem;
+                padding: 0 2px;
+              "
+              title="Collapse panel"
+            >
+              <span id="preview-toggle-icon">▼</span>
+            </button></span
+          >
+        </div>
+        <div
+          id="preview-panel-body"
+          style="
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #e4e4ea;
+            background-image: radial-gradient(circle, #d0d0d8 1px, transparent 1px);
+            background-size: 16px 16px;
+            overflow: hidden;
+            min-height: 180px;
+            transition: all 0.25s;
+          "
+        >
+          <span style="color: var(--text2); font-size: 0.85rem" id="preview-content">Click a node to preview</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="drag-preview" id="drag-preview"></div>
+
+  <script src="js/editor.js"></script>
+</body>
+</html>

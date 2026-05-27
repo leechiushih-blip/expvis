@@ -1,0 +1,8 @@
+docs/
+data/
+tests/
+.DS_Store
+*.docx
+*.md
+!README.md
+tests/
