@@ -7,12 +7,12 @@ ExpVis Editor is a browser-based tool for designing behavioral experiments witho
 ## Quick Start
 
 ```bash
-git clone https://github.com/<user>/expvis-editor.git
-cd expvis-editor
+git clone https://github.com/leechiushih-blip/expvis.git
+cd expvis
 open index.html    # That's it — no build step, no dependencies
 ```
 
-Or try the [online demo](https://<user>.github.io/expvis-editor).
+Or try the [online demo](https://leechiushih-blip.github.io/expvis/).
 
 ## Features
 

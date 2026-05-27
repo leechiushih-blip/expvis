@@ -2,7 +2,7 @@
 
 ## Abstract
 
-Web-based data collection is increasingly central to behavioral research, yet constructing online experiments remains a technical barrier for researchers without programming expertise. While libraries such as jsPsych have simplified the coding of browser-based paradigms, and tools like lab.js have introduced visual editing, no existing platform combines visual experiment construction with AI-assisted generation and automated quality review. We introduce ExpVis, a free, open-source experiment builder that enables researchers to design behavioral experiments through a component-based visual interface, generate jsPsych code automatically, and leverage large language models for both experiment generation and multi-agent peer review. ExpVis provides 17 stimulus, response, and logic components that can be assembled via drag-and-drop, a three-tier preview system for real-time visualization across simulated devices, and one-click publication of standalone experiment files with built-in data collection and dashboards. We describe the system architecture, provide step-by-step tutorials for constructing classic paradigms (Stroop, Simon, Flanker), and evaluate the fidelity of AI-generated experiment structures. ExpVis is freely available under the MIT license at [repository URL].
+Web-based data collection is increasingly central to behavioral research, yet constructing online experiments remains a technical barrier for researchers without programming expertise. While libraries such as jsPsych have simplified the coding of browser-based paradigms, and tools like lab.js have introduced visual editing, no existing platform combines visual experiment construction with AI-assisted generation and automated quality review. We introduce ExpVis, a free, open-source experiment builder that enables researchers to design behavioral experiments through a component-based visual interface, generate jsPsych code automatically, and leverage large language models for both experiment generation and multi-agent peer review. ExpVis provides 17 stimulus, response, and logic components that can be assembled via drag-and-drop, a three-tier preview system for real-time visualization across simulated devices, and one-click publication of standalone experiment files with built-in data collection and dashboards. We describe the system architecture, provide step-by-step tutorials for constructing classic paradigms (Stroop, Simon, Flanker), and evaluate the fidelity of AI-generated experiment structures. ExpVis is freely available under the MIT license at https://github.com/leechiushih-blip/expvis.
 
 **Keywords:** Experiment builder · Online experiments · Visual editor · jsPsych · AI-assisted · Open source
 
@@ -227,7 +227,7 @@ ExpVis has several limitations that should be considered. First, as a single-fil
 
 Several directions are planned for future development. A server-side component with participant management, centralized data storage, and integration with crowdsourcing platforms (Prolific, MTurk) would enable larger-scale deployment. The multi-agent review system could be enhanced to use real LLM agents with domain-specific prompts for more thorough analysis. Additional component types—including eye-tracking calibration, mouse trajectory recording, and audio response capture—would expand the range of supported paradigms. Finally, a formal usability evaluation comparing ExpVis with lab.js and Gorilla on experiment construction tasks would provide empirical evidence for the tool's effectiveness.
 
-We invite community contributions to the component library and encourage researchers to adapt ExpVis for their specific experimental needs. The source code, documentation, and live demo are available at [repository URL].
+We invite community contributions to the component library and encourage researchers to adapt ExpVis for their specific experimental needs. The source code, documentation, and live demo are available at https://github.com/leechiushih-blip/expvis.
 
 ---
 
@@ -347,15 +347,16 @@ Stroop, J. R. (1935). Studies of interference in serial verbal reactions. *Journ
 
 ## Data Availability
 
-The ExpVis source code is available at [https://github.com/...](https://github.com/...) under the MIT license. A live demo is hosted at [https://...](https://...). The experiment generation prompts, fidelity assessment data, and analysis scripts are included in the repository.
+The ExpVis source code is available at [https://github.com/leechiushih-blip/expvis](https://github.com/leechiushih-blip/expvis) under the MIT license. A live demo is hosted at [https://leechiushih-blip.github.io/expvis/](https://leechiushih-blip.github.io/expvis/). The experiment generation prompts, fidelity assessment data, and analysis scripts are included in the repository.
 
-## Author Contributions
+## Author Information
 
-[To be completed]
+Li, Qiushi (liqsh23@mail2.sysu.edu.cn)
+School of Journalism and Communication, Sun Yat-sen University, Guangzhou, China
 
 ## Acknowledgments
 
-[To be completed]
+We thank the developers of jsPsych and lab.js for establishing the foundations upon which this work builds.
 
 ## Declarations
 
