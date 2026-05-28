@@ -61,20 +61,6 @@ expvis-editor/
     └── verify.py           # Validation script
 ```
 
-## Citation
-
-If you use ExpVis Editor in your research, please cite:
-
-```bibtex
-@article{expvis2026,
-  title = {ExpVis: A Visual, AI-Assisted Experiment Builder for Web-Based Behavioral Research},
-  author = {...},
-  journal = {Behavior Research Methods},
-  year = {2026},
-  note = {Under review}
-}
-```
-
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
