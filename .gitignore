@@ -1,8 +1,8 @@
 docs/
-data/
 tests/
 .DS_Store
 *.docx
 *.md
 !README.md
 tests/
+!data/rating_rubric_CN.md
