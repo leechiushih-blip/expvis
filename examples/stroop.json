@@ -5,7 +5,7 @@
     {
       "id": "ph1",
       "type": "instructions",
-      "name": "指导语",
+      "name": "Instructions",
       "color": "i",
       "trials": [
         {
@@ -13,13 +13,13 @@
           "components": [
             {
               "id": "c1", "type": "text", "cat": "s",
-              "content": "欢迎参加本实验！\n\n屏幕中央会出现不同颜色的文字。\n请忽略文字的含义，根据文字的颜色快速按键。\n\n红色 → 按 A 键\n蓝色 → 按 L 键\n\n请又快又准地做出反应！",
-              "fontSize": 20, "color": "#333", "position": "center", "fontWeight": "bold",
+              "content": "Welcome to this experiment!\n\nYou will see words displayed in different colors.\nIgnore the word meaning and respond to the FONT COLOR.\n\nRed font → Press A\nBlue font → Press L\n\nRespond as quickly and accurately as possible!",
+              "fontSize": 20, "color": "#333333", "position": "center", "fontWeight": "bold",
               "posX": 640, "posY": 100
             },
             {
               "id": "c2", "type": "button", "cat": "r",
-              "labels": "开始实验",
+              "labels": "Start Experiment",
               "posX": 640, "posY": 530
             }
           ]
@@ -29,7 +29,7 @@
     {
       "id": "ph2",
       "type": "trials",
-      "name": "正式实验",
+      "name": "Trials",
       "color": "t",
       "trials": [
         {
@@ -37,7 +37,7 @@
           "components": [
             { "id": "c3", "type": "fixation", "cat": "s", "duration": 500, "posX": 640, "posY": 324 },
             { "id": "c4", "type": "delay", "cat": "l", "duration": 200, "posX": 0, "posY": 0 },
-            { "id": "c5", "type": "text", "cat": "s", "content": "红", "color": "#3b82f6", "fontSize": 48, "position": "center", "fontWeight": "bold", "posX": 640, "posY": 274 },
+            { "id": "c5", "type": "text", "cat": "s", "content": "RED", "color": "#3b82f6", "fontSize": 48, "position": "center", "fontWeight": "bold", "posX": 640, "posY": 274 },
             { "id": "c6", "type": "keyboard", "cat": "r", "keys": "a,l", "correctKey": "a", "posX": 640, "posY": 446 },
             { "id": "c7", "type": "loop", "cat": "l", "count": 48, "posX": 0, "posY": 0 }
           ]
@@ -47,7 +47,7 @@
     {
       "id": "ph3",
       "type": "feedback",
-      "name": "反馈",
+      "name": "Feedback",
       "color": "f",
       "trials": [
         {
@@ -55,8 +55,8 @@
           "components": [
             {
               "id": "c8", "type": "text", "cat": "s",
-              "content": "实验结束！\n\n感谢你的参与。\n你的反应数据已被记录。",
-              "fontSize": 24, "color": "#333", "position": "center", "fontWeight": "bold",
+              "content": "Experiment complete!\n\nThank you for your participation.\nYour response data has been recorded.",
+              "fontSize": 24, "color": "#333333", "position": "center", "fontWeight": "bold",
               "posX": 640, "posY": 288
             }
           ]
