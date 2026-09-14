@@ -905,22 +905,32 @@ function _applyI18n() {
               });
               var badgeEl = _logicBadges(t);
               if (badgeEl) row.appendChild(badgeEl);
-              visualComps.forEach(function (c, i) {
+              // Build one node for a component (extracted so it can be nested
+              // inside a "simultaneous" group box).
+              function makeNode(c, compact) {
                 var node = document.createElement('div');
                 var sel = t.id === editor.selectedTrial && editor.selComp === c.id;
-                node.className = 'flow-node' + (sel ? ' selected' : '');
-                var iconBg = c.cat === 's' ? '#eef0ff' : c.cat === 'r' ? '#fff7ed' : '#f0fdf4';
-                var iconColor = c.cat === 's' ? 'var(--accent)' : c.cat === 'r' ? 'var(--orange)' : 'var(--green)';
-                node.innerHTML =
-                  '<div class="flow-node-icon" style="background:' +
-                  iconBg +
-                  '">' +
-                  (icons[c.type] || '?') +
-                  '</div><div class="flow-node-body"><div class="flow-node-label">' +
-                  labels[c.type] +
-                  '</div><div class="flow-node-detail">' +
-                  getDetail(c) +
-                  '</div></div>';
+                node.className = (compact ? 'flow-chip' : 'flow-node') + (sel ? ' selected' : '');
+                if (compact) {
+                  // Inside a simultaneous group the components share one screen;
+                  // a compact chip keeps the row from overflowing the card.
+                  node.innerHTML = '<span class="flow-chip-icon">' + (icons[c.type] || '?') +
+                    '</span><span class="flow-chip-label">' + labels[c.type] +
+                    '</span><span class="flow-chip-detail">' +
+                    String(getDetail(c)).split('\n')[0].slice(0, 14) + '</span>';
+                } else {
+                  var iconBg = c.cat === 's' ? '#eef0ff' : c.cat === 'r' ? '#fff7ed' : '#f0fdf4';
+                  node.innerHTML =
+                    '<div class="flow-node-icon" style="background:' +
+                    iconBg +
+                    '">' +
+                    (icons[c.type] || '?') +
+                    '</div><div class="flow-node-body"><div class="flow-node-label">' +
+                    labels[c.type] +
+                    '</div><div class="flow-node-detail">' +
+                    getDetail(c) +
+                    '</div></div>';
+                }
                 node.setAttribute('draggable', 'true');
                 node.onclick = function (e) {
                   e.stopPropagation();
@@ -991,10 +1001,44 @@ function _applyI18n() {
                   removeComponent(n.getAttribute('data-trial-id'), n.getAttribute('data-comp-id'));
                 };
                 node.appendChild(compDel);
-                row.appendChild(node);
+                return node;
+              }
 
-                // Arrow between components
-                if (i < visualComps.length - 1) {
+              // ---- Group components into presentation steps -------------------
+              // Stimuli (except fixation) share one screen — they must NOT be drawn
+              // as a sequence, which is exactly what confused the BRM reviewer
+              // ("if I add two shapes, they show as a sequence"). Only fixation,
+              // delay and responses are genuinely sequential.
+              var steps = [];
+              var curSimul = null;
+              visualComps.forEach(function (c) {
+                var isSimul = c.cat === 's' && c.type !== 'fixation';
+                if (isSimul) {
+                  if (!curSimul) { curSimul = {simul: true, comps: []}; steps.push(curSimul); }
+                  curSimul.comps.push(c);
+                } else {
+                  curSimul = null;
+                  steps.push({simul: false, comps: [c]});
+                }
+              });
+
+              steps.forEach(function (step, si) {
+                var box;
+                if (step.simul && step.comps.length > 1) {
+                  box = document.createElement('div');
+                  box.className = 'flow-step-simul';
+                  var tag = document.createElement('span');
+                  tag.className = 'flow-step-tag';
+                  tag.textContent = '同时呈现';
+                  tag.title = step.comps.length +
+                    ' components rendered together in one jsPsych stimulus';
+                  box.appendChild(tag);
+                  step.comps.forEach(function (c) { box.appendChild(makeNode(c, true)); });
+                } else {
+                  box = makeNode(step.comps[0]);
+                }
+                row.appendChild(box);
+                if (si < steps.length - 1) {
                   var arrow = document.createElement('span');
                   arrow.className = 'flow-arrow';
                   arrow.textContent = '→';

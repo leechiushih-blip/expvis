@@ -1,4 +1,6 @@
-docs/
+# docs/ 整体忽略，但交接文档要进版本控制（否则回滚/换机器就丢了）
+docs/*
+!docs/HANDOFF.md
 tests/
 .DS_Store
 *.docx
@@ -6,3 +8,4 @@ tests/
 !README.md
 tests/
 !data/rating_rubric_CN.md
+!docs/HANDOFF.md
