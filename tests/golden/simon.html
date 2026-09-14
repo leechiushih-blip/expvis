@@ -40,18 +40,7 @@
     timeline.push(instructions_trial_1);
 
     // ── Trials (2/3) ──
-    // Stimulus variants for trials_trial_1
-    var trials_trial_1_variants = [
-      {stimulus: '<div style="width:80px;height:80px;background:#ef4444;border-radius:50%"></div>', correct_response: "a"},
-      {stimulus: '<div style="width:80px;height:80px;background:#ef4444;border-radius:50%"></div>', correct_response: "a"},
-      {stimulus: '<div style="width:80px;height:80px;background:#22c55e;border-radius:50%"></div>', correct_response: "l"},
-      {stimulus: '<div style="width:80px;height:80px;background:#22c55e;border-radius:50%"></div>', correct_response: "l"},
-    ];
-
     var trials_trial_1 = {
-      timeline_variables: trials_trial_1_variants,
-      sample: {type: 'with-replacement', size: 1},
-      repetitions: 60,
       timeline: [
         {
           type: jsPsychHtmlKeyboardResponse,
@@ -61,24 +50,9 @@
         },
         {
           type: jsPsychHtmlKeyboardResponse,
-          stimulus: jsPsych.timelineVariable('stimulus'),
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="width:80px;height:80px;background:#6366f1;border-radius:50%"></div><div style="width:80px;height:80px;background:#ef4444;border-radius:50%"></div><div style="width:80px;height:80px;background:#ef4444;border-radius:50%"></div><div style="width:80px;height:80px;background:#22c55e;border-radius:50%"></div></div>',
           choices: ["a","l"],
-          prompt: 'Red→A  Green→L',
-          data: {correct_response: jsPsych.timelineVariable('correct_response')},
-          on_finish: function(data) {
-            data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);
-          }
-        },
-        {
-          timeline: [{
-            type: jsPsychHtmlButtonResponse,
-            stimulus: '<div style="font-size:22px;color:#ef4444;font-weight:bold">Press the key for the COLOR!<br>Red=A  Green=L</div>',
-            choices: ["Continue"],
-            trial_duration: 1200
-          }],
-          conditional_function: function () {
-            return !jsPsych.data.get().last(1).values()[0].correct;
-          }
+          prompt: 'Press a key'
         }
       ]
     };

@@ -41,30 +41,13 @@
     timeline.push(instructions_trial_1);
 
     // ── Trials (2/3) ──
-    var score = 0;
     var trials_trial_1 = {
       type: jsPsychHtmlKeyboardResponse,
-      prompt: '<p>Press any key to continue</p>',
-      data: {score:score},
-      on_finish: function(data) {
-        if (data.correct) score += 1;
-      }
+      prompt: '<p>Press any key to continue</p>'
     };
     timeline.push(trials_trial_1);
 
-    var score = 0;
-    // Stimulus variants for trials_trial_2
-    var trials_trial_2_variants = [
-      {stimulus: '<div style="font-size:30px;color:#ef4444;font-weight:bold">Apple</div>', correct_response: ""},
-      {stimulus: '<div style="font-size:30px;color:#f59e0b;font-weight:bold">Banana</div>', correct_response: ""},
-      {stimulus: '<div style="font-size:30px;color:#f97316;font-weight:bold">Orange</div>', correct_response: ""},
-      {stimulus: '<div style="font-size:30px;color:#a855f7;font-weight:bold">Grape</div>', correct_response: ""},
-    ];
-
     var trials_trial_2 = {
-      timeline_variables: trials_trial_2_variants,
-      randomize_order: true,
-      repetitions: 5,
       timeline: [
         {
           type: jsPsychHtmlKeyboardResponse,
@@ -74,18 +57,13 @@
         },
         {
           type: jsPsychSurveyText,
-          preamble: jsPsych.timelineVariable('stimulus'),
+          preamble: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:32px;color:#333333;font-weight:bold">New Text</div><div style="font-size:30px;color:#ef4444;font-weight:bold">Apple</div><div style="font-size:30px;color:#f59e0b;font-weight:bold">Banana</div><div style="font-size:30px;color:#f97316;font-weight:bold">Orange</div></div>',
           questions: [{
-            prompt: 'Which fruits do you remember?',
-            placeholder: 'Apple, Banana, …',
-            name: 'Fruits',
+            prompt: '',
+            placeholder: 'Enter text',
+            name: 'Q0',
           }],
-          button_label: 'Continue',
-          data: {score:score,correct_response: jsPsych.timelineVariable('correct_response')},
-          on_finish: function(data) {
-            data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);
-            if (data.correct) score += 1;
-          }
+          button_label: 'Continue'
         }
       ]
     };

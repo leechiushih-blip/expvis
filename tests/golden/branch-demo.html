@@ -41,7 +41,6 @@
 
     // ── Trials (2/3) ──
     var trials_trial_1 = {
-      repetitions: 3,
       timeline: [
         {
           type: jsPsychHtmlKeyboardResponse,
@@ -58,17 +57,6 @@
           on_finish: function(data) {
             data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);
           }
-        },
-        {
-          timeline: [{
-            type: jsPsychHtmlButtonResponse,
-            stimulus: '<div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press A for RED text</div>',
-            choices: ["Continue"],
-            trial_duration: 1500
-          }],
-          conditional_function: function () {
-            return !jsPsych.data.get().last(1).values()[0].correct;
-          }
         }
       ]
     };
@@ -82,7 +70,6 @@
     timeline.push(trials_trial_2);
 
     var trials_trial_3 = {
-      repetitions: 3,
       timeline: [
         {
           type: jsPsychHtmlKeyboardResponse,
@@ -98,17 +85,6 @@
           data: {correct_response: 'l'},
           on_finish: function(data) {
             data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);
-          }
-        },
-        {
-          timeline: [{
-            type: jsPsychHtmlButtonResponse,
-            stimulus: '<div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press L for BLUE text</div>',
-            choices: ["Continue"],
-            trial_duration: 1500
-          }],
-          conditional_function: function () {
-            return !jsPsych.data.get().last(1).values()[0].correct;
           }
         }
       ]

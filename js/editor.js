@@ -201,16 +201,8 @@ var _i18n = {
   'comp.slider.desc': {en:'Continuous Value · Range / Step', zh:'连续数值 · 范围 / 步长'},
   'comp.textInput':   {en:'Survey Text', zh:'问卷文本'},
   'comp.textInput.desc':{en:'Free Input · Placeholder', zh:'自由输入 · 占位提示'},
-  'comp.loop':        {en:'Loop', zh:'循环'},
-  'comp.loop.desc':   {en:'Repeat Trial N Times', zh:'重复当前试次 N 次'},
-  'comp.branch':      {en:'Branch', zh:'条件分支'},
-  'comp.branch.desc': {en:'Correct / Response / Variable', zh:'按键对错 / 变量判断'},
   'comp.delay':       {en:'Delay', zh:'延迟'},
   'comp.delay.desc':  {en:'Insert Wait (ms)', zh:'插入等待 ms'},
-  'comp.randomize':   {en:'Randomize', zh:'随机化'},
-  'comp.randomize.desc':{en:'Shuffle Order Within Trial', zh:'试次内顺序随机排列'},
-  'comp.variable':    {en:'Variable', zh:'变量'},
-  'comp.variable.desc':{en:'Score / Counter / Custom', zh:'计分 / 计数 / 自定义'},
   // --- Toolbar ---
   'toolbar.add_instructions': {en:'+ Instructions Phase', zh:'+ 指导语阶段'},
   'toolbar.add_trials':       {en:'+ Trials Phase', zh:'+ 实验阶段'},
@@ -533,9 +525,8 @@ function _applyI18n() {
             // dropped in the usual way still joins the same screen.
             newStep: false,
             step_duration: 500,
-            映射按键: '',
           },
-          shape: {type: 'shape', shape: 'circle', size: 80, color: '#6366f1', position: 'center', newStep: false, step_duration: 500, 映射按键: ''},
+          shape: {type: 'shape', shape: 'circle', size: 80, color: '#6366f1', position: 'center', newStep: false, step_duration: 500},
           // stimulus_width/height/maintain_aspect_ratio are the image plugins'
           // own parameters; they apply when the trial runs on one of them (see
           // the image-plugin rule in _compileExperiment) and as max-width in the
@@ -550,7 +541,6 @@ function _applyI18n() {
             stimulus_height: 0,
             maintain_aspect_ratio: true,
             render_on_canvas: true,
-            映射按键: '',
           },
           // Frame-by-frame animation (jsPsychAnimation). It OWNS the display —
           // the plugin clears the display element each frame — so it carries no
@@ -642,10 +632,6 @@ function _applyI18n() {
             button_label: 'Continue',
             autocomplete: false,
           },
-          loop: {type: 'loop', count: 10},
-          branch: {type: 'branch', condition: 'correct', matchValue: '', targetFail: '', operator: '>=', compareValue: ''},
-          randomize: {type: 'randomize', mode: 'pick-one'},
-          variable: {type: 'variable', name: 'score', initial: 0, mode: 'correct'},
         };
         if (!defs[type]) {
           // A retired or unknown type: refuse rather than create an inert shell
@@ -815,10 +801,6 @@ function _applyI18n() {
         button: '🔘',
         slider: '🎚️',
         textInput: '📝',
-        loop: '🔄',
-        branch: '🔀',
-        randomize: '🎲',
-        variable: '📊',
       };
       var labels = {
         text: 'Text',
@@ -832,10 +814,6 @@ function _applyI18n() {
         button: 'Button',
         slider: 'Slider',
         textInput: 'Survey Text',
-        loop: 'Loop',
-        branch: 'Branch',
-        randomize: 'Randomize',
-        variable: 'Variable',
       };
       var propLabel = {
         content: 'Content',
@@ -891,13 +869,7 @@ function _applyI18n() {
         columns: 'Columns',
         button_label: 'Button Label',
         autocomplete: 'Autocomplete',
-        count: 'Count',
-        mode: 'Mode',
-        condition: 'Condition',
-        targetFail: 'Target on Fail', matchValue: '🎯 Match Value', operator: 'Operator', compareValue: 'Compare Value',
-        target: 'Target',
         name: 'Var Name',
-        initial: 'Initial',
       };
 
       function renderAll() {
@@ -1098,8 +1070,6 @@ function _applyI18n() {
               var visualComps = t.components.filter(function (c) {
                 return c.cat === 's' || c.cat === 'r';
               });
-              var badgeEl = _logicBadges(t);
-              if (badgeEl) row.appendChild(badgeEl);
               // Build one node for a component (extracted so it can be nested
               // inside a "simultaneous" group box).
               function makeNode(c, compact) {
@@ -1310,45 +1280,6 @@ function _applyI18n() {
               row.appendChild(newStepZone);
             }
 
-            // Branch annotation: visual hint when trial contains a branch component
-
-            // Branch target badge: show where this trial jumps on error
-            // Branch source badge: show where this branch jumps to (human-readable)
-            var branchComp = t.components.find(function (c) { return c.type === 'branch' && c.targetFail; });
-            if (branchComp) {
-              // Search all phases for the target trial
-              var targetTrial = null, targetPhaseIdx = -1, targetTrialIdx = -1;
-              editor.phases.forEach(function (p2, pi2) {
-                p2.timeline.forEach(function (tr, ti2) { if (tr.id === branchComp.targetFail) { targetTrial = tr; targetPhaseIdx = pi2; targetTrialIdx = ti2; } });
-              });
-              if (targetTrial) {
-                var targetPhase = editor.phases[targetPhaseIdx];
-                var phaseLabel = _stripEmoji(targetPhase.name);
-                var desc = phaseLabel + ' Trial ' + (targetTrialIdx + 1);
-                var branchBadge = document.createElement('span');
-                branchBadge.style.cssText = 'font-size:0.55rem;padding:2px 8px;border-radius:8px;background:#fef3c7;color:#b45309;border:1px solid rgba(245,158,11,0.3);margin-left:8px;white-space:nowrap;cursor:default';
-                var condLabel = branchComp.condition === 'response' ? '🔀 Match→' : '🔀 Error→';
-                branchBadge.innerHTML = condLabel + desc;
-                branchBadge.title = (branchComp.condition === 'response' ? 'Match "' + (branchComp.matchValue || '') + '"' : 'Error') + ' → ' + desc;
-                row.appendChild(branchBadge);
-              }
-            }
-            // Branch target indicator: show which trial(s) point here
-            var srcTrials = [];
-            editor.phases.forEach(function (p2) {
-              p2.timeline.forEach(function (t2) {
-                var bc = t2.components.find(function (c) { return c.type === 'branch' && c.targetFail && c.targetFail === t.id; });
-                if (bc) srcTrials.push({phaseName: _stripEmoji(p2.name), trialIdx: p2.timeline.indexOf(t2) + 1, condition: bc.condition});
-              });
-            });
-            if (srcTrials.length > 0) {
-              var targetBadge = document.createElement('span');
-              targetBadge.style.cssText = 'font-size:0.55rem;padding:2px 8px;border-radius:8px;background:#fef3c7;color:#b45309;border:1px solid rgba(245,158,11,0.3);margin-left:8px;white-space:nowrap;cursor:default';
-              targetBadge.innerHTML = '🎯 from ' + srcTrials.map(function(s) { return s.phaseName + 'T' + s.trialIdx; }).join(', ');
-              targetBadge.title = 'Branch source: ' + srcTrials.map(function(s) { return s.phaseName + ' Trial ' + s.trialIdx + ' (' + s.condition + ')'; }).join(', ');
-              row.appendChild(targetBadge);
-            }
-
             // Action buttons
             var del = document.createElement('button');
             // The trial container is a column now, so pin this to the right edge
@@ -1449,8 +1380,6 @@ function _applyI18n() {
         }
         if (c.type === 'button') return (c.choices || []).join(', ');
         if (c.type === 'slider') return c.min + '-' + c.max + (c.labels && c.labels.length ? ' · ' + c.labels.join('/') : '');
-        if (c.type === 'loop') return '×' + c.count;
-        if (c.type === 'branch') return 'if ' + c.condition;
         return '';
       }
 
@@ -1458,23 +1387,6 @@ function _applyI18n() {
       // In jsPsych these are node/trial parameters, not trials:
       //   loop → repetitions, randomize → sample/randomize_order,
       //   branch → conditional_function, delay → trial_duration, variable → user JS
-      function _logicBadges(t) {
-        var out = [];
-        t.components.forEach(function (c) {
-          if (c.type === 'loop') out.push('↻ ' + (c.count || 1) + '×');
-          else if (c.type === 'randomize') out.push('🎲 ' + (c.mode === 'shuffle' ? 'shuffle' : 'pick-one'));
-          else if (c.type === 'branch') out.push('🔀 ' + (c.condition || 'correct'));
-          else if (c.type === 'variable') out.push('📊 ' + (c.name || 'var'));
-        });
-        if (!out.length) return null;
-        var el = document.createElement('div');
-        el.className = 'flow-badges';
-        el.title = 'Trial settings — jsPsych node / trial parameters';
-        el.innerHTML = out.map(function (b) {
-          return '<span class="flow-badge">' + b + '</span>';
-        }).join('');
-        return el;
-      }
 
       var _SET_INPUT_CSS = 'width:100%;padding:6px 9px;border-radius:6px;border:1px solid var(--border);' +
         'background:var(--surface);color:var(--text);font-family:inherit;font-size:0.75rem';
@@ -1489,60 +1401,17 @@ function _applyI18n() {
       function _renderTrialSettings(insp) {
         var t = findTrial(editor.selectedTrial);
         if (!t) { insp.innerHTML = ''; return; }
-        function get(type) {
-          return t.components.filter(function (c) { return c.type === type; })[0] || null;
-        }
-        function setter(type, field) {
-          return "_setTrialLogic('" + t.id + "','" + type + "','" + field + "',this.value)";
-        }
-        var loop = get('loop'), rand = get('randomize'), br = get('branch'),
-            v = get('variable');
-
         var h = '';
         h += '<div style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:14px">';
         h += '<div style="font-weight:700;font-size:0.85rem">Trial Settings</div>';
         h += '<div style="font-size:0.66rem;color:var(--text2);margin-top:3px;line-height:1.5">' +
-             'These become jsPsych <b>node / trial parameters</b>, not trials.<br>Leave a field empty to remove it.</div>';
+             'Parameters of this jsPsych trial. Leave a field empty to remove it.</div>';
         h += '</div>';
-
-        h += _settingRow('Loop', 'jsPsych repetitions',
-          '<input type="number" min="1" style="' + _SET_INPUT_CSS + '" value="' + (loop ? loop.count : '') +
-          '" placeholder="e.g. 48" onchange="' + setter('loop', 'count') + '">');
-
-        h += _settingRow('Randomize', 'jsPsych sample / randomize_order',
-          '<select style="' + _SET_INPUT_CSS + '" onchange="' + setter('randomize', 'mode') + '">' +
-          '<option value=""' + (!rand ? ' selected' : '') + '>— none —</option>' +
-          '<option value="pick-one"' + (rand && rand.mode !== 'shuffle' ? ' selected' : '') + '>pick-one (sample size 1)</option>' +
-          '<option value="shuffle"' + (rand && rand.mode === 'shuffle' ? ' selected' : '') + '>shuffle (randomize_order)</option>' +
-          '</select>');
-
-        h += _settingRow('Branch', 'jsPsych conditional_function',
-          '<select style="' + _SET_INPUT_CSS + '" onchange="' + setter('branch', 'condition') + '">' +
-          '<option value=""' + (!br ? ' selected' : '') + '>— none —</option>' +
-          '<option value="correct"' + (br && br.condition === 'correct' ? ' selected' : '') + '>on incorrect answer</option>' +
-          '<option value="response"' + (br && br.condition === 'response' ? ' selected' : '') + '>on specific response</option>' +
-          '<option value="variable"' + (br && br.condition === 'variable' ? ' selected' : '') + '>on variable threshold</option>' +
-          '</select>');
-
-        // A real jsPsych parameter, not a stand-in for one. It applies to the
-        // node as a whole; a response component with its own trial_duration
-        // takes precedence (they are the same jsPsych parameter).
+        // A real jsPsych parameter. A response component with its own
+        // trial_duration takes precedence — they are the same parameter.
         h += _settingRow('Trial Duration', 'jsPsych trial_duration (ms)',
           '<input type="number" min="0" style="' + _SET_INPUT_CSS + '" value="' + (t.trial_duration || '') +
           '" placeholder="e.g. 1200" onchange="_setTrialField(\'' + t.id + '\',\'trial_duration\',this.value)">');
-
-        h += _settingRow('Counter', 'plain JS variable',
-          '<input type="text" style="' + _SET_INPUT_CSS + '" value="' + (v ? (v.name || '') : '') +
-          '" placeholder="e.g. score" onchange="' + setter('variable', 'name') + '">');
-
-        if (v) {
-          h += _settingRow('Counter update', 'when to increment',
-            '<select style="' + _SET_INPUT_CSS + '" onchange="' + setter('variable', 'mode') + '">' +
-            '<option value="correct"' + (v.mode !== 'always' && v.mode !== 'manual' ? ' selected' : '') + '>+1 on correct</option>' +
-            '<option value="always"' + (v.mode === 'always' ? ' selected' : '') + '>+1 on any response</option>' +
-            '<option value="manual"' + (v.mode === 'manual' ? ' selected' : '') + '>manual</option>' +
-            '</select>');
-        }
         insp.innerHTML = h;
       }
 
@@ -1585,24 +1454,6 @@ function _applyI18n() {
         renderAll();
       }
 
-      function _setTrialLogic(trialId, type, field, value) {
-        var t = findTrial(trialId);
-        if (!t) return;
-        var c = t.components.filter(function (x) { return x.type === type; })[0];
-        if (!c) {
-          if (value === '' || value == null) return; // nothing to remove
-          addComponent(trialId, type, 'l');
-          c = t.components[t.components.length - 1];
-        }
-        if (value === '' || value == null) {
-          t.components = t.components.filter(function (x) { return x !== c; });
-        } else {
-          c[field] = (field === 'count' || field === 'duration' || field === 'initial') ? Number(value) : value;
-        }
-        editor.selComp = null; // stay in trial-settings mode
-        saveState();
-        renderAll();
-      }
 
       function renderInspector() {
         var insp = document.getElementById('inspector');
@@ -1639,10 +1490,6 @@ function _applyI18n() {
             button: 'Runs on the jsPsych html-button-response plugin — every field here maps to a parameter of the same name in the official docs. choices is the list of button labels. Data records response as the button\'s 0-based INDEX (0 = first choice), not its label.',
             slider: 'Runs on the jsPsych html-slider-response plugin — every field here maps to a parameter of the same name in the official docs. Data records response as a number, plus rt and slider_start.',
             textInput: 'Runs on the jsPsych survey-text plugin — a free-text question with its own submit button. There is no right answer and no trial_duration; the trial ends when the participant submits. Data records response as an object keyed by Data Name, e.g. {Q0: "..."}, plus rt.',
-            loop: 'Set count (repetitions). Place as the last component in a trial. In fullscreen preview, remaining count is shown in the navigation bar.',
-            branch: 'Select condition type. targetFail = target trial ID on error (dropdown lists same-phase trials). Leave empty = retry current trial without consuming loop count.',
-            randomize: 'Select mode. pick-one = randomly selects 1 variant per loop (for Simon/Stroop). shuffle = shows all variants in random order (for memory tests).',
-            variable: '📊 Score counter. Place at trial start (init) and/or end (update). correct mode: +1 on correct answer. always mode: +1 on any response. manual mode: manual control. Current value shown in navigation bar.',
           };
           h +=
             '<div class="prop-section"><div class="prop-section-title">' +
@@ -1674,7 +1521,6 @@ function _applyI18n() {
             stimulus_duration: 'Hide the stimulus after this many ms; the buttons stay and the trial continues. 0 = keep it visible.',
             response_ends_trial: 'false = the trial runs for the full trial_duration even if the participant responds early (fixed viewing time).',
             enable_button_after: 'Delay before the buttons become clickable (ms). Guards against accidental early clicks.',
-            targetFail: '',
             name: 'Key this answer is stored under in the data, e.g. Q0. Defaults to Q0.',
             durationMin: 'Set this and Jitter Max (Max > Min) to randomise the duration trial by trial. 0 = no jitter.',
             durationMax: 'Upper end of the jitter range. Must be greater than Jitter Min for the jitter to apply.',
@@ -1691,8 +1537,6 @@ function _applyI18n() {
             button_label: 'Text on the button that submits the response.',
             slider_width: 'Slider width in px. 0 = match the widest element on screen.',
             require_movement: 'true = the slider must be moved before the button can be clicked.',
-            mode: 'pick-one=randomly select 1 variant per loop | shuffle=show all in random order',
-            映射按键: '🎲 When randomize pick-one selects this element, its key mapping becomes the correct keyboard key. Just type the letter (e.g. a/l/k).',
           };
           // For branch targetFail: build dropdown from same-phase trial IDs
           var currentPhase = editor.phases.find(function (p) {
@@ -1704,27 +1548,12 @@ function _applyI18n() {
             if (k === 'id' || k === 'cat' || k === 'type' || k === 'fileData' ||
                 k === 'fileName' || k === 'frames') return; // frames have their own uploader below
             if (k === 'correctKey' || k === '颜色按键映射' || k === '按键映射' || k === 'correctKeyHint') return;
-            if (c.type === 'variable' && k === 'mode') return;
-            // Ensure variable always shows mode (even if property missing in older data)
-            if (c.type === 'variable' && k === 'initial') {
-              h += '<div class="prop-row"><label>Count Mode</label>';
-              h += "<select onchange=\"updateComponent('" + t.id + "','" + c.id + "','mode',this.value)\"><option value=\"correct\"" + ((c.mode||'correct')==='correct'?' selected':'') + ">Correct +1</option><option value=\"always\"" + (c.mode==='always'?' selected':'') + ">Always +1</option><option value=\"manual\"" + (c.mode==='manual'?' selected':'') + ">Manual</option></select>";
-              h += '</div>';
-            }
             var v = c[k];
             var displayLabel = propLabel[k] || k;
-            if (k === 'targetFail' && c.condition === 'response') displayLabel = '🎯 Jump Target';
-            if (k === 'targetFail' && c.condition === 'correct') displayLabel = '❌ Target on Fail';
-            if (k === 'targetFail' && c.condition === 'variable') displayLabel = '🎯 Jump Target';
-            if (k === 'matchValue' && c.condition === 'variable') displayLabel = '📊 Variable Name';
-            if (k === 'matchValue' && c.condition === 'response') displayLabel = '🎯 Match Value';
             // textInput reuses `name` (variable name) and `prompt` (key prompt) for
             // different things, so its labels are resolved here instead.
             if (k === 'name' && c.type === 'textInput') displayLabel = '📝 Data Name';
             if (k === 'prompt' && c.type === 'textInput') displayLabel = '📝 Question';
-            if (k === 'matchValue' && c.condition === 'correct') return;
-            if (k === 'operator' && c.condition !== 'variable') return;
-            if (k === 'compareValue' && c.condition !== 'variable') return;
             h += '<div class="prop-row"><label>' + displayLabel + '</label>';
             if (k === 'position') h += sel(k, ['center', 'left', 'right'], v, t.id, c.id);
             else if (k === 'fontWeight')
@@ -1736,13 +1565,6 @@ function _applyI18n() {
                 c.id,
               );
             else if (k === 'shape') h += sel(k, ['circle', 'square', 'triangle', 'diamond', 'star'], v, t.id, c.id);
-            else if (k === 'condition') {
-              h += '<select onchange="_switchBranchCondition(\'' + t.id + '\',\'' + c.id + '\',this.value)">';
-              [{v:'correct',l:'✅ Correct Key'},{v:'response',l:'💬 Response Match'},{v:'variable',l:'📊 Variable Check'}].forEach(function(o) { h += '<option value="' + o.v + '"' + (v === o.v ? ' selected' : '') + '>' + o.l + '</option>'; });
-              h += '</select>';
-            }
-            else if (k === 'operator') { h += sel(k, ['>=','<=','>','<','==','!='], v||'>=', t.id, c.id); }
-            else if (k === 'compareValue') { h += '<input value="' + (v || '') + '" onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'compareValue\',this.value)" placeholder="比较值（如: 5）" type="number">'; }
             else if (k === 'mode')
               h +=
                 '<select onchange="updateComponent(\'' +
@@ -1863,29 +1685,6 @@ function _applyI18n() {
                 '</div>';
             h += '</div>';
           });
-          if (c.type === 'loop') {
-            h +=
-              '<p style="font-size:0.7rem;color:var(--text2);line-height:1.5;margin:4px 0">Repeats the current trial a specified number of times. Use for multi-round experiments.</p>';
-          }
-          if (c.type === 'variable') {
-            h +=
-              '<p style="font-size:0.7rem;color:var(--text2);line-height:1.5;margin:4px 0">Defines a variable readable by branch conditions or modifiable by other components.</p>';
-          }
-          if (c.type === 'randomize') {
-            h +=
-              '<p style="font-size:0.7rem;color:var(--text2);line-height:1.5;margin:4px 0">Shuffles the order of stimulus components within the trial. Random order on each run.</p>';
-          }
-          if (c.type === 'branch') {
-            var cd = {
-              correct: 'Check if key press matches correct key',
-              response: 'Check if participant made a response',
-              variable: 'Check if variable value meets condition',
-            };
-            h +=
-              '<p style="font-size:0.7rem;color:var(--text2);line-height:1.5;margin:4px 0">' +
-              (cd[c.condition] || '') +
-              '</p>';
-          }
           if (c.type === 'image') {
             h +=
               '<div class="prop-row"><label>Upload Image</label><label id="img-upload-label" style="padding:6px 12px;background:var(--accent);color:#ffffff;border-radius:6px;cursor:pointer;font-size:0.75rem;display:inline-block">📁 选择文件</label><input type="file" id="img-file-input" accept="image/*" data-tid="' +
@@ -1951,9 +1750,7 @@ function _applyI18n() {
           t.id +
           '\',\'text\',\'s\')">📝 Text</button><button class="btn btn-outline" style="font-size:0.65rem;padding:4px 8px" onclick="addComponent(\'' +
           t.id +
-          '\',\'keyboard\',\'r\')">⌨️ Keyboard</button><button class="btn btn-outline" style="font-size:0.65rem;padding:4px 8px" onclick="addComponent(\'' +
-          t.id +
-          "','loop','l')\">🔄 Loop</button></div>";
+          "','keyboard','r')\">⌨️ Keyboard</button></div>";
         insp.innerHTML = h;
         setTimeout(function () {
           function bindUpload(fiId, lbId, accepts, maxMB) {
@@ -2594,6 +2391,7 @@ function _applyI18n() {
       function migratePos() {
         var droppedDelays = 0;
         var droppedClicks = 0;
+        var droppedLogic = 0;
         // The per-phase array is `timeline` now — the same name jsPsych uses for
         // a node's children, so the later step to a nested tree is about nesting
         // rather than about renaming.
@@ -2603,6 +2401,18 @@ function _applyI18n() {
         });
         editor.phases.forEach(function (p) {
           p.timeline.forEach(function (t) {
+            // loop / randomize / branch / variable are gone: ExpVis no longer
+            // carries node-level parameters at all, so a trial runs once and the
+            // timeline is exactly what the canvas shows. Experiments that relied
+            // on them need the loop, the sampling or the conditional jump added
+            // by hand in the exported code.
+            var logicComps = t.components.filter(function (c) {
+              return ['loop', 'randomize', 'branch', 'variable'].indexOf(c.type) >= 0;
+            });
+            if (logicComps.length) {
+              droppedLogic += logicComps.length;
+              t.components = t.components.filter(function (c) { return logicComps.indexOf(c) < 0; });
+            }
             // `click` is gone — it had no official counterpart.
             var clicks = t.components.filter(function (c) { return c.type === 'click'; });
             if (clicks.length) {
@@ -2761,6 +2571,12 @@ function _applyI18n() {
             });
           });
         });
+        if (droppedLogic) {
+          console.info('[ExpVis] Removed ' + droppedLogic + ' loop / randomize / branch / variable ' +
+            'component(s). ExpVis no longer carries node-level parameters: each trial runs once, ' +
+            'and the timeline is exactly what the canvas shows. Add repetitions, sampling or a ' +
+            'conditional jump by hand in the exported code if the experiment needs them.');
+        }
         if (droppedClicks) {
           console.info('[ExpVis] Removed ' + droppedClicks + ' "click" component(s): it had no ' +
             'official jsPsych counterpart. A button, or a keyboard trial set to any key, covers the same ground.');
@@ -2838,9 +2654,14 @@ function _applyI18n() {
       // ============ Templates ============
       function loadTemplate(name) {
         resetEditor();
-        // Helper: set component props by index in a trial
+        // Helper: set component props by index in a trial. Tolerant of a missing
+        // index: these templates were written against component types that have
+        // since been removed, so the indices have shifted and the surplus calls
+        // land on nothing. They are being rewritten; until then this keeps them
+        // loadable instead of throwing.
         function sc(trial, idx, props) {
           var c = trial.components[idx];
+          if (!c) return;
           Object.keys(props).forEach(function (k) {
             c[k] = props[k];
           });
@@ -3435,8 +3256,8 @@ function _applyI18n() {
       var stims = [],
         respType = null,
         respInfo = {},
-        logic = { loop: null, hints: [], randomizeMode: null, randomizeStims: [], trial_duration: 0, hasBranch: false, branchCond: 'correct', branchTarget: '', branchMatch: '', branchOp: '>=', branchCmp: '', hasVariable: false, varName: '', varInit: 0, varMode: 'correct' };
-      var preStims = [], postStims = [], foundRandomize = false;
+        logic = { loop: null, hints: [], trial_duration: 0 };
+      var preStims = [], postStims = [];
       // fixation is a *timed segment*: it becomes its own jsPsych trial inside
       // the node's timeline, so its duration actually takes effect. (Previously
       // it was folded into the stimulus HTML and the duration was recorded but
@@ -3453,8 +3274,7 @@ function _applyI18n() {
         var isStim = ['text', 'shape', 'image', 'audio', 'video'].indexOf(c.type) >= 0;
         if (isStim) {
           seenVisual = true;
-          if (!foundRandomize) { preStims.push(c); }
-          else { postStims.push(c); logic.randomizeStims.push(c); }
+          preStims.push(c);
           stims.push(c);
           return;
         }
@@ -3538,23 +3358,6 @@ function _applyI18n() {
           };
           respInfo.buttonLabel = c.button_label || '';
           respInfo.autocomplete = (c.autocomplete === true || c.autocomplete === 'true');
-        } else if (c.type === 'loop') {
-          logic.loop = c.count;
-        } else if (c.type === 'randomize') {
-          foundRandomize = true;
-          logic.randomizeMode = c.mode || 'pick-one';
-        } else if (c.type === 'branch') {
-          logic.hasBranch = true;
-          logic.branchCond = c.condition || 'correct';
-          logic.branchTarget = c.targetFail || '';
-          logic.branchMatch = c.matchValue || '';
-          logic.branchOp = c.operator || '>=';
-          logic.branchCmp = c.compareValue || '';
-        } else if (c.type === 'variable') {
-          logic.hasVariable = true;
-          logic.varName = c.name;
-          logic.varInit = c.initial;
-          logic.varMode = c.mode || 'correct';
         }
       });
 // Default: any-key to continue (for instructions / feedback / stimulus-only).
@@ -3585,8 +3388,7 @@ function _applyI18n() {
             // else can share its trial — say so rather than dropping silently.
             if (t.components.some(function (c) { return c.type === 'animation'; })) {
               var _animOthers = t.components.filter(function (c) {
-                return ['loop', 'variable', 'branch', 'randomize'].indexOf(c.type) < 0 &&
-                       c.type !== 'animation';
+                return c.type !== 'animation';
               });
               if (_animOthers.length) {
                 logic.hints.push('// !! This trial mixes an animation with ' + _animOthers.length +
@@ -3630,17 +3432,10 @@ function _applyI18n() {
                 logic.hints.push('// !! This animation has no frames uploaded — nothing to play.');
               }
               logic.hints.forEach(function (h) { code += h + '\n'; });
-              if (logic.hasVariable && logic.varName) {
-                code += 'var ' + logic.varName + ' = ' + (logic.varInit || 0) + ';\n';
-              }
-              // Same rule as everywhere else: repetitions make it a real node;
-              // without them it is one trial and is emitted flat. Provenance data
-              // and the ALL_KEYS default are left out.
-              var _aLoop = !!logic.loop;
-              var _a = _aLoop ? '    ' : '  ';
+              // ExpVis carries no node-level parameters, so every trial is a flat
+              // trial. Provenance data and the ALL_KEYS default are left out too.
+              var _a = '  ';
               code += 'var ' + trialName + ' = {\n';
-              if (_aLoop) code += '  repetitions: ' + logic.loop + ',\n';
-              if (_aLoop) code += '  timeline: [{\n';
               code += _a + 'type: jsPsychAnimation,\n';
               code += _a + 'stimuli: [' + _fr.map(function (f) {
                 return _mediaRefData(f.fileData, 'image');
@@ -3660,19 +3455,12 @@ function _applyI18n() {
               if (!respInfo.renderOnCanvas) code += _a + 'render_on_canvas: false,\n';
               // strip the trailing comma off the last property
               code = code.replace(/,\n$/, '\n');
-              if (_aLoop) code += '  }]\n};\n';
-              else code += '};\n';
+              code += '};\n';
               code += 'timeline.push(' + trialName + ');\n\n';
               return; // this trial is complete
             }
 
             // --- Build stimulus HTML ---
-            // For randomize pick-one: generate timeline_variables per stimulus variant
-            var hasRandomizePickOne = logic.randomizeMode === 'pick-one' && logic.randomizeStims.length > 1;
-            var hasRandomizeShuffle = logic.randomizeMode === 'shuffle' && logic.randomizeStims.length > 1;
-            // Both modes drive the trial from timeline_variables; they differ only in
-            // how many variants run per repetition (see the `sample` / `randomize_order` below).
-            var hasVariantTimeline = hasRandomizePickOne || hasRandomizeShuffle;
             // Presentation steps. Components dropped on the trial's shared screen
             // collect into one step; a component marked `newStep` opens a new one,
             // shown on its own for its Step Duration. Only the LAST step shares the
@@ -3686,31 +3474,15 @@ function _applyI18n() {
               if (!_stepGroups.length || c.newStep) _stepGroups.push([c]);
               else _stepGroups[_stepGroups.length - 1].push(c);
             });
-            // Steps and randomize variants are not combinable yet: a variant is
-            // already one screen per trial, so the split is skipped and explained.
             // The final screen is the response screen: it stays up until the
             // participant answers (or, with no response component, until any key),
             // which is exactly what a trial with no trial_duration does in
             // hand-written jsPsych. The canvas marks that step as "until response"
             // rather than showing a Step Duration that would not be used.
-            var _splitSteps = !hasVariantTimeline && _stepGroups.length > 1;
+            var _splitSteps = _stepGroups.length > 1;
             var _leadGroups = _splitSteps ? _stepGroups.slice(0, -1) : [];
-            if (hasVariantTimeline && _stepGroups.length > 1) {
-              logic.hints.push('// !! This trial mixes randomize variants with presentation steps; ' +
-                'the steps were ignored. Split them into separate trials.');
-            }
-            // Build HTML for pre-randomize components (fixation etc.)
+            // All visual components go into this trial's screens.
             var preHTML = preStims.map(function (c) { return compHTML(c); }).join('');
-            // Individual stimulus variants for timeline_variables
-            var stimVariants = logic.randomizeStims.map(function (c) {
-              return {
-                html: compHTML(c),
-                correctKey: c.映射按键 || '',
-                // The image plugins take the picture itself as `stimulus`, so the
-                // variant holds the media variable rather than the <img> markup.
-                mediaVar: c.type === 'image' ? _mediaRef(c) : null,
-              };
-            });
             // Flow container: components stack in a flex column. jsPsych's own
             // `.jspsych-content-wrapper { margin:auto }` already centres this block,
             // so no justify-content is needed here — and `min-height` actively hurt,
@@ -3725,17 +3497,17 @@ function _applyI18n() {
             // instead — see _deviceStyle().
             var _bodyHTML = _splitSteps
               ? _stepGroups[_stepGroups.length - 1].map(function (c) { return compHTML(c); }).join('')
-              : preHTML + (hasVariantTimeline ? '__VARIANT__' : postStims.map(function(c){return compHTML(c);}).join(''));
+              : preHTML + postStims.map(function(c){return compHTML(c);}).join('');
             var fullStimHTML = _jsStr(_stage(_bodyHTML));
 
             // Where the correct answer comes from. Recorded into the trial's `data`
             // so the export is directly analysable, and used to score the trial.
-            var correctResponseExpr = null;
-            if (hasVariantTimeline && stimVariants.length > 1) {
-              correctResponseExpr = "jsPsych.timelineVariable('correct_response')";
-            } else if (respInfo.correctKey) {
-              correctResponseExpr = "'" + String(respInfo.correctKey).replace(/'/g, "\\'") + "'";
-            }
+            // `correctKey` is not a jsPsych parameter — it is ExpVis scoring, and
+            // computing data.correct in on_finish is the idiom the official docs
+            // use for exactly this.
+            var correctResponseExpr = respInfo.correctKey
+              ? "'" + String(respInfo.correctKey).replace(/'/g, "\\'") + "'"
+              : null;
 
             // --- Generate trial object ---
             var lines = [];
@@ -3743,10 +3515,6 @@ function _applyI18n() {
               lines.push('  '.repeat(indent) + str);
             }
 
-            // Variable init
-            if (logic.hasVariable && logic.varName) {
-              code += 'var ' + logic.varName + ' = ' + (logic.varInit || 0) + ';\n';
-            }
             // Emit hints for remaining unsupported logic
             logic.hints.forEach(function (h) {
               code += h + '\n';
@@ -3754,43 +3522,13 @@ function _applyI18n() {
 
             // A node holding exactly one trial and carrying no node-level
             // parameters IS just a trial, so it is emitted flat — the shape
-            // hand-written jsPsych uses. Anything with repetitions / sample /
-            // randomize_order / a conditional entry / extra timed segments has to
-            // keep the wrapper, because those belong to the node, not the trial.
-            var _hasBranchEntry = !!(logic.hasBranch && logic.branchTarget);
-            var _plainNode = !hasVariantTimeline && !logic.loop && !_hasBranchEntry &&
-              preTiming.length === 0 && postTiming.length === 0 && _leadGroups.length === 0;
+            // hand-written jsPsych uses. A wrapper is needed only when the node
+            // really holds more than one trial: extra timed segments, or the
+            // presentation steps of a multi-screen trial.
+            var _plainNode = preTiming.length === 0 && postTiming.length === 0 &&
+              _leadGroups.length === 0;
 
             L(0, 'var ' + trialName + ' = {');
-
-            if (hasVariantTimeline && stimVariants.length > 1) {
-              // Variants live in their own named array (as in the jsPsych
-              // tutorial), which keeps the node itself readable.
-              code += '// Stimulus variants for ' + trialName + '\n';
-              code += 'var ' + trialName + '_variants = [\n';
-              stimVariants.forEach(function (v) {
-                var _stimExpr = (useImagePlugin && v.mediaVar)
-                  ? v.mediaVar
-                  : "'" + _jsStr(preHTML + v.html) + "'";
-                code += '  {stimulus: ' + _stimExpr +
-                        ', correct_response: "' + (v.correctKey || '') + '"},\n';
-              });
-              code += '];\n\n';
-              L(1, 'timeline_variables: ' + trialName + '_variants,');
-              if (hasRandomizePickOne) {
-                // pick-one: draw ONE variant per repetition.
-                // (randomize_order would instead run every variant each round.)
-                L(1, "sample: {type: 'with-replacement', size: 1},");
-              } else {
-                // shuffle: run every variant, in a random order, each repetition.
-                L(1, 'randomize_order: true,');
-              }
-              if (logic.loop) {
-                L(1, 'repetitions: ' + logic.loop + ',');
-              }
-            } else if (logic.loop) {
-              L(1, 'repetitions: ' + logic.loop + ',');
-            }
 
             // --- node timeline: timed segments around the stimulus trial ---
             if (!_plainNode) L(1, 'timeline: [');
@@ -3845,9 +3583,7 @@ function _applyI18n() {
             // HTML shown above the questions.
             var _stimKey = respType === 'textInput' ? 'preamble' : 'stimulus';
             {
-              if (hasVariantTimeline && stimVariants.length > 1) {
-                L(indent, _stimKey + ": jsPsych.timelineVariable('stimulus'),");
-              } else if (useImagePlugin) {
+              if (useImagePlugin) {
                 // The picture itself, as the image plugins expect.
                 L(indent, 'stimulus: ' + _mediaRef(imageOnlyComp) + ',');
               } else if (preHTML || postStims.length > 0) {
@@ -3934,111 +3670,21 @@ function _applyI18n() {
             if (respType === 'keyboard' && (respInfo.prompt || stims.length === 0))
               L(indent, "prompt: '" + _jsStr(respInfo.prompt || '<p>Press any key to continue</p>') + "',");
 
-            // --- what runs after the response: scoring, counter, branch jump ---
+            // --- scoring ---
+            // `data` is written only when it carries something the analysis needs.
+            // Provenance fields are not added automatically: jsPsych records
+            // trial_index and trial_type on its own.
             var hasScore = !!correctResponseExpr;
-            var hasVarUpdate = !!(logic.hasVariable && logic.varName && logic.varMode !== 'manual');
-            var branchCondCode = null;
-            if (logic.hasBranch && logic.branchTarget) {
-              if (logic.branchCond === 'correct') {
-                if (hasScore) {
-                  branchCondCode = '!data.correct';
-                } else {
-                  logic.hints.push('// NOTE: branch waits on correctness, but no correct key is ' +
-                    'configured for this trial — the jump will be skipped. Set the keyboard ' +
-                    "component's correct key, or use a shape/text key mapping.");
-                }
-              } else if (logic.branchCond === 'response') {
-                branchCondCode = 'data.response === "' +
-                  String(logic.branchMatch).replace(/"/g, '\\"') + '"';
-              } else if (logic.branchCond === 'variable' && logic.branchMatch) {
-                branchCondCode = logic.branchMatch + ' ' + logic.branchOp + ' ' +
-                  (logic.branchCmp === '' ? '0' : logic.branchCmp);
-              }
-            }
-            var needsOnFinish = hasScore || hasVarUpdate || !!branchCondCode;
-
-            // Variable tracking in data.
-            // NB: `trial_index` is a jsPsych reserved key — a custom value would be
-            // silently ignored, so use a non-conflicting name for the in-phase index.
-            // `data` is written only when it carries something the analysis needs —
-            // the correct answer for scoring, or a counter. Provenance fields are
-            // not added automatically: jsPsych records trial_index and trial_type
-            // on its own, and an experiment that needs more can add it in the GUI.
-            var _dataParts = [];
-            if (logic.hasVariable && logic.varName) {
-              _dataParts.push(logic.varName + ':' + logic.varName);
-            }
             if (correctResponseExpr) {
-              _dataParts.push('correct_response: ' + correctResponseExpr);
-            }
-            if (_dataParts.length) {
-              var dataStr = 'data: {' + _dataParts.join(',') + '}';
-              if (needsOnFinish) dataStr += ',';
-              L(indent, dataStr);
-            }
-
-            if (needsOnFinish) {
+              L(indent, 'data: {correct_response: ' + correctResponseExpr + '},');
               L(indent, 'on_finish: function(data) {');
-              if (hasScore) {
-                L(indent + 1, 'data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);');
-              }
-              if (hasVarUpdate) {
-                L(indent + 1, (logic.varMode === 'correct' ? 'if (data.correct) ' : '') +
-                  logic.varName + ' += 1;');
-              }
-              // The branch is emitted as a conditional timeline entry below, so
-              // on_finish only scores the trial.
+              L(indent + 1, 'data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);');
               L(indent, '},');
             }
             // strip the trial's trailing property comma, then close the entry
             var last = lines[lines.length - 1];
             if (last.slice(-1) === ',') lines[lines.length - 1] = last.slice(0, -1);
             if (!_plainNode) L(ei, '},');
-
-            // timed segments after the stimulus
-            // Branch jump as a conditional timeline entry — the jsPsych idiom
-            // (conditional_function), rather than mutating the timeline mid-run.
-            if (branchCondCode) {
-              _usedPlugins['jsPsychHtmlButtonResponse'] = true;
-              // Render the branch's target trial as the error page, so what the
-              // researcher designed in the GUI is what the participant sees.
-              var failTrialObj = logic.branchTarget ? findTrial(logic.branchTarget) : null;
-              var failHTML = null;
-              var failDuration = 1500;
-              if (failTrialObj && failTrialObj.components.length) {
-                failHTML = failTrialObj.components
-                  .map(function (fc) { return compHTML(fc); }).join('');
-                // The error page holds for as long as the target trial says.
-                if (failTrialObj.trial_duration) failDuration = failTrialObj.trial_duration;
-              }
-              var prevRef = "jsPsych.data.get().last(1).values()[0]";
-              var condExpr;
-              if (logic.branchCond === 'correct') {
-                condExpr = '!' + prevRef + '.correct';
-              } else if (logic.branchCond === 'response') {
-                // survey-text records response as an object keyed by question name
-                var _respRef = prevRef + '.response';
-                if (respType === 'textInput' && respInfo.question) {
-                  _respRef += "['" + String(respInfo.question.name).replace(/'/g, "\\'") + "']";
-                }
-                condExpr = _respRef + ' === "' + String(logic.branchMatch).replace(/"/g, '\\"') + '"';
-              } else {
-                condExpr = logic.branchMatch + ' ' + logic.branchOp + ' ' + (logic.branchCmp === '' ? '0' : logic.branchCmp);
-              }
-              L(ei, '{');
-              L(ei + 1, 'timeline: [{');
-              L(ei + 2, 'type: jsPsychHtmlButtonResponse,');
-              L(ei + 2, failHTML
-                ? "stimulus: '" + _jsStr(failHTML) + "',"
-                : "stimulus: '<p style=\"color:#ef4444;font-size:22px\">Wrong answer! Press the key according to the rules.</p>',");
-              L(ei + 2, 'choices: ["Continue"],');
-              L(ei + 2, 'trial_duration: ' + failDuration);
-              L(ei + 1, '}],');
-              L(ei + 1, 'conditional_function: function () {');
-              L(ei + 2, 'return ' + condExpr + ';');
-              L(ei + 1, '}');
-              L(ei, '},');
-            }
 
             postTiming.forEach(emitTimingTrial);
 
@@ -5207,22 +4853,6 @@ function showVersionHistory() {
       }
       startOnboarding();
     
-function _switchBranchCondition(trialId, compId, newVal) {
-  updateComponent(trialId, compId, 'condition', newVal);
-  if (newVal === 'correct') {
-    updateComponent(trialId, compId, 'matchValue', '');
-  } else if (newVal === 'variable') {
-    updateComponent(trialId, compId, 'matchValue', '');
-    updateComponent(trialId, compId, 'operator', '>=');
-    updateComponent(trialId, compId, 'compareValue', '');
-  }
-  if (newVal !== 'variable') {
-    updateComponent(trialId, compId, 'operator', '>=');
-    updateComponent(trialId, compId, 'compareValue', '');
-  }
-  renderInspector();
-}
-
 // ============ Published Experiment File Generator ============
 function generatePublishedFile() {
   // The published file *is* the jsPsych experiment — byte-for-byte the same HTML
