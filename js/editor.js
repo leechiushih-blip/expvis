@@ -3200,20 +3200,105 @@ function _applyI18n() {
           }
         }
 
-        // One jsPsych node per phase. The trials are declared first, then
-        // collected into the node's `timeline` — the shape the jsPsych timeline
-        // docs use for a block of trials. Semantically it is a pass-through: a
-        // node with no node-level parameters runs its children exactly as
-        // pushing them one at a time would (same order, same `trial_index`,
-        // and the node itself records no data). What it buys is that the
-        // generated code mirrors the canvas, and that each phase has a named
-        // place to add `repetitions` / `sample` / `conditional_function` by hand.
+        // What makes two of a phase's trials the same procedure. Everything
+        // except the values of the properties: the shape of the object, the
+        // properties it has, in order, and at what nesting they sit.
+        function _trialSignature(part) {
+          // The first and last lines are `var <name> = {` and `};` — the wrapper
+          // the single-trial emission adds. The name itself differs between
+          // trials and says nothing about the shape, so it is not compared.
+          var body = part.lines.slice(1, -1);
+          var inSlot = {};
+          part.slots.forEach(function (s) {
+            for (var i = s.from; i < s.to; i++) inSlot[i - 1] = true;
+          });
+          return JSON.stringify([
+            body.filter(function (_, i) { return !inSlot[i]; }),
+            part.slots.map(function (s) { return s.path + '@' + s.indent; }),
+          ]);
+        }
+
+        // A phase becomes one procedure plus a table of values when — and only
+        // when — its trials are that. jsPsych's timeline variables repeat one
+        // procedure; they cannot describe a set of trials that are structurally
+        // different from each other. So a phase whose trials differ in shape, or
+        // that holds a single trial, or that is empty, is emitted as plain
+        // trials instead. Returns null in all of those cases.
+        function _factorPhase(parts) {
+          if (parts.length < 2) return null;
+          if (parts.some(function (p) { return p.kind !== 'trial'; })) return null;
+          var sig = _trialSignature(parts[0]);
+          if (!parts.every(function (p) { return _trialSignature(p) === sig; })) return null;
+
+          // The properties that actually differ. A phase whose trials differ in
+          // nothing has no table to build, and is emitted as plain trials.
+          var varies = [];
+          parts[0].slots.forEach(function (s, i) {
+            if (!parts.every(function (p) { return p.slots[i].val === s.val; })) varies.push(i);
+          });
+          if (!varies.length) return null;
+
+          // Name each one after the property itself. `timing.0.stimulus` gets
+          // that path only when a bare `stimulus` is already taken, so the
+          // common case — the response trial's stimulus varying — reads as
+          // `stimulus`.
+          var used = {}, names = {};
+          varies.forEach(function (i) {
+            var base = parts[0].slots[i].path.split('.').pop();
+            used[base] = (used[base] || 0) + 1;
+            names[i] = used[base] > 1 ? base + '_' + used[base] : base;
+          });
+
+          // The procedure: the first trial, with the varying properties replaced
+          // by lookups. Line ranges come from the slots, so a multi-line value
+          // (`on_finish`, or the `stimulus` of a trial with a fixation) collapses
+          // to one line without disturbing anything around it.
+          var procedure = [], cursor = 0;
+          varies.forEach(function (i) {
+            var s = parts[0].slots[i];
+            for (var k = cursor; k < s.from; k++) procedure.push(parts[0].lines[k]);
+            procedure.push('  '.repeat(s.indent) + s.key +
+              ": jsPsych.timelineVariable('" + names[i] + "'),");
+            cursor = s.to;
+          });
+          for (var k = cursor; k < parts[0].lines.length; k++) procedure.push(parts[0].lines[k]);
+
+          // Drop the `var x = {` and `};` the single-trial emission wrapped it in;
+          // the node supplies its own braces and indentation.
+          procedure = procedure.slice(1, -1);
+          var last = procedure[procedure.length - 1];
+          if (last.slice(-1) === ',') procedure[procedure.length - 1] = last.slice(0, -1);
+
+          return {
+            procedure: procedure,
+            table: parts.map(function (p) {
+              var row = {};
+              varies.forEach(function (i) { row[names[i]] = p.slots[i].val; });
+              return row;
+            }),
+          };
+        }
+
+        // One jsPsych node per phase. When the phase's trials are one procedure
+        // with different values, that is what is emitted: a `timeline_variables`
+        // table the trials' values were lifted into. Otherwise the trials are
+        // declared and collected into the node's `timeline`, which is the shape
+        // the jsPsych timeline docs use for a block of trials.
+        //
+        // Either way it is semantically a pass-through: a node with no node-level
+        // parameters runs its children exactly as pushing them one at a time
+        // would (same order, same `trial_index`, and the node itself records no
+        // data). What the node buys is that the generated code mirrors the
+        // canvas, and that each phase has a named place to add `repetitions` /
+        // `sample` / `conditional_function` by hand.
         var _phaseSlugs = {};
         editor.phases.forEach(function (ph, phi) {
           code += '// ── ' + _stripEmoji(ph.name) + ' (' + (phi + 1) + '/' + editor.phases.length + ') ──\n';
           var phaseSlug = _uniqueSlug(_slugify(ph.name), _phaseSlugs);
-          // Trial variable names, in timeline order, for the node below.
-          var phaseTrials = [];
+          // Each trial is compiled into a buffer first, because the phase cannot
+          // be emitted until it is known whether its trials are one procedure
+          // with different values (see _factorPhase) or just trials.
+          var phaseParts = [];
           ph.timeline.forEach(function (t, ti) {
                   // --- Classify components ---
       var stims = [],
@@ -3383,41 +3468,45 @@ function _applyI18n() {
             // Semantic, stable names in the generated code: the phase name plus
             // the trial's index within that phase.
             var trialName = phaseSlug + '_trial_' + (ti + 1);
-            phaseTrials.push(trialName);
             var pname = pluginName(respType, useImagePlugin);
 
             // ---- jsPsychAnimation owns the display element, so it is emitted as
             // the whole trial rather than as one parameter among others. ----
             if (respType === 'animation') {
+              var _out = '';
               var _fr = respInfo.frames || [];
               if (!_fr.length) {
                 logic.hints.push('// !! This animation has no frames uploaded — nothing to play.');
               }
-              logic.hints.forEach(function (h) { code += h + '\n'; });
+              logic.hints.forEach(function (h) { _out += h + '\n'; });
               // ExpVis carries no node-level parameters, so every trial is a flat
               // trial. Provenance data and the ALL_KEYS default are left out too.
               var _a = '  ';
-              code += 'var ' + trialName + ' = {\n';
-              code += _a + 'type: jsPsychAnimation,\n';
-              code += _a + 'stimuli: [' + _fr.map(function (f) {
+              _out += 'var ' + trialName + ' = {\n';
+              _out += _a + 'type: jsPsychAnimation,\n';
+              _out += _a + 'stimuli: [' + _fr.map(function (f) {
                 return _mediaRefData(f.fileData, 'image');
               }).join(', ') + '],\n';
-              code += _a + 'frame_time: ' + (respInfo.frameTime || 250) + ',\n';
-              if (respInfo.frameIsi) code += _a + 'frame_isi: ' + respInfo.frameIsi + ',\n';
+              _out += _a + 'frame_time: ' + (respInfo.frameTime || 250) + ',\n';
+              if (respInfo.frameIsi) _out += _a + 'frame_isi: ' + respInfo.frameIsi + ',\n';
               if (respInfo.sequenceReps && respInfo.sequenceReps !== 1) {
-                code += _a + 'sequence_reps: ' + respInfo.sequenceReps + ',\n';
+                _out += _a + 'sequence_reps: ' + respInfo.sequenceReps + ',\n';
               }
               // "ALL_KEYS" is the plugin default, so only a named key list is written.
               if (respInfo.animChoices !== 'ALL_KEYS') {
-                code += _a + 'choices: [' + respInfo.animChoices.map(function (k) {
+                _out += _a + 'choices: [' + respInfo.animChoices.map(function (k) {
                   return '"' + String(k).replace(/"/g, '\\"') + '"';
                 }).join(', ') + '],\n';
               }
-              if (respInfo.prompt) code += _a + "prompt: '" + _jsStr(String(respInfo.prompt)) + "',\n";
-              if (!respInfo.renderOnCanvas) code += _a + 'render_on_canvas: false,\n';
+              if (respInfo.prompt) _out += _a + "prompt: '" + _jsStr(String(respInfo.prompt)) + "',\n";
+              if (!respInfo.renderOnCanvas) _out += _a + 'render_on_canvas: false,\n';
               // strip the trailing comma off the last property
-              code = code.replace(/,\n$/, '\n');
-              code += '};\n\n';
+              _out = _out.replace(/,\n$/, '\n');
+              _out += '};\n\n';
+              // jsPsychAnimation owns the display element, so it is emitted as a
+              // whole trial with no properties to lift into a variable table —
+              // a phase of animations never factors.
+              phaseParts.push({kind: 'raw', text: _out});
               return; // this trial is complete
             }
 
@@ -3456,11 +3545,36 @@ function _applyI18n() {
             function L(indent, str) {
               lines.push('  '.repeat(indent) + str);
             }
+            // Every property is recorded as it is written, so that a phase whose
+            // trials are the same procedure with different values can be
+            // re-rendered as one procedure plus a table of those values. Recorded
+            // at the point of emission rather than parsed back out of the finished
+            // text: this file's history is a list of bugs from two places holding
+            // separate opinions about one thing.
+            var slots = [];
+            // A timing trial lives inside the node's own `timeline`, where it can
+            // have a `stimulus` of its own, so its properties are path-qualified.
+            var _slotPrefix = '';
+            var _timingN = 0;
+            // `block` emits a value that spans lines (on_finish, questions); `val`
+            // is then whatever was emitted, which is all the diff needs — a
+            // substitution always collapses the property back to one line.
+            function P(indent, key, val, block) {
+              var from = lines.length;
+              if (block) block(); else L(indent, key + ': ' + val + ',');
+              slots.push({
+                path: _slotPrefix ? _slotPrefix + '.' + key : key,
+                key: key,
+                indent: indent,
+                from: from,
+                to: lines.length,
+                val: block ? lines.slice(from).join('\n') : val,
+              });
+            }
 
-            // Emit hints for remaining unsupported logic
-            logic.hints.forEach(function (h) {
-              code += h + '\n';
-            });
+            // Hints for remaining unsupported logic ride along with the trial they
+            // are about, so they stay next to it however the phase is emitted.
+            var _trialHints = logic.hints.slice();
 
             // A node holding exactly one trial and carrying no node-level
             // parameters IS just a trial, so it is emitted flat — the shape
@@ -3480,10 +3594,11 @@ function _applyI18n() {
               // fixation renders its cross through the normal component renderer
               // (so font size / colour are preserved); delay is a blank wait.
               var stim = compHTML(c);
+              _slotPrefix = 'timing.' + (_timingN++);
               L(ei, '{');
-              L(ei + 1, 'type: jsPsychHtmlKeyboardResponse,');
-              L(ei + 1, "stimulus: '" + _jsStr(_stage(stim)) + "',");
-              L(ei + 1, "choices: 'NO_KEYS',");
+              P(ei + 1, 'type', 'jsPsychHtmlKeyboardResponse');
+              P(ei + 1, 'stimulus', "'" + _jsStr(_stage(stim)) + "'");
+              P(ei + 1, 'choices', "'NO_KEYS'");
               // A Max > Min range turns the duration into a dynamic parameter, the
               // same idiom the jsPsych rt-task demo uses for its jittered fixation.
               var _lo = Number(c.durationMin) || 0, _hi = Number(c.durationMax) || 0;
@@ -3492,100 +3607,105 @@ function _applyI18n() {
                 var _vals = [];
                 for (var _v = _lo; _v <= _hi; _v += _step) _vals.push(_v);
                 if (_vals[_vals.length - 1] !== _hi) _vals.push(_hi);
-                L(ei + 1, 'trial_duration: function () {');
-                L(ei + 2, 'return jsPsych.randomization.sampleWithoutReplacement(' +
-                          JSON.stringify(_vals) + ', 1)[0];');
-                L(ei + 1, '},');
+                P(ei + 1, 'trial_duration', null, function () {
+                  L(ei + 1, 'trial_duration: function () {');
+                  L(ei + 2, 'return jsPsych.randomization.sampleWithoutReplacement(' +
+                            JSON.stringify(_vals) + ', 1)[0];');
+                  L(ei + 1, '},');
+                });
               } else {
-                L(ei + 1, 'trial_duration: ' + (c.trial_duration || 0) + ',');
+                P(ei + 1, 'trial_duration', String(c.trial_duration || 0));
               }
               L(ei, '},');
+              _slotPrefix = '';
             }
             preTiming.forEach(emitTimingTrial);
 
 
             if (!_plainNode) L(ei, '{');
             var indent = _plainNode ? 1 : ei + 1;
-            L(indent, 'type: ' + pname + ',');
+            P(indent, 'type', pname);
             // survey-text has no `stimulus` — its equivalent is `preamble`, the
             // HTML shown above the questions.
             var _stimKey = respType === 'textInput' ? 'preamble' : 'stimulus';
             {
               if (useImagePlugin) {
                 // The picture itself, as the image plugins expect.
-                L(indent, 'stimulus: ' + _mediaRef(imageOnlyComp) + ',');
+                P(indent, 'stimulus', _mediaRef(imageOnlyComp));
               } else if (preHTML || postStims.length > 0) {
-                L(indent, _stimKey + ": '" + fullStimHTML + "',");
+                P(indent, _stimKey, "'" + fullStimHTML + "'");
               } else if (respType === 'button' || respType === 'slider') {
                 // The button and slider plugins both expect `stimulus`; omitting
                 // it makes them render the literal string "undefined".
-                L(indent, "stimulus: '',");
+                P(indent, 'stimulus', "''");
               }
               if (respInfo.choices === 'ALL_KEYS') {
                 // "ALL_KEYS" is the plugin's own default, so it is left out — the
                 // trial behaves identically and the code reads like hand-written
                 // jsPsych. A named key list still has to be written out.
               } else if (respInfo.choices && respInfo.choices.length) {
-                L(indent,'choices: [' + respInfo.choices.map(function (x) { return '"' + x + '"'; }).join(',') + '],');
+                P(indent, 'choices', '[' + respInfo.choices.map(function (x) { return '"' + x + '"'; }).join(',') + ']');
               }
             }
             // ---- jsPsychHtmlButtonResponse parameters, emitted under their own
             // names. Anything left at 0 / default is omitted, so jsPsych applies
             // its documented default instead of an ExpVis invention.
             if (respType === 'button') {
-              if (respInfo.prompt) L(indent, "prompt: '" + _jsStr(String(respInfo.prompt)) + "',");
-              if (respInfo.buttonLayout) L(indent, "button_layout: '" + respInfo.buttonLayout + "',");
-              if (respInfo.gridRows) L(indent, 'grid_rows: ' + respInfo.gridRows + ',');
-              if (respInfo.gridColumns) L(indent, 'grid_columns: ' + respInfo.gridColumns + ',');
-              if (respInfo.stimulusDuration) L(indent, 'stimulus_duration: ' + respInfo.stimulusDuration + ',');
-              if (respInfo.enableButtonAfter) L(indent, 'enable_button_after: ' + respInfo.enableButtonAfter + ',');
+              if (respInfo.prompt) P(indent, 'prompt', "'" + _jsStr(String(respInfo.prompt)) + "'");
+              if (respInfo.buttonLayout) P(indent, 'button_layout', "'" + respInfo.buttonLayout + "'");
+              if (respInfo.gridRows) P(indent, 'grid_rows', String(respInfo.gridRows));
+              if (respInfo.gridColumns) P(indent, 'grid_columns', String(respInfo.gridColumns));
+              if (respInfo.stimulusDuration) P(indent, 'stimulus_duration', String(respInfo.stimulusDuration));
+              if (respInfo.enableButtonAfter) P(indent, 'enable_button_after', String(respInfo.enableButtonAfter));
               // `=== false`, not `!x`: a trial with no response component gets a
               // fresh respInfo, and `!undefined` would wrongly emit a false here.
-              if (respInfo.responseEndsTrial === false) L(indent, 'response_ends_trial: false,');
+              if (respInfo.responseEndsTrial === false) P(indent, 'response_ends_trial', 'false');
             }
             if (respType === 'textInput') {
               var _q = respInfo.question;
-              L(indent, 'questions: [{');
-              L(indent + 1, "prompt: '" + _jsStr(_q.prompt) + "',");
-              if (_q.placeholder) L(indent + 1, "placeholder: '" + _jsStr(_q.placeholder) + "',");
-              L(indent + 1, "name: '" + _q.name.replace(/'/g, "\\'") + "',");
-              if (_q.required) L(indent + 1, 'required: true,');
-              if (_q.rows > 1) L(indent + 1, 'rows: ' + _q.rows + ',');
-              if (_q.columns !== 40) L(indent + 1, 'columns: ' + _q.columns + ',');
-              L(indent, '}],');
+              P(indent, 'questions', null, function () {
+                L(indent, 'questions: [{');
+                L(indent + 1, "prompt: '" + _jsStr(_q.prompt) + "',");
+                if (_q.placeholder) L(indent + 1, "placeholder: '" + _jsStr(_q.placeholder) + "',");
+                L(indent + 1, "name: '" + _q.name.replace(/'/g, "\\'") + "',");
+                if (_q.required) L(indent + 1, 'required: true,');
+                if (_q.rows > 1) L(indent + 1, 'rows: ' + _q.rows + ',');
+                if (_q.columns !== 40) L(indent + 1, 'columns: ' + _q.columns + ',');
+                L(indent, '}],');
+              });
               if (respInfo.buttonLabel)
-                L(indent, "button_label: '" + _jsStr(String(respInfo.buttonLabel)) + "',");
-              if (respInfo.autocomplete) L(indent, 'autocomplete: true,');
+                P(indent, 'button_label', "'" + _jsStr(String(respInfo.buttonLabel)) + "'");
+              if (respInfo.autocomplete) P(indent, 'autocomplete', 'true');
             }
             if (useImagePlugin) {
               var _imc = imageOnlyComp;
-              if (_imc.stimulus_width) L(indent, 'stimulus_width: ' + _imc.stimulus_width + ',');
-              if (_imc.stimulus_height) L(indent, 'stimulus_height: ' + _imc.stimulus_height + ',');
+              if (_imc.stimulus_width) P(indent, 'stimulus_width', String(_imc.stimulus_width));
+              if (_imc.stimulus_height) P(indent, 'stimulus_height', String(_imc.stimulus_height));
               if (_imc.maintain_aspect_ratio === false || _imc.maintain_aspect_ratio === 'false')
-                L(indent, 'maintain_aspect_ratio: false,');
+                P(indent, 'maintain_aspect_ratio', 'false');
               if (_imc.render_on_canvas === false || _imc.render_on_canvas === 'false')
-                L(indent, 'render_on_canvas: false,');
+                P(indent, 'render_on_canvas', 'false');
             }
             if (respType === 'keyboard') {
-              if (respInfo.stimulusDuration) L(indent, 'stimulus_duration: ' + respInfo.stimulusDuration + ',');
-              if (respInfo.responseEndsTrial === false) L(indent, 'response_ends_trial: false,');
-              if (respInfo.waitForKeyRelease) L(indent, 'wait_for_key_release: true,');
+              if (respInfo.stimulusDuration) P(indent, 'stimulus_duration', String(respInfo.stimulusDuration));
+              if (respInfo.responseEndsTrial === false) P(indent, 'response_ends_trial', 'false');
+              if (respInfo.waitForKeyRelease) P(indent, 'wait_for_key_release', 'true');
             }
             if (respType === 'slider') {
-              if (respInfo.min != null) L(indent, 'min: ' + respInfo.min + ',');
-              if (respInfo.max != null) L(indent, 'max: ' + respInfo.max + ',');
-              if (respInfo.step != null) L(indent, 'step: ' + respInfo.step + ',');
-              if (respInfo.sliderStart) L(indent, 'slider_start: ' + respInfo.sliderStart + ',');
+              if (respInfo.min != null) P(indent, 'min', String(respInfo.min));
+              if (respInfo.max != null) P(indent, 'max', String(respInfo.max));
+              if (respInfo.step != null) P(indent, 'step', String(respInfo.step));
+              if (respInfo.sliderStart) P(indent, 'slider_start', String(respInfo.sliderStart));
               if (respInfo.labels && respInfo.labels.length)
-                L(indent, 'labels: [' + respInfo.labels.map(function (x) {
+                P(indent, 'labels', '[' + respInfo.labels.map(function (x) {
                   return '"' + String(x).replace(/"/g, '\\"') + '"';
-                }).join(', ') + '],');
-              if (respInfo.buttonLabel) L(indent, "button_label: '" + _jsStr(String(respInfo.buttonLabel)) + "',");
-              if (respInfo.sliderWidth) L(indent, 'slider_width: ' + respInfo.sliderWidth + ',');
-              if (respInfo.requireMovement) L(indent, 'require_movement: true,');
-              if (respInfo.prompt) L(indent, "prompt: '" + _jsStr(String(respInfo.prompt)) + "',");
-              if (respInfo.stimulusDuration) L(indent, 'stimulus_duration: ' + respInfo.stimulusDuration + ',');
-              if (respInfo.responseEndsTrial === false) L(indent, 'response_ends_trial: false,');
+                }).join(', ') + ']');
+              if (respInfo.buttonLabel) P(indent, 'button_label', "'" + _jsStr(String(respInfo.buttonLabel)) + "'");
+              if (respInfo.sliderWidth) P(indent, 'slider_width', String(respInfo.sliderWidth));
+              if (respInfo.requireMovement) P(indent, 'require_movement', 'true');
+              if (respInfo.prompt) P(indent, 'prompt', "'" + _jsStr(String(respInfo.prompt)) + "'");
+              if (respInfo.stimulusDuration) P(indent, 'stimulus_duration', String(respInfo.stimulusDuration));
+              if (respInfo.responseEndsTrial === false) P(indent, 'response_ends_trial', 'false');
             }
             // trial_duration is the same jsPsych parameter for either plugin; a
             // button trial reads it off the button component, everything else off
@@ -3593,10 +3713,10 @@ function _applyI18n() {
             var _trialDuration = (respType === 'button' ? respInfo.trialDuration : logic.trial_duration) ||
               t.trial_duration;
             if (_trialDuration && respType !== 'textInput') {
-              L(indent, 'trial_duration: ' + _trialDuration + ',');
+              P(indent, 'trial_duration', String(_trialDuration));
             }
             if (respType === 'keyboard' && (respInfo.prompt || stims.length === 0))
-              L(indent, "prompt: '" + _jsStr(respInfo.prompt || '<p>Press any key to continue</p>') + "',");
+              P(indent, 'prompt', "'" + _jsStr(respInfo.prompt || '<p>Press any key to continue</p>') + "'");
 
             // --- scoring ---
             // `data` is written only when it carries something the analysis needs.
@@ -3604,10 +3724,12 @@ function _applyI18n() {
             // trial_index and trial_type on its own.
             var hasScore = !!correctResponseExpr;
             if (correctResponseExpr) {
-              L(indent, 'data: {correct_response: ' + correctResponseExpr + '},');
-              L(indent, 'on_finish: function(data) {');
-              L(indent + 1, 'data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);');
-              L(indent, '},');
+              P(indent, 'data', '{correct_response: ' + correctResponseExpr + '}');
+              P(indent, 'on_finish', null, function () {
+                L(indent, 'on_finish: function(data) {');
+                L(indent + 1, 'data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);');
+                L(indent, '},');
+              });
             }
             // strip the trial's trailing property comma, then close the entry
             var last = lines[lines.length - 1];
@@ -3623,16 +3745,50 @@ function _applyI18n() {
             if (!_plainNode) L(1, ']');
             L(0, '};');
 
-            code += lines.join('\n') + '\n\n';
+            phaseParts.push({kind: 'trial', name: trialName, lines: lines,
+                             slots: slots, hints: _trialHints});
           });
 
           // Close the phase node. An empty phase contributes nothing to run, so
           // it is noted rather than emitted as an empty `timeline: []`.
-          if (phaseTrials.length === 0) {
+          if (phaseParts.length === 0) {
             code += '// (this phase holds no trials, so it adds nothing to the timeline)\n\n';
             return;
           }
           var nodeName = phaseSlug + '_timeline';
+          var factored = _factorPhase(phaseParts);
+
+          if (factored) {
+            var varName = phaseSlug + '_variables';
+            code += '// The same procedure once per set of values below.\n';
+            code += 'var ' + varName + ' = [\n';
+            factored.table.forEach(function (row, i) {
+              code += '  {' + Object.keys(row).map(function (k) {
+                return k + ': ' + row[k];
+              }).join(', ') + '}' + (i < factored.table.length - 1 ? ',' : '') + '\n';
+            });
+            code += '];\n\n';
+            code += 'var ' + nodeName + ' = {\n';
+            code += '  timeline: [\n';
+            code += '    {\n';
+            factored.procedure.forEach(function (l) { code += '    ' + l + '\n'; });
+            code += '    }\n';
+            code += '  ],\n';
+            code += '  timeline_variables: ' + varName + '\n';
+            code += '};\n';
+            code += 'timeline.push(' + nodeName + ');\n\n';
+            return;
+          }
+
+          // Plain trials: what the canvas shows, declared in order and then
+          // collected into the node.
+          var phaseTrials = [];
+          phaseParts.forEach(function (p) {
+            if (p.kind === 'raw') { code += p.text; return; }
+            p.hints.forEach(function (h) { code += h + '\n'; });
+            code += p.lines.join('\n') + '\n\n';
+            phaseTrials.push(p.name);
+          });
           var collected = '  timeline: [' + phaseTrials.join(', ') + ']';
           code += 'var ' + nodeName + ' = {\n';
           if (collected.length <= 96) {

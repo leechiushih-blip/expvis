@@ -35,7 +35,15 @@ PROBE = """
 var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
   'jsPsychHtmlSliderResponse', 'jsPsychSurveyText', 'jsPsychPreload', 'jsPsychAnimation',
   'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
-var __FORBIDDEN = ['timeline_variables', 'repetitions', 'sample', 'conditional_function',
+// Node-level parameters ExpVis never sets, because it no longer has the
+// capability: repetition counts, sampling policy, conditional jumps and loop
+// functions are things the researcher adds by hand to the export.
+//
+// `timeline_variables` is deliberately NOT on this list. It is derived from the
+// canvas — a phase whose trials are one procedure with different values becomes
+// a table — rather than being a policy anyone configures. Its presence or
+// absence is asserted per case in phaseCases() instead.
+var __FORBIDDEN = ['repetitions', 'sample', 'conditional_function',
   'randomize_order', 'loop_function'];
 function inspectStructure(code) {
   var stub = {
@@ -61,8 +69,63 @@ function inspectStructure(code) {
   };
 }
 
+// Phase factoring (one procedure + a timeline_variables table) needs a phase
+// whose trials are structurally identical, which none of the five built-in
+// templates has — they are all heterogeneous or single-trial, so nothing in
+// them exercises this path. These cases build one on the spot.
+function phaseCases() {
+  var out = {};
+  function build(pid, spec) {
+    spec.forEach(function (v) {
+      addTrial(pid);
+      var t = findTrial(editor.selectedTrial);
+      v.forEach(function (c) {
+        addComponent(t.id, c[0], c[0] === 'keyboard' ? 'r' : 's');
+        var comp = t.components[t.components.length - 1];
+        Object.keys(c[1] || {}).forEach(function (k) { comp[k] = c[1][k]; });
+      });
+    });
+  }
+  function run(label, spec) {
+    resetEditor();
+    addPhase('trials');
+    build(editor.phases[0].id, spec);
+    var code = _compileExperiment({}).code;
+    out[label] = {
+      factored: code.indexOf('timeline_variables') >= 0,
+      // a factored node holds the one procedure, not one entry per condition
+      trialsPerNode: inspectStructure(code).trialsPerNode,
+      forbiddenParams: inspectStructure(code).forbiddenParams
+    };
+  }
+  // Two trials, same shape, different words and answers: one procedure.
+  run('homogeneous', [
+    [['text', {content: 'RED'}], ['keyboard', {choices: ['a'], correctKey: 'a'}]],
+    [['text', {content: 'BLUE'}], ['keyboard', {choices: ['a'], correctKey: 'l'}]]
+  ]);
+  // Same shape as each other but a fixation opens each trial — the varying
+  // value sits inside the node's own timeline, not at its top level.
+  run('homogeneous+fixation', [
+    [['fixation', {trial_duration: 500}], ['text', {content: 'RED'}]],
+    [['fixation', {trial_duration: 500}], ['text', {content: 'BLUE'}]]
+  ]);
+  // Trials that differ in shape have no single procedure to hoist.
+  run('ragged', [
+    [['text', {content: 'RED'}], ['keyboard', {choices: ['a']}]],
+    [['text', {content: 'BLUE'}]]
+  ]);
+  // Identical trials: nothing varies, so there is no table to build.
+  run('identical', [
+    [['text', {content: 'SAME'}]],
+    [['text', {content: 'SAME'}]]
+  ]);
+  // A single trial is not a variable table either.
+  run('one trial', [[['text', {content: 'ONLY'}]]]);
+  return out;
+}
+
 window.addEventListener('load', function () {
-  var out = { ok: true, templates: {}, errors: [] };
+  var out = { ok: true, templates: {}, cases: {}, errors: [] };
   window.addEventListener('error', function (e) { out.errors.push(String(e.message)); });
   try {
     localStorage.clear();
@@ -86,6 +149,12 @@ window.addEventListener('load', function () {
         out.templates[name] = { error: String(e.message) + ' @ ' + String(e.stack).split('\\n')[1] };
       }
     });
+    try {
+      out.cases = phaseCases();
+    } catch (e) {
+      out.ok = false;
+      out.cases = { error: String(e.message) + ' @ ' + String(e.stack).split('\\n')[1] };
+    }
   } catch (e) {
     out.ok = false;
     out.errors.push('FATAL ' + e.message);
@@ -138,8 +207,30 @@ def cmd_check():
     if not res["ok"]:
         print(json.dumps(res, indent=1)[:2000])
         sys.exit("FAIL: the probe itself errored")
+    cases = res.get("cases", {})
+    if "error" in cases:
+        broken_cases = [f"phase cases threw: {cases['error']}"]
+    else:
+        # What each synthetic phase must compile to. `factored` is the point:
+        # a phase whose trials are one procedure becomes a table, and every
+        # other shape must stay plain trials rather than being forced into one.
+        WANT = {"homogeneous": True, "homogeneous+fixation": True,
+                "ragged": False, "identical": False, "one trial": False}
+        broken_cases = [
+            f"phase case {name}: factored={cases[name]['factored']}, expected {want}"
+            for name, want in WANT.items()
+            if name in cases and cases[name]["factored"] != want
+        ]
+        for name, c in cases.items():
+            if c["forbiddenParams"]:
+                broken_cases.append(f"phase case {name}: {c['forbiddenParams']}")
+            if name in ("homogeneous", "homogeneous+fixation") and c["trialsPerNode"] != [1]:
+                broken_cases.append(
+                    f"phase case {name}: node should hold the one procedure, "
+                    f"got {c['trialsPerNode']}")
+
     bad = 0
-    broken = []
+    broken = list(broken_cases)
     for name, t in res["templates"].items():
         struct = t["structure"]
         # Invariants that must hold whatever the bytes are.
