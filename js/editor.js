@@ -890,6 +890,10 @@ function _applyI18n() {
         fc.querySelectorAll('.flow-row').forEach((el) => el.remove());
 
         editor.phases.forEach(function (ph, i) {
+          // Presentation steps are numbered across the whole phase, not per trial:
+          // a phase is one block of the experiment, so its screens read as a single
+          // sequence instead of every trial restarting at 1.
+          var _stepNo = 0;
           // Phase card wrapper
           var card = document.createElement('div');
           card.className = 'phase-card';
@@ -1177,8 +1181,9 @@ function _applyI18n() {
                 stepRow.className = 'flow-step';
                 var num = document.createElement('span');
                 num.className = 'flow-step-num';
-                num.textContent = si + 1;
-                num.title = 'Presentation step ' + (si + 1) +
+                _stepNo++;
+                num.textContent = _stepNo;
+                num.title = 'Presentation step ' + _stepNo + ' of this phase' +
                   (step.simul && step.comps.length > 1
                     ? ' — ' + step.comps.length + ' components shown together on one screen'
                     : '');
