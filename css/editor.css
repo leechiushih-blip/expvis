@@ -535,3 +535,25 @@
           transform: rotate(360deg);
         }
       }
+/* Trial-level settings shown on the flow row. These are jsPsych node/trial
+   parameters (repetitions, sample, conditional_function, trial_duration),
+   deliberately styled apart from the component nodes. */
+.flow-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-self: center;
+  margin-right: 8px;
+}
+
+.flow-badge {
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  white-space: nowrap;
+}

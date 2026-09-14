@@ -226,9 +226,11 @@ var _i18n = {
   'empty.click_node': {en:'← Click a node in the flow\nto view and edit properties', zh:'← 点击流程中的节点\n查看和编辑属性'},
   'empty.click_preview':{en:'Click a node to preview', zh:'Click a node to preview'},
   // --- Phase names ---
-  'phase.instructions': {en:'📖 Instructions', zh:'📖 指导语'},
-  'phase.trials':       {en:'🧪 Trials', zh:'🧪 正式实验'},
-  'phase.feedback':     {en:'📊 Feedback', zh:'📊 反馈'},
+  // Phase names are stored plain; the icon is added by _phaseLabel() at render
+  // time so that generated experiment code stays free of decorative emoji.
+  'phase.instructions': {en:'Instructions', zh:'指导语'},
+  'phase.trials':       {en:'Trials', zh:'正式实验'},
+  'phase.feedback':     {en:'Feedback', zh:'反馈'},
   'phase.trials_count': {en:' trials', zh:' 个试次'},
   'phase.empty_trial':  {en:'Empty Trial', zh:'Empty Trial'},
   'phase.drop_comp':    {en:'Drop component', zh:'拖入组件'},
@@ -246,45 +248,12 @@ var _i18n = {
   'ai.btn.cancel':    {en:'Cancel', zh:'取消'},
   'ai.status.generating': {en:'⏳ Calling API...', zh:'⏳ 正在调用 API...'},
   'ai.status.success': {en:'✅ Experiment generated!', zh:'✅ 实验生成成功！'},
-  // --- Review dialog ---
-  'review.title':     {en:'🤖 Multi-Agent Experiment Review', zh:'🤖 多智能体实验审核'},
-  'review.subtitle':  {en:'3 AI agents are collaboratively reviewing your experiment', zh:'3 个 AI Agent 正在协作审查你的实验'},
-  'review.waiting':   {en:'Waiting...', zh:'等待中...'},
-  'review.analyzing': {en:'Analyzing...', zh:'分析中...'},
-  'review.close':     {en:'Close', zh:'Close'},
-  'review.got_it':    {en:'Got it', zh:'我知道了'},
-  'review.agent.ethics':    {en:'Ethics Reviewer', zh:'伦理审核员'},
-  'review.agent.security':  {en:'Security Reviewer', zh:'安全审核员'},
-  'review.agent.methodology':{en:'Methodology Reviewer', zh:'规范审核员'},
-  // --- Review findings ---
-  'review.missing_instructions': {en:'Missing instructions phase; consider adding informed consent', zh:'缺少指导语阶段，建议添加知情同意说明'},
-  'review.too_short':       {en:'Experiment content too brief to assess ethical compliance', zh:'实验内容过少，无法评估伦理合规性'},
-  'review.deception':       {en:'Possible deception detected; debriefing required', zh:'检测到可能的欺骗性描述，需标注事后说明'},
-  'review.minors':          {en:'Involves minors; additional ethics review required', zh:'涉及未成年人被试，需额外伦理审查'},
-  'review.ethics_ok':       {en:'No obvious ethical issues found', zh:'未发现明显伦理问题'},
-  'review.script_injection':{en:'Potential script injection risk detected', zh:'检测到潜在脚本注入风险'},
-  'review.iframe':          {en:'Iframe embedding detected; cross-site risk', zh:'检测到 iframe 嵌入，可能存在跨站风险'},
-  'review.too_many_trials': {en:'Too many trials', zh:'试次数过多'},
-  'review.server_load':     {en:'May impact server load', zh:'可能影响服务器负载'},
-  'review.security_ok':     {en:'No security risks found', zh:'未发现安全风险'},
-  'review.no_stimuli':      {en:'Missing stimulus components; participants have nothing to observe', zh:'缺少刺激组件，被试没有可观察的内容'},
-  'review.no_response':     {en:'Missing response components; participants cannot answer', zh:'缺少响应组件，被试无法作答'},
-  'review.no_trials':       {en:'Experiment has no trials; add at least one trial', zh:'实验没有试次，请至少添加一个试次'},
-  'review.empty_experiment':{en:'Experiment is empty; add phases and trials', zh:'实验为空，请添加阶段和试次'},
-  'review.stimulus_no_response':{en:'Stimuli present but no response; experiment may lack interaction', zh:'仅有刺激无响应，实验可能缺少交互'},
-  'review.methodology_ok':  {en:'Experiment structure complete; ready for review', zh:'实验结构完整，可通过审核'},
-  // --- Review summary ---
-  'review.pass':      {en:'Review passed — experiment can be published', zh:'审核通过，实验可以发布'},
-  'review.warn':      {en:'Recommended changes before publishing. Continue anyway?', zh:'建议修改后发布，确认要继续？'},
-  'review.fail':      {en:'Review failed — please revise and re-submit', zh:'审核未通过，请修改后重新发布'},
   // --- Publish ---
   'publish.config_title': {en:'📋 Publish Settings', zh:'📋 Publish Settings'},
-  'publish.config_desc':  {en:'Confirm settings before review', zh:'Confirm settings, then proceed to review'},
   'publish.target_n':     {en:'👥 Target Participants', zh:'👥 Target Participants'},
   'publish.reward':       {en:'💰 Reward (¥/person)', zh:'💰 Reward (¥/person)'},
   'publish.public':       {en:'🌐 Show in Experiment Hall', zh:'🌐 Show in Experiment Hall'},
   'publish.public_desc':  {en:'When enabled, participants can find this experiment in the hall', zh:'When enabled, participants can find this experiment in the hall'},
-  'publish.confirm':      {en:'Confirm & Review →', zh:'Confirm & Review →'},
   // --- Misc ---
   'misc.empty_trial':    {en:'Empty Trial', zh:'Empty Trial'},
   'misc.delete':         {en:'✕ Delete', zh:'✕ 删除'},
@@ -329,7 +298,7 @@ function _applyI18n() {
 /**
  * ExpVis Editor — editor.js
  * Visual, component-based behavioral experiment builder.
- * Generates standard jsPsych code with AI-assisted design and review.
+ * Generates standard jsPsych code with AI-assisted design.
  *
  * Architecture:
  *   Section 1:  State & Core CRUD
@@ -341,9 +310,8 @@ function _applyI18n() {
  *   Section 7:  Undo & Quick Layout
  *   Section 8:  jsPsych Code Generation
  *   Section 9:  AI Experiment Generation
- *   Section 10: Multi-Agent Experiment Review
- *   Section 11: Version Management & Publishing
- *   Section 12: Classic Experiment Templates
+ *   Section 10: Version Management & Publishing
+ *   Section 11: Classic Experiment Templates
  *   Section 13: Device Simulation
  *   Section 14: Keyboard Shortcuts & Context Menu
  *   Section 15: Onboarding Tutorial
@@ -407,13 +375,34 @@ function _applyI18n() {
         projectId: '',
       };
 
+      // Phase/device labels: storage keeps plain text so that generated jsPsych
+      // code carries no decorative emoji. The UI re-adds an icon at render time.
+      // _stripEmoji also cleans legacy data saved before this convention.
+      var _phaseIcons = {instructions: '📖', trials: '🧪', feedback: '📊'};
+      function _stripEmoji(s) {
+        return (s || '').replace(
+          /^(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]+\s*)+/u,
+          '',
+        );
+      }
+      function _phaseLabel(ph) {
+        var icon = _phaseIcons[ph.type];
+        return (icon ? icon + ' ' : '') + _stripEmoji(ph.name);
+      }
+      function _deviceLabel(d) {
+        if (!d) return '';
+        var icon = d.icon || '';
+        var name = _stripEmoji(d.name);
+        return icon ? icon + ' ' + name : name;
+      }
+
       var devicePresets = [
-        {name: '🖥️ Desktop', w: 1280, h: 720},
-        {name: '📱 Mobile', w: 390, h: 844},
+        {name: 'Desktop', icon: '🖥️', w: 1280, h: 720},
+        {name: 'Mobile', icon: '📱', w: 390, h: 844},
       ];
 
       function addPhase(type) {
-        var labels = {instructions: '📖 Instructions', trials: '🧪 Trials', feedback: '📊 Feedback'};
+        var labels = {instructions: 'Instructions', trials: 'Trials', feedback: 'Feedback'};
         saveState();
         editor.phases.push({
           id: 'ph' + ++editor.pc,
@@ -444,6 +433,7 @@ function _applyI18n() {
 
       function selectTrial(id) {
         editor.selectedTrial = id;
+        editor.selComp = null; // trial selected → inspector shows trial settings
         renderAll();
       }
       function removeTrial(id) {
@@ -472,7 +462,7 @@ function _applyI18n() {
         var defs = {
           text: {
             type: 'text',
-            content: '新文本',
+            content: 'New Text',
             fontSize: 32,
             color: '#333333',
             position: 'center',
@@ -485,9 +475,9 @@ function _applyI18n() {
           image: {type: 'image', fileData: '', fileName: '', width: 200, posX: 0, posY: 0, 映射按键: ''},
           audio: {type: 'audio', fileData: '', fileName: '', posX: 0, posY: 0},
           video: {type: 'video', fileData: '', fileName: '', width: 320, posX: 0, posY: 0},
-          fixation: {type: 'fixation', duration: 500, posX: 0, posY: 0},
+          fixation: {type: 'fixation', duration: 500, durationMin: 0, durationMax: 0, posX: 0, posY: 0},
           keyboard: {type: 'keyboard', keys: 'a,l', prompt: 'Press a key', timeout: 0, posX: 0, posY: 0},
-          button: {type: 'button', labels: '是,否', color: '#6366f1', posX: 0, posY: 0},
+          button: {type: 'button', labels: 'Yes,No', color: '#6366f1', posX: 0, posY: 0},
           slider: {type: 'slider', min: 0, max: 100, step: 1, labelMin: '', labelMax: '', showValue: true, posX: 0, posY: 0},
           click: {type: 'click', posX: 0, posY: 0},
           textInput: {
@@ -502,7 +492,7 @@ function _applyI18n() {
           loop: {type: 'loop', count: 10, posX: 0, posY: 0},
           branch: {type: 'branch', condition: 'correct', matchValue: '', targetFail: '', operator: '>=', compareValue: '', posX: 0, posY: 0},
           randomize: {type: 'randomize', mode: 'pick-one', posX: 0, posY: 0},
-          delay: {type: 'delay', duration: 1000, posX: 0, posY: 0},
+          delay: {type: 'delay', duration: 1000, durationMin: 0, durationMax: 0, posX: 0, posY: 0},
           variable: {type: 'variable', name: 'score', initial: 0, mode: 'correct', posX: 0, posY: 0},
         };
         var c = JSON.parse(JSON.stringify(defs[type] || {type: type}));
@@ -808,7 +798,7 @@ function _applyI18n() {
             '">' +
             (i + 1) +
             '</span><span style="font-weight:700;font-size:0.82rem">' +
-            ph.name +
+            _phaseLabel(ph) +
             '</span><span style="font-size:0.68rem;color:var(--text2)">' +
             ph.trials.length +
             ' trials</span><button data-phase="' +
@@ -907,7 +897,15 @@ function _applyI18n() {
               };
               row.appendChild(emptyNode);
             } else {
-              t.components.forEach(function (c, i) {
+              // Only stimuli and responses are drawn as nodes — they are what
+              // becomes a jsPsych trial. Loop / randomize / branch / delay /
+              // variable are *parameters* of the trial, shown as badges instead.
+              var visualComps = t.components.filter(function (c) {
+                return c.cat === 's' || c.cat === 'r';
+              });
+              var badgeEl = _logicBadges(t);
+              if (badgeEl) row.appendChild(badgeEl);
+              visualComps.forEach(function (c, i) {
                 var node = document.createElement('div');
                 var sel = t.id === editor.selectedTrial && editor.selComp === c.id;
                 node.className = 'flow-node' + (sel ? ' selected' : '');
@@ -996,7 +994,7 @@ function _applyI18n() {
                 row.appendChild(node);
 
                 // Arrow between components
-                if (i < t.components.length - 1) {
+                if (i < visualComps.length - 1) {
                   var arrow = document.createElement('span');
                   arrow.className = 'flow-arrow';
                   arrow.textContent = '→';
@@ -1018,7 +1016,7 @@ function _applyI18n() {
               });
               if (targetTrial) {
                 var targetPhase = editor.phases[targetPhaseIdx];
-                var phaseLabel = (targetPhase.name || '').replace('📖 ', '').replace('🧪 ', '').replace('📊 ', '');
+                var phaseLabel = _stripEmoji(targetPhase.name);
                 var desc = phaseLabel + ' Trial ' + (targetTrialIdx + 1);
                 var branchBadge = document.createElement('span');
                 branchBadge.style.cssText = 'font-size:0.55rem;padding:2px 8px;border-radius:8px;background:#fef3c7;color:#b45309;border:1px solid rgba(245,158,11,0.3);margin-left:8px;white-space:nowrap;cursor:default';
@@ -1033,7 +1031,7 @@ function _applyI18n() {
             editor.phases.forEach(function (p2) {
               p2.trials.forEach(function (t2) {
                 var bc = t2.components.find(function (c) { return c.type === 'branch' && c.targetFail && c.targetFail === t.id; });
-                if (bc) srcTrials.push({phaseName: (p2.name || '').replace('📖 ', '').replace('🧪 ', '').replace('📊 ', ''), trialIdx: p2.trials.indexOf(t2) + 1, condition: bc.condition});
+                if (bc) srcTrials.push({phaseName: _stripEmoji(p2.name), trialIdx: p2.trials.indexOf(t2) + 1, condition: bc.condition});
               });
             });
             if (srcTrials.length > 0) {
@@ -1139,11 +1137,125 @@ function _applyI18n() {
         return '';
       }
 
+      // Trial-level settings rendered as compact badges on the flow row.
+      // In jsPsych these are node/trial parameters, not trials:
+      //   loop → repetitions, randomize → sample/randomize_order,
+      //   branch → conditional_function, delay → trial_duration, variable → user JS
+      function _logicBadges(t) {
+        var out = [];
+        t.components.forEach(function (c) {
+          if (c.type === 'loop') out.push('↻ ' + (c.count || 1) + '×');
+          else if (c.type === 'randomize') out.push('🎲 ' + (c.mode === 'shuffle' ? 'shuffle' : 'pick-one'));
+          else if (c.type === 'branch') out.push('🔀 ' + (c.condition || 'correct'));
+          else if (c.type === 'delay') out.push('⏱ ' + (c.duration || 0) + 'ms');
+          else if (c.type === 'variable') out.push('📊 ' + (c.name || 'var'));
+        });
+        if (!out.length) return null;
+        var el = document.createElement('div');
+        el.className = 'flow-badges';
+        el.title = 'Trial settings — jsPsych node / trial parameters';
+        el.innerHTML = out.map(function (b) {
+          return '<span class="flow-badge">' + b + '</span>';
+        }).join('');
+        return el;
+      }
+
+      var _SET_INPUT_CSS = 'width:100%;padding:6px 9px;border-radius:6px;border:1px solid var(--border);' +
+        'background:var(--surface);color:var(--text);font-family:inherit;font-size:0.75rem';
+
+      function _settingRow(label, hint, inputHTML) {
+        return '<div style="margin-bottom:12px">' +
+          '<label style="display:block;font-size:0.7rem;color:var(--text2);margin-bottom:3px">' + label +
+          (hint ? ' <span style="opacity:.7">· ' + hint + '</span>' : '') + '</label>' +
+          inputHTML + '</div>';
+      }
+
+      function _renderTrialSettings(insp) {
+        var t = findTrial(editor.selectedTrial);
+        if (!t) { insp.innerHTML = ''; return; }
+        function get(type) {
+          return t.components.filter(function (c) { return c.type === type; })[0] || null;
+        }
+        function setter(type, field) {
+          return "_setTrialLogic('" + t.id + "','" + type + "','" + field + "',this.value)";
+        }
+        var loop = get('loop'), rand = get('randomize'), br = get('branch'),
+            dly = get('delay'), v = get('variable');
+
+        var h = '';
+        h += '<div style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:14px">';
+        h += '<div style="font-weight:700;font-size:0.85rem">Trial Settings</div>';
+        h += '<div style="font-size:0.66rem;color:var(--text2);margin-top:3px;line-height:1.5">' +
+             'These become jsPsych <b>node / trial parameters</b>, not trials.<br>Leave a field empty to remove it.</div>';
+        h += '</div>';
+
+        h += _settingRow('Loop', 'jsPsych repetitions',
+          '<input type="number" min="1" style="' + _SET_INPUT_CSS + '" value="' + (loop ? loop.count : '') +
+          '" placeholder="e.g. 48" onchange="' + setter('loop', 'count') + '">');
+
+        h += _settingRow('Randomize', 'jsPsych sample / randomize_order',
+          '<select style="' + _SET_INPUT_CSS + '" onchange="' + setter('randomize', 'mode') + '">' +
+          '<option value=""' + (!rand ? ' selected' : '') + '>— none —</option>' +
+          '<option value="pick-one"' + (rand && rand.mode !== 'shuffle' ? ' selected' : '') + '>pick-one (sample size 1)</option>' +
+          '<option value="shuffle"' + (rand && rand.mode === 'shuffle' ? ' selected' : '') + '>shuffle (randomize_order)</option>' +
+          '</select>');
+
+        h += _settingRow('Branch', 'jsPsych conditional_function',
+          '<select style="' + _SET_INPUT_CSS + '" onchange="' + setter('branch', 'condition') + '">' +
+          '<option value=""' + (!br ? ' selected' : '') + '>— none —</option>' +
+          '<option value="correct"' + (br && br.condition === 'correct' ? ' selected' : '') + '>on incorrect answer</option>' +
+          '<option value="response"' + (br && br.condition === 'response' ? ' selected' : '') + '>on specific response</option>' +
+          '<option value="variable"' + (br && br.condition === 'variable' ? ' selected' : '') + '>on variable threshold</option>' +
+          '</select>');
+
+        h += _settingRow('Delay', 'jsPsych trial_duration (ms)',
+          '<input type="number" min="0" style="' + _SET_INPUT_CSS + '" value="' + (dly ? dly.duration : '') +
+          '" placeholder="e.g. 200" onchange="' + setter('delay', 'duration') + '">');
+
+        h += _settingRow('Counter', 'plain JS variable',
+          '<input type="text" style="' + _SET_INPUT_CSS + '" value="' + (v ? (v.name || '') : '') +
+          '" placeholder="e.g. score" onchange="' + setter('variable', 'name') + '">');
+
+        if (v) {
+          h += _settingRow('Counter update', 'when to increment',
+            '<select style="' + _SET_INPUT_CSS + '" onchange="' + setter('variable', 'mode') + '">' +
+            '<option value="correct"' + (v.mode !== 'always' && v.mode !== 'manual' ? ' selected' : '') + '>+1 on correct</option>' +
+            '<option value="always"' + (v.mode === 'always' ? ' selected' : '') + '>+1 on any response</option>' +
+            '<option value="manual"' + (v.mode === 'manual' ? ' selected' : '') + '>manual</option>' +
+            '</select>');
+        }
+        insp.innerHTML = h;
+      }
+
+      // Create / update / remove the logic component backing a trial setting.
+      function _setTrialLogic(trialId, type, field, value) {
+        var t = findTrial(trialId);
+        if (!t) return;
+        var c = t.components.filter(function (x) { return x.type === type; })[0];
+        if (!c) {
+          if (value === '' || value == null) return; // nothing to remove
+          addComponent(trialId, type, 'l');
+          c = t.components[t.components.length - 1];
+        }
+        if (value === '' || value == null) {
+          t.components = t.components.filter(function (x) { return x !== c; });
+        } else {
+          c[field] = (field === 'count' || field === 'duration' || field === 'initial') ? Number(value) : value;
+        }
+        editor.selComp = null; // stay in trial-settings mode
+        saveState();
+        renderAll();
+      }
+
       function renderInspector() {
         var insp = document.getElementById('inspector');
-        if (!editor.selectedTrial || !editor.selComp) {
+        if (!editor.selectedTrial) {
           insp.innerHTML =
             '<p style="color:var(--text2);font-size:0.78rem;text-align:center;padding:20px">← Click a node in the flow<br>to view and edit properties</p>';
+          return;
+        }
+        if (!editor.selComp) {
+          _renderTrialSettings(insp);
           return;
         }
         var t = findTrial(editor.selectedTrial);
@@ -1268,13 +1380,13 @@ function _applyI18n() {
               if (c.condition === 'variable') {
                 h += '<select onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'targetFail\',this.value)">';
                 h += '<option value=""' + (v ? '' : ' selected') + '>Retry current trial</option>';
-                editor.phases.forEach(function (ph2, pi2) { ph2.trials.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + ph2.name + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
+                editor.phases.forEach(function (ph2, pi2) { ph2.trials.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _phaseLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
                 h += '</select>';
               }
               else {
                 h += '<select onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'targetFail\',this.value)">';
                 h += '<option value=""' + (v ? '' : ' selected') + '>Retry current trial</option>';
-                editor.phases.forEach(function (ph2, pi2) { ph2.trials.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + ph2.name + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
+                editor.phases.forEach(function (ph2, pi2) { ph2.trials.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _phaseLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
                 h += '</select>';
               }
               h += '<div style="font-size:0.6rem;color:var(--text2);flex-basis:100%;margin-top:2px">' + failHint + '</div>';
@@ -1496,7 +1608,31 @@ function _applyI18n() {
         var s = opts.scale || 1;
         var h = '';
         var usePixel = opts.usePixel || false;
+        // With randomize(pick-one) only ONE variant is shown per trial, so the
+        // preview must render a single variant too — otherwise every variant stacks
+        // up in the flow layout and the preview misrepresents the experiment.
+        var _rnd = null;
+        for (var _ri = 0; _ri < t.components.length; _ri++) {
+          if (t.components[_ri].type === 'randomize') { _rnd = t.components[_ri]; break; }
+        }
+        var _variantStart = -1, _variantShown = -1;
+        if (_rnd && _rnd.mode !== 'shuffle') {
+          var _rndIdx = t.components.indexOf(_rnd);
+          for (var _k = _rndIdx + 1; _k < t.components.length; _k++) {
+            var _cc = t.components[_k];
+            if (_cc.cat === 's' && ['text','shape','image','audio','video','fixation'].indexOf(_cc.type) >= 0) {
+              if (_variantStart < 0) { _variantStart = _k; _variantShown = _k; }
+            }
+          }
+        }
+        var _compIdx = -1;
         t.components.forEach(function (c) {
+          _compIdx++;
+          // in pick-one, skip every variant but the first
+          if (_variantStart >= 0 && _compIdx > _variantStart &&
+              c.cat === 's' && ['text','shape','image','audio','video','fixation'].indexOf(c.type) >= 0) {
+            return;
+          }
           var hasPixel = usePixel && typeof c.posX === 'number' && typeof c.posY === 'number';
           var al = c.position === 'left' ? 'flex-start' : c.position === 'right' ? 'flex-end' : 'center';
           var ta = c.position === 'left' ? 'left' : c.position === 'right' ? 'right' : 'center';
@@ -1509,7 +1645,7 @@ function _applyI18n() {
           if (c.type === 'text') {
             var fs = Math.round(c.fontSize * s);
             h +=
-              '<div data-drag data-cid="' +
+              '<div data-cid="' +
               c.id +
               '" style="' +
               px +
@@ -1534,7 +1670,7 @@ function _applyI18n() {
               '</span></div>';
           } else if (c.type === 'shape') {
             h +=
-              '<div data-drag data-cid="' +
+              '<div data-cid="' +
               c.id +
               '" style="' +
               px +
@@ -1553,7 +1689,7 @@ function _applyI18n() {
               '"></div></div>';
           } else if (c.type === 'fixation')
             h +=
-              '<div data-drag data-cid="' +
+              '<div data-cid="' +
               c.id +
               '" style="' +
               px +
@@ -1563,7 +1699,7 @@ function _applyI18n() {
           else if (c.type === 'image') {
             if (c.fileData)
               h +=
-                '<div data-drag data-cid="' +
+                '<div data-cid="' +
                 c.id +
                 '" style="' +
                 px +
@@ -1581,7 +1717,7 @@ function _applyI18n() {
           } else if (c.type === 'audio') {
             if (c.fileData)
               h +=
-                '<div data-drag data-cid="' +
+                '<div data-cid="' +
                 c.id +
                 '" style="' +
                 px +
@@ -1607,7 +1743,7 @@ function _applyI18n() {
                 'px;border-radius:8px"></video>';
             else h += '<span style="color:#aaa">🎬 Video</span>';
           } else if (c.type === 'keyboard') {
-            h += '<div data-drag data-cid="' + c.id + '" style="' + px + 'display:flex;flex-direction:column;align-items:center;gap:' + Math.round(6 * s) + 'px">';
+            h += '<div data-cid="' + c.id + '" style="' + px + 'display:flex;flex-direction:column;align-items:center;gap:' + Math.round(6 * s) + 'px">';
             if (c.prompt) h += '<span style="font-size:' + Math.round(13 * s) + 'px;color:#888">' + c.prompt + '</span>';
             h += '<div style="display:flex;gap:' + Math.round(8 * s) + 'px;justify-content:center">';
             c.keys.split(',').forEach(function (k) {
@@ -1617,7 +1753,7 @@ function _applyI18n() {
             h += '</div></div>';
           } else if (c.type === 'button')
             h +=
-              '<div data-drag data-cid="' +
+              '<div data-cid="' +
               c.id +
               '" style="' +
               px +
@@ -1645,7 +1781,7 @@ function _applyI18n() {
               '</div>';
           else if (c.type === 'slider') {
       var sv = Math.round((c.min + c.max) / 2);
-      h += '<div data-drag data-cid="' + c.id + '" style="' + px + 'display:flex;flex-direction:column;align-items:center;gap:' + Math.round(4 * s) + 'px">';
+      h += '<div data-cid="' + c.id + '" style="' + px + 'display:flex;flex-direction:column;align-items:center;gap:' + Math.round(4 * s) + 'px">';
       if (c.showValue !== false && c.showValue !== 'false') h += '<span id="sv-' + c.id + '" style="font-size:' + Math.round(14 * s) + 'px;font-weight:700;color:var(--accent)">' + sv + '</span>';
       h += '<div style="display:flex;align-items:center;gap:' + Math.round(8 * s) + 'px;font-size:' + Math.round(11 * s) + 'px;color:#888">';
       if (c.labelMin) h += '<span>' + c.labelMin + '</span>';
@@ -1654,7 +1790,7 @@ function _applyI18n() {
       h += '</div></div>';
     }else if (c.type === 'textInput')
             h +=
-              '<div data-drag data-cid="' +
+              '<div data-cid="' +
               c.id +
               '" style="' +
               px +
@@ -1675,7 +1811,7 @@ function _applyI18n() {
               'px;text-align:center;outline:none"></div>';
           else if (c.type === 'click')
             h +=
-              '<div data-drag data-cid="' +
+              '<div data-cid="' +
               c.id +
               '" style="' +
               px +
@@ -1688,13 +1824,9 @@ function _applyI18n() {
               'px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:' +
               Math.round(15 * s) +
               'px;transition:all 0.15s">👆 Click anywhere</div>';
-          else if (c.type === 'delay')
-            h +=
-              '<div style="display:flex;align-items:center;gap:6px;color:var(--text2);font-size:' +
-              Math.round(13 * s) +
-              'px"><span>⏱️</span><span>' +
-              (c.duration || 1000) +
-              'ms</span></div>';
+          // NB: delay has no branch here on purpose. It generates its own jsPsych
+          // trial (trial_duration), so it is not part of the stimulus the
+          // participant sees and must not appear in the preview either.
         });
         return h;
       }
@@ -1719,7 +1851,7 @@ function _applyI18n() {
           });
         });
         var dev = editor.device || {w: 1280, h: 720};
-        var devName = dev.name || dev.w + '×' + dev.h;
+        var devName = _deviceLabel(dev) || dev.w + '×' + dev.h;
         var isPhone = dev.w < 400;
         var isTablet = dev.w >= 400 && dev.w < 1000;
         var bezelK = isPhone ? 14 : isTablet ? 8 : 5;
@@ -1755,7 +1887,7 @@ function _applyI18n() {
         if (ph)
           h +=
             '<div style="font-size:0.5rem;color:var(--text2);text-align:center;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;opacity:0.7">' +
-            ph.name +
+            _phaseLabel(ph) +
             '</div>';
         h +=
           '<div style="background:' +
@@ -1782,7 +1914,8 @@ function _applyI18n() {
           'px;overflow:hidden;background:#fff;border-radius:' +
           screenR +
           'px">';
-        h += '<div style="' + innerStyle + '">' + renderTrialHTML(t, {scale: 1, usePixel: true}) + '</div>';
+        h += '<div style="' + innerStyle + 'display:flex;flex-direction:column;justify-content:center;align-items:center;gap:0.9em;padding:1.2em;box-sizing:border-box;overflow:auto">' +
+             renderTrialHTML(t, {scale: 1}) + '</div>';
         h += '</div>';
         if (isPhone)
           h +=
@@ -1807,364 +1940,53 @@ function _applyI18n() {
         }
       }
 
+      // Full-window layout preview.
+      // Layout comes from the flow itself, so there is nothing to drag here — this
+      // is simply a large, undistracted view of the stimulus HTML the participant
+      // will actually receive.
       function expandPreview() {
-        if (!editor.selectedTrial) {
-          alert('Please select a trial first');
-          return;
-        }
         var t = findTrial(editor.selectedTrial);
-        if (!t || t.components.length === 0) {
-          alert('Trial is empty');
-          return;
-        }
+        if (!t) return;
+        var dev = editor.device || {w: 1280, h: 720};
         var ph = null;
         editor.phases.forEach(function (p) {
-          p.trials.forEach(function (tr) {
-            if (tr.id === t.id) ph = p;
-          });
+          if (p.trials.some(function (x) { return x.id === t.id; })) ph = p;
         });
 
         var overlay = document.createElement('div');
         overlay.style.cssText =
-          "position:fixed;inset:0;z-index:2500;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-family:'Inter','Noto Sans SC',sans-serif";
-        overlay.onclick = function (e) {
-          if (e.target === overlay) {
-            overlay.remove();
-            renderAll();
-          }
-        };
+          'position:fixed;inset:0;z-index:2200;background:rgba(20,20,28,.55);' +
+          'display:flex;align-items:center;justify-content:center;padding:3vh 3vw;box-sizing:border-box';
 
         var box = document.createElement('div');
-        var devRef = editor.device || {w: 1280, h: 720};
-        var boxW = Math.min(devRef.w + 220, window.innerWidth * 0.98);
         box.style.cssText =
-          'background:#fff;border-radius:18px;width:' +
-          boxW +
-          'px;max-width:98vw;height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden';
+          'background:#fff;border-radius:16px;width:min(1100px,96vw);height:min(820px,94vh);' +
+          'display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.35)';
 
-        var h =
-          '<div style="padding:14px 24px;border-bottom:1px solid #e0e0e8;display:flex;align-items:center;gap:10px;background:#fafafe;flex-shrink:0">';
-        h += '<span style="font-weight:800;font-size:0.9rem">🔍 Visual Editor</span>';
-        if (ph) h += '<span style="font-size:0.7rem;color:var(--text2)">' + ph.name + '</span>';
-        h += '<span style="font-size:0.62rem;color:var(--text2);margin-left:auto">Drag to reposition · Double-click to reset</span>';
-        h +=
-          '<button onclick="var o=this.closest(\'[style*=fixed]\');o.remove();renderAll()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#888">✕</button></div>';
-
-        h += '<div style="flex:1;display:flex;overflow:hidden">';
-        h +=
-          '<div id="drag-canvas" style="flex:1;position:relative;overflow:hidden;background:#fafafe;background-image:radial-gradient(circle,#e0e0e8 1px,transparent 1px);background-size:20px 20px;cursor:default"></div>';
-        h +=
-          '<div id="drag-sidebar" style="width:180px;border-left:1px solid #e0e0e8;background:#fafafe;overflow-y:auto;padding:8px;flex-shrink:0">';
-        h +=
-          '<div style="font-size:0.6rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;padding:6px 8px;border-bottom:1px solid #f0f0f5;margin-bottom:4px">📋 Component List</div>';
-        t.components.forEach(function (c) {
-          if (
-            c.type === 'branch' ||
-            c.type === 'loop' ||
-            c.type === 'randomize' ||
-            c.type === 'variable' ||
-            c.type === 'delay'
-          )
-            return;
-          h +=
-            '<div class="drag-list-item" data-cid="' +
-            c.id +
-            '" style="padding:6px 10px;margin-bottom:2px;border-radius:6px;cursor:pointer;font-size:0.7rem;display:flex;align-items:center;gap:6px;transition:all 0.1s">';
-          h +=
-            '<span style="font-size:0.85rem">' +
-            (icons[c.type] || '') +
-            '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-            labels[c.type] +
-            '</span>';
-          h +=
-            '<span class="drag-pos-label" style="font-size:0.55rem;color:var(--text2)">(' +
-            ((c.posX || 0) + 1) +
-            ',' +
-            ((c.posY || 0) + 1) +
-            ')</span></div>';
-        });
-        h += '</div></div>';
-
-        h +=
-          '<div style="padding:10px 24px;border-top:1px solid #e0e0e8;display:flex;align-items:center;gap:8px;background:#fafafe;flex-shrink:0;font-size:0.65rem;color:var(--text2)">';
-        h +=
-          '<span>💡 Drag to reposition · Auto-bounded · Double-click to reset | X: <b id="drag-range-x">—</b> Y: <b id="drag-range-y">—</b></span>';
-        h +=
-          '<button onclick="var o=this.closest(\'[style*=fixed]\');o.remove();renderAll()" style="margin-left:auto;padding:5px 14px;border-radius:6px;border:1px solid #e0e0e8;background:#fff;cursor:pointer;font-size:0.72rem;font-family:inherit;color:var(--text)">关闭</button></div>';
+        var h = '';
+        h += '<div style="display:flex;align-items:center;gap:10px;padding:12px 20px;' +
+             'border-bottom:1px solid var(--border);flex-shrink:0">';
+        h += '<span style="font-weight:800;font-size:0.9rem">Layout Preview</span>';
+        if (ph) h += '<span style="font-size:0.7rem;color:var(--text2)">' + _phaseLabel(ph) + '</span>';
+        h += '<span style="font-size:0.62rem;color:var(--text2);margin-left:auto">' +
+             'Flow layout \u00b7 same HTML the jsPsych stimulus uses</span>';
+        h += '<button id="exp-prev-close" style="background:none;border:1px solid var(--border);' +
+             'border-radius:6px;color:var(--text2);cursor:pointer;font-size:0.8rem;padding:3px 10px;' +
+             'font-family:inherit">\u2715</button>';
+        h += '</div>';
+        h += '<div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;' +
+             'background:#f4f4f8;padding:24px">';
+        h += '<div id="exp-prev-stage" style="width:100%;max-width:' + dev.w + 'px;background:#fff;' +
+             'border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.12)"></div>';
+        h += '</div>';
 
         box.innerHTML = h;
         overlay.appendChild(box);
         document.body.appendChild(overlay);
 
-        // --- Canvas setup ---
-        var canvas = document.getElementById('drag-canvas');
-        if (!canvas) return;
-
-        window._selectedCid = null;
-        // Set HTML skeleton first, then defer rendering to RAF for correct layout measurements
-        canvas.innerHTML =
-          '<div id="drag-workspace" style="position:absolute;inset:0;background:#d5d8de;display:flex;align-items:center;justify-content:center;overflow:auto;padding:24px"></div>' +
-          '<div id="drag-ruler-x" style="position:absolute;top:0;left:0;right:0;height:24px;pointer-events:none;overflow:visible;background:rgba(255,255,255,0.9);border-bottom:1px solid #d0d0d8;z-index:1"></div>' +
-          '<div id="drag-ruler-y" style="position:absolute;top:0;left:0;bottom:0;width:24px;pointer-events:none;overflow:visible;background:rgba(255,255,255,0.9);border-right:1px solid #d0d0d8;z-index:1"></div>' +
-          '<div style="position:absolute;top:0;left:0;width:24px;height:24px;pointer-events:none;background:rgba(255,255,255,0.9);border-right:1px solid #d0d0d8;border-bottom:1px solid #d0d0d8;z-index:2"></div>';
-
-        // Sidebar click: highlight canvas element + scroll to it
-        document.querySelectorAll('.drag-list-item').forEach(function (row) {
-          row.onclick = function () {
-            document.querySelectorAll('.drag-list-item').forEach(function (r) {
-              r.style.background = '';
-            });
-            row.style.background = '#eef0ff';
-            canvas.querySelectorAll('[data-drag]').forEach(function (e) {
-              e.style.outline = '';
-            });
-            var cid = row.getAttribute('data-cid');
-            window._selectedCid = cid;
-            var cel = canvas.querySelector('[data-cid="' + cid + '"]');
-            if (cel) {
-              cel.style.outline = '3px solid #6366f1';
-              cel.style.outlineOffset = '2px';
-              cel.style.zIndex = '5';
-              cel.scrollIntoView({behavior: 'smooth', block: 'center'});
-            }
-          };
-        });
-
-        // Defer all size-dependent work to after layout (double RAF for reliable dimensions)
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () {
-            var cr2 = canvas.getBoundingClientRect();
-            var devRef2 = editor.device || {w: 1280, h: 720};
-            var expandScale = Math.min(1, cr2.width / devRef2.w, cr2.height / devRef2.h);
-            var frameW = Math.round(devRef2.w * expandScale),
-              frameH = Math.round(devRef2.h * expandScale);
-
-            // Device frame in workspace center — use device coords + CSS transform for unified coordinate system
-            var ws = document.getElementById('drag-workspace');
-            ws.innerHTML =
-              '<div id="drag-frame" style="width:' +
-              frameW +
-              'px;height:' +
-              frameH +
-              'px;background:#fff;border-radius:4px;box-shadow:0 4px 20px rgba(0,0,0,0.15);position:relative;overflow:hidden;flex-shrink:0">' +
-              '<div id="drag-inner" style="width:' +
-              devRef2.w +
-              'px;height:' +
-              devRef2.h +
-              'px;transform:scale(' +
-              expandScale +
-              ');transform-origin:0 0"></div></div>';
-            document.getElementById('drag-inner').innerHTML = renderTrialHTML(t, {scale: 1, usePixel: true});
-
-            // Force layout then freeze (relative to drag-frame, convert visual → device coordinates)
-            var df = document.getElementById('drag-frame');
-            df.offsetHeight; // force reflow on frame
-            var dragEls = canvas.querySelectorAll('[data-drag]');
-            var pr = df.getBoundingClientRect();
-            dragEls.forEach(function (el) {
-              var cid = el.getAttribute('data-cid');
-              var comp = t.components.find(function (c) {
-                return c.id === cid;
-              });
-              if (comp && (comp.posX || comp.posY)) return;
-              var r = el.getBoundingClientRect();
-              var ax = (r.left - pr.left) / expandScale,
-                ay = (r.top - pr.top) / expandScale;
-              // Account for translateX centering: posX=visual center for aligned elements
-              var posAlign = comp.position || 'center';
-              if (posAlign === 'center') ax += el.offsetWidth / 2;
-              else if (posAlign === 'right') ax += el.offsetWidth;
-              el.style.position = 'absolute';
-              el.style.left = ax + 'px';
-              el.style.top = ay + 'px';
-              comp.posX = Math.round(ax);
-              comp.posY = Math.round(ay);
-            });
-
-            // Update sidebar labels with frozen coordinates
-            dragEls.forEach(function (el) {
-              var cid = el.getAttribute('data-cid');
-              var comp = t.components.find(function (c) {
-                return c.id === cid;
-              });
-              if (!comp) return;
-              var lbl = document.querySelector('.drag-list-item[data-cid="' + cid + '"] .drag-pos-label');
-              if (lbl) lbl.textContent = '(' + ((comp.posX || 0) + 1) + ',' + ((comp.posY || 0) + 1) + ')';
-            });
-            // Populate rulers — device coords on ticks, visual positions via expandScale
-            var rx = document.getElementById('drag-ruler-x'),
-              ry = document.getElementById('drag-ruler-y');
-            var fr2 = df.getBoundingClientRect(),
-              cr3 = canvas.getBoundingClientRect();
-            var frameLeft = fr2.left - cr3.left,
-              frameTop = fr2.top - cr3.top;
-            var margin = Math.round(Math.max(200, devRef2.w * 0.15));
-            if (rx) {
-              var xh = '';
-              for (var i = Math.floor(-(frameLeft / expandScale) / 50) * 50; i <= devRef2.w + margin; i += 50) {
-                var px = frameLeft + i * expandScale;
-                if (px < 24 || px > cr3.width) continue;
-                var label = i + 1;
-                xh +=
-                  '<span style="position:absolute;left:' +
-                  px +
-                  'px;font-size:0.5rem;top:2px;color:' +
-                  (i < 0 ? '#d4a0a0' : '#aaa') +
-                  '">' +
-                  (i % 100 === 0 ? '<b>' + label + '</b>' : '|') +
-                  '</span>';
-              }
-              rx.innerHTML = xh;
-            }
-            if (ry) {
-              var yh = '';
-              for (var j = Math.floor(-(frameTop / expandScale) / 50) * 50; j <= devRef2.h + margin; j += 50) {
-                var py = frameTop + j * expandScale;
-                if (py < 24 || py > cr3.height) continue;
-                var label = j + 1;
-                yh +=
-                  '<div style="position:absolute;top:' +
-                  (py - 7) +
-                  'px;font-size:0.5rem;color:' +
-                  (j < 0 ? '#d4a0a0' : '#aaa') +
-                  ';width:100%;text-align:right;padding-right:3px">' +
-                  (j % 100 === 0 ? '<b>' + label + '</b>' : '—') +
-                  '</div>';
-              }
-              ry.innerHTML = yh;
-            }
-            var rxEl = document.getElementById('drag-range-x'),
-              ryEl = document.getElementById('drag-range-y');
-            if (rxEl) rxEl.textContent = '[-' + margin + ', ' + (devRef2.w + margin) + ']';
-            if (ryEl) ryEl.textContent = '[-' + margin + ', ' + (devRef2.h + margin) + ']';
-
-            // Attach drag handlers (now with correct midX2/midY2)
-            var allDragEls = canvas.querySelectorAll('[data-drag]');
-            allDragEls.forEach(function (el) {
-              var cid = el.getAttribute('data-cid');
-              var comp = t.components.find(function (c) {
-                return c.id === cid;
-              });
-              if (!comp) return;
-              el.style.cursor = 'move';
-              el.onclick = function (e) {
-                e.stopPropagation();
-                // Select this element in sidebar + canvas
-                document.querySelectorAll('.drag-list-item').forEach(function (r) {
-                  r.style.background = '';
-                });
-                var row = document.querySelector('.drag-list-item[data-cid="' + cid + '"]');
-                if (row) row.style.background = '#eef0ff';
-                canvas.querySelectorAll('[data-drag]').forEach(function (e) {
-                  e.style.outline = '';
-                });
-                el.style.outline = '3px solid #6366f1';
-                el.style.outlineOffset = '2px';
-                window._selectedCid = cid;
-              };
-              el.onmousedown = function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                // If a different element is selected, check if click overlaps it
-                var targetEl = el,
-                  targetComp = comp,
-                  targetCid = cid;
-                if (window._selectedCid && window._selectedCid !== cid) {
-                  var selEl = canvas.querySelector('[data-cid="' + window._selectedCid + '"]');
-                  if (selEl) {
-                    var sr = selEl.getBoundingClientRect();
-                    if (
-                      e.clientX >= sr.left &&
-                      e.clientX <= sr.right &&
-                      e.clientY >= sr.top &&
-                      e.clientY <= sr.bottom
-                    ) {
-                      targetEl = selEl;
-                      targetCid = window._selectedCid;
-                      targetComp = t.components.find(function (c) {
-                        return c.id === window._selectedCid;
-                      });
-                    }
-                  }
-                }
-                if (!targetComp) return;
-                targetEl.style.zIndex = 10;
-                var sx = e.clientX,
-                  sy = e.clientY;
-                var startAbsX = targetComp.posX || 0,
-                  startAbsY = targetComp.posY || 0;
-                var moved = false,
-                  dfRefW = devRef2.w,
-                  dfRefH = devRef2.h;
-                var dragMargin = Math.round(Math.max(200, dfRefW * 0.15));
-                function mv(ev) {
-                  var dx = (ev.clientX - sx) / expandScale,
-                    dy = (ev.clientY - sy) / expandScale;
-                  if (!moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
-                  moved = true;
-                  var nx = Math.max(-dragMargin, Math.min(dfRefW + dragMargin - targetEl.offsetWidth, startAbsX + dx));
-                  var ny = Math.max(-dragMargin, Math.min(dfRefH + dragMargin - targetEl.offsetHeight, startAbsY + dy));
-                  targetEl.style.left = nx + 'px';
-                  targetEl.style.top = ny + 'px';
-                  targetEl.style.position = 'absolute';
-                }
-                function up(ev) {
-                  document.removeEventListener('mousemove', mv);
-                  document.removeEventListener('mouseup', up);
-                  targetEl.style.zIndex = 1;
-                  if (!moved) return;
-                  var nx = Math.max(
-                    -dragMargin,
-                    Math.min(dfRefW + dragMargin - targetEl.offsetWidth, startAbsX + (ev.clientX - sx) / expandScale),
-                  );
-                  var ny = Math.max(
-                    -dragMargin,
-                    Math.min(dfRefH + dragMargin - targetEl.offsetHeight, startAbsY + (ev.clientY - sy) / expandScale),
-                  );
-                  targetComp.posX = Math.round(nx);
-                  targetComp.posY = Math.round(ny);
-                  if (!editor._ucSaved) {
-                    saveState();
-                    editor._ucSaved = true;
-                    setTimeout(function () {
-                      editor._ucSaved = false;
-                    }, 1500);
-                  }
-                  autoSave();
-                  editor.selectedTrial = t.id;
-                  renderPreview();
-                  var lbl = document.querySelector('.drag-list-item[data-cid="' + targetCid + '"] .drag-pos-label');
-                  if (lbl) lbl.textContent = '(' + (targetComp.posX + 1) + ',' + (targetComp.posY + 1) + ')';
-                }
-                document.addEventListener('mousemove', mv);
-                document.addEventListener('mouseup', up);
-              };
-              el.ondblclick = function () {
-                var cx = Math.round(devRef2.w / 2),
-                  cy = Math.round(devRef2.h / 2);
-                comp.posX = cx;
-                comp.posY = cy;
-                el.style.left = cx + 'px';
-                el.style.top = cy + 'px';
-                el.style.position = 'absolute';
-                var lbl = document.querySelector('.drag-list-item[data-cid="' + cid + '"] .drag-pos-label');
-                if (lbl) lbl.textContent = '(' + (cx + 1) + ',' + (cy + 1) + ')';
-                autoSave();
-                editor.selectedTrial = t.id;
-                renderPreview();
-                window._selectedCid = cid;
-              };
-            });
-          });
-        });
-        // Auto-select first component
-        setTimeout(function () {
-          var first = document.querySelector('.drag-list-item');
-          if (first) {
-            first.click();
-            window._selectedCid = first.getAttribute('data-cid');
-          }
-        }, 200);
+        document.getElementById('exp-prev-stage').innerHTML = renderTrialHTML(t, {scale: 1});
+        document.getElementById('exp-prev-close').onclick = function () { overlay.remove(); };
+        overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
       }
 
       function previewExperiment() {
@@ -2296,7 +2118,7 @@ function _applyI18n() {
           _branchJumped = false;
           var t = ph.trials[ti];
           count++;
-          var phaseLabel = ph.name.replace('📖 ', '').replace('🧪 ', '').replace('📊 ', '');
+          var phaseLabel = _stripEmoji(ph.name);
           var phaseColor = ph.color === 'i' ? '#818cf8' : ph.color === 'f' ? '#22c55e' : '#f97316';
 
           // Analyze trial for interaction
@@ -2384,7 +2206,7 @@ function _applyI18n() {
               ');transform-origin:0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:' +
               Math.round(20 * isc) +
               'px">' +
-              renderTrialHTML(tmp, {scale: 1, usePixel: true}) +
+              renderTrialHTML(tmp, {scale: 1}) +
               '</div></div>'
             );
           }
@@ -2655,7 +2477,7 @@ function _applyI18n() {
               if (varMode === 'correct' && correct) variables[varName]++;
               else if (varMode === 'always') variables[varName]++;
             }
-              responses.push({phase: ph.name, trial: ti + 1, rt: rt, response: resp, correct: correct});
+              responses.push({phase: _stripEmoji(ph.name), trial: ti + 1, rt: rt, response: resp, correct: correct});
               var rtEl = document.getElementById('preview-rt');
               if (rtEl)
                 rtEl.innerHTML =
@@ -3032,7 +2854,7 @@ function _applyI18n() {
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'button', 'r');
           var t1 = findTrial(editor.selectedTrial);
-          sc(t1, 0, Object.assign({content: 'Welcome to the Stroop experiment!\n\nYou will see Chinese characters displayed in different colors.\nYour task is to respond to the FONT COLOR, ignoring the word meaning.\n\n🔴 Red font → Press A\n🔵 Blue font → Press L\n🟢 Green font → Press K\n\nRespond as quickly and accurately as possible!', fontSize: 20, position: 'center'}, px(0.5, 0.12)));
+          sc(t1, 0, Object.assign({content: 'Welcome to the Stroop experiment!\n\nYou will see color words (RED, BLUE, GREEN) displayed in different font colors.\nYour task is to respond to the FONT COLOR, ignoring the word meaning.\n\nRed font → Press A\nBlue font → Press L\nGreen font → Press K\n\nRespond as quickly and accurately as possible!', fontSize: 20, position: 'center'}, px(0.5, 0.12)));
           sc(t1, 1, Object.assign({labels: 'Start Experiment'}, px(0.5, 0.76)));
           // Phase 2: Stroop trials — 9 variants (3 colors × 3 characters)
           addPhase('trials');
@@ -3065,7 +2887,7 @@ function _applyI18n() {
           stroopVariants.forEach(function (v, vi) {
             sc(t2, 3 + vi, Object.assign({content: v.content, color: v.color, fontSize: 36, position: 'center', fontWeight: 'bold', 映射按键: v.key}, px(0.5, 0.38)));
           });
-          sc(t2, 12, Object.assign({keys: 'a,l,k', prompt: '🔴Red→A  🔵Blue→L  🟢Green→K'}, px(0.5, 0.62)));
+          sc(t2, 12, Object.assign({keys: 'a,l,k', prompt: 'Red→A  Blue→L  Green→K'}, px(0.5, 0.62)));
           sc(t2, 13, {condition: 'correct'});
           sc(t2, 14, {count: 48});
           // Error feedback trial
@@ -3073,7 +2895,7 @@ function _applyI18n() {
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'delay', 'l');
           var t3 = findTrial(editor.selectedTrial);
-          sc(t3, 0, Object.assign({content: '❌ Press the key for the FONT COLOR!\nRed=A  Blue=L  Green=K', fontSize: 22, color: '#ef4444', position: 'center'}, px(0.5, 0.4)));
+          sc(t3, 0, Object.assign({content: 'Press the key for the FONT COLOR!\nRed=A  Blue=L  Green=K', fontSize: 22, color: '#ef4444', position: 'center'}, px(0.5, 0.4)));
           sc(t3, 1, {duration: 1200});
           sc(t2, 13, {condition: 'correct', targetFail: t3.id});
           // Phase 3: Feedback
@@ -3104,7 +2926,7 @@ function _applyI18n() {
             Object.assign(
               {
                 content:
-                  'Welcome to the Simon effect experiment!\n\nColored circles will appear on the left or right side of the screen.\nIgnore the position and respond based on COLOR:\n\n🔴 Red → Press A\n🟢 Green → Press L\n\nRespond as quickly and accurately as possible!',
+                  'Welcome to the Simon effect experiment!\n\nColored circles will appear on the left or right side of the screen.\nIgnore the position and respond based on COLOR:\n\nRed → Press A\nGreen → Press L\n\nRespond as quickly and accurately as possible!',
                 fontSize: 20,
                 position: 'center',
               },
@@ -3131,10 +2953,10 @@ function _applyI18n() {
           sc(t2, 0, Object.assign({duration: 500}, px(0.5, 0.45))); // fixation
           sc(t2, 1, {duration: 200}); // delay 200ms
           sc(t2, 2, {mode: 'pick-one'}); // randomize: pick one each loop
-          sc(t2, 3, Object.assign({shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}, px(0.25, 0.38))); // 🔴左→A
-          sc(t2, 4, Object.assign({shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}, px(0.75, 0.38))); // 🔴右→A
-          sc(t2, 5, Object.assign({shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}, px(0.25, 0.38))); // 🟢左→L
-          sc(t2, 6, Object.assign({shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}, px(0.75, 0.38))); // 🟢右→L
+          sc(t2, 3, Object.assign({shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}, px(0.25, 0.38))); // 左→A
+          sc(t2, 4, Object.assign({shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}, px(0.75, 0.38))); // 右→A
+          sc(t2, 5, Object.assign({shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}, px(0.25, 0.38))); // 左→L
+          sc(t2, 6, Object.assign({shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}, px(0.75, 0.38))); // 右→L
           sc(t2, 7, Object.assign({keys: 'a,l', prompt: 'Red→A  Green→L'}, px(0.5, 0.62))); // keyboard
           sc(t2, 8, {condition: 'correct'}); // branch placeholder (targetFail set below)
           sc(t2, 9, {count: 60}); // 60 trials
@@ -3147,7 +2969,7 @@ function _applyI18n() {
             t3,
             0,
             Object.assign(
-              {content: '❌ Press the key for the COLOR!\nRed=A  Green=L', fontSize: 22, color: '#ef4444', position: 'center'},
+              {content: 'Press the key for the COLOR!\nRed=A  Green=L', fontSize: 22, color: '#ef4444', position: 'center'},
               px(0.5, 0.4),
             ),
           );
@@ -3264,7 +3086,7 @@ function _applyI18n() {
             Object.assign(
               {
                 content:
-                  '🔀 Branch Demo\n\nThis experiment demonstrates the branch component:\n• Red text → Press A\n• Blue text → Press L\n• Wrong answer → jumps to error feedback\n• Correct answer → proceeds normally\n\n2 sets of 3 trials each.',
+                  'Branch Demo\n\nThis experiment demonstrates the branch component:\n• Red text → Press A\n• Blue text → Press L\n• Wrong answer → jumps to error feedback\n• Correct answer → proceeds normally\n\n2 sets of 3 trials each.',
                 fontSize: 18,
                 position: 'center',
               },
@@ -3299,7 +3121,7 @@ function _applyI18n() {
             t3,
             0,
             Object.assign(
-              {content: '❌ Wrong key!\n\nPress A for RED text', fontSize: 22, color: '#ef4444', position: 'center'},
+              {content: 'Wrong key!\n\nPress A for RED text', fontSize: 22, color: '#ef4444', position: 'center'},
               px(0.5, 0.4),
             ),
           );
@@ -3328,7 +3150,7 @@ function _applyI18n() {
             t5,
             0,
             Object.assign(
-              {content: '❌ Wrong key!\n\nPress L for BLUE text', fontSize: 22, color: '#ef4444', position: 'center'},
+              {content: 'Wrong key!\n\nPress L for BLUE text', fontSize: 22, color: '#ef4444', position: 'center'},
               px(0.5, 0.4),
             ),
           );
@@ -3369,7 +3191,7 @@ function _applyI18n() {
             Object.assign(
               {
                 content:
-                  '🎲 Randomize + 📊 Variable Demo\n\nThis experiment demonstrates two logic components:\n\n📊 Variable: stores experiment data (e.g. score)\n  • Creates variable score=0 at trial start\n  • +1 on each correct answer\n\n🎲 Randomize: shuffles component display order\n  • 4 fruit names in random order\n  • Different order each loop\n\nMemorize the fruit names, then type them in.\n5 rounds total.',
+                  'Randomize + Variable Demo\n\nThis experiment demonstrates two logic components:\n\nVariable: stores experiment data (e.g. score)\n  • Creates variable score=0 at trial start\n  • +1 on each correct answer\n\nRandomize: shuffles component display order\n  • 4 fruit names in random order\n  • Different order each loop\n\nMemorize the fruit names, then type them in.\n5 rounds total.',
                 fontSize: 17,
                 position: 'center',
               },
@@ -3405,22 +3227,22 @@ function _applyI18n() {
           sc(
             t3,
             3,
-            Object.assign({content: '🍎 Apple', fontSize: 30, color: '#ef4444', position: 'center'}, px(0.5, 0.2)),
+            Object.assign({content: 'Apple', fontSize: 30, color: '#ef4444', position: 'center'}, px(0.5, 0.2)),
           );
           sc(
             t3,
             4,
-            Object.assign({content: '🍌 Banana', fontSize: 30, color: '#f59e0b', position: 'center'}, px(0.5, 0.3)),
+            Object.assign({content: 'Banana', fontSize: 30, color: '#f59e0b', position: 'center'}, px(0.5, 0.3)),
           );
           sc(
             t3,
             5,
-            Object.assign({content: '🍊 Orange', fontSize: 30, color: '#f97316', position: 'center'}, px(0.5, 0.4)),
+            Object.assign({content: 'Orange', fontSize: 30, color: '#f97316', position: 'center'}, px(0.5, 0.4)),
           );
           sc(
             t3,
             6,
-            Object.assign({content: '🍇 Grape', fontSize: 30, color: '#a855f7', position: 'center'}, px(0.5, 0.5)),
+            Object.assign({content: 'Grape', fontSize: 30, color: '#a855f7', position: 'center'}, px(0.5, 0.5)),
           );
           sc(t3, 7, {duration: 2000});
           sc(
@@ -3445,7 +3267,7 @@ function _applyI18n() {
             Object.assign(
               {
                 content:
-                  'Demo complete!\n\n📊 Variable component:\n• Stores and updates experiment data\n• e.g. scores, cumulative RT\n• Converted to data fields in jsPsych\n\n🎲 Randomize component:\n• Shuffles component order within a trial\n• Controls order effects\n• Converted to timeline_variables in jsPsych',
+                  'Demo complete!\n\nVariable component:\n• Stores and updates experiment data\n• e.g. scores, cumulative RT\n• Converted to data fields in jsPsych\n\nRandomize component:\n• Shuffles component order within a trial\n• Controls order effects\n• Converted to timeline_variables in jsPsych',
                 fontSize: 20,
                 position: 'center',
               },
@@ -3469,42 +3291,128 @@ function _applyI18n() {
         renderAll();
       }
 
-      function generateCode() {
-        if (editor.phases.length === 0) return '// No experiment created yet\n';
+      // Compile the experiment into jsPsych code (no HTML shell).
+      // Both the code export and the published file build on this, so the two
+      // outputs run the *same* experiment rather than two parallel implementations.
+      //   opts.onFinish — JS statements to run in initJsPsych's on_finish
+      // Returns { code, usedPlugins }.
+      function _compileExperiment(opts) {
+        opts = opts || {};
+        if (editor.phases.length === 0) {
+          return { code: '// No experiment created yet\n', usedPlugins: {} };
+        }
         var dev = editor.device || {w: 1280, h: 720};
-        var code = '/* ===== ExpVis Generated jsPsych Experiment Code ===== */\n';
-        code +=
-          '// Device: ' +
-          (editor.device ? editor.device.name : 'Default 1280×720') +
-          ' | Generated: ' +
-          new Date().toISOString().slice(0, 10) +
-          '\n\n';
+        // Collect jsPsych plugins actually used by this experiment, so the
+        // generated HTML only loads what it needs.
+        var _usedPlugins = {};
+        // Media (image/audio/video) is emitted once as a named variable and then
+        // shared between the preload trial and the stimulus HTML. Components
+        // carry base64 data URIs, so inlining them twice would double file size.
+        var _mediaVars = {};
+        var _mediaDecls = [];
+        function _mediaRef(c) {
+          if (!c.fileData) return null;
+          if (_mediaVars[c.fileData]) return _mediaVars[c.fileData];
+          var name = 'EXP_MEDIA_' + _mediaDecls.length;
+          _mediaVars[c.fileData] = name;
+          _mediaDecls.push({name: name, type: c.type, data: c.fileData});
+          return name;
+        }
+        // Turn stimulus HTML into a single-quoted JS string. Placeholders left by
+        // compHTML() become variable concatenations AFTER quote-escaping, so the
+        // escaped HTML and the live expression don't interfere.
+        function _jsStr(html) {
+          return html.replace(/'/g, "\\'").replace(/@@(\w+)@@/g, "' + $1 + '");
+        }
+        var code = '';
+        var onFinishBody = opts.onFinish || 'jsPsych.data.displayData();';
         code += 'var jsPsych = initJsPsych({\n';
-        code += '  on_finish: function(data) {\n';
-        code += '    // jsPsych.data.get().csv();  // Uncomment to export CSV\n';
-        code += '    jsPsych.data.displayData();\n';
+        if (opts.displayElement) {
+          code += "  display_element: '" + opts.displayElement + "',\n";
+        }
+        code += '  on_finish: function() {\n';
+        onFinishBody.split('\n').forEach(function (l) {
+          code += '    ' + l + '\n';
+        });
         code += '  }\n';
         code += '});\n\n';
-        code += 'var timeline = [];\n\n';
+        code += 'var timeline = [];\n\n@@MEDIA_PRELOAD@@';
 
         // Map internal response type → jsPsych plugin name
+        // Everything runs on jsPsychHtmlKeyboardResponse. For keyboard trials it is
+        // used as intended; for button/slider/textInput/click it serves as the trial
+        // container with choices: "NO_KEYS" — the controls are drawn into the
+        // stimulus and the trial ends via jsPsych.finishTrial().
         function pluginName(rt) {
-          var m = {
-            keyboard: 'jsPsychHtmlKeyboardResponse',
-            button: 'jsPsychHtmlButtonResponse',
-            slider: 'jsPsychHtmlSliderResponse',
-            textInput: 'jsPsychSurveyText',
-            click: 'jsPsychHtmlButtonResponse',
-          };
-          return m[rt] || 'jsPsychHtmlKeyboardResponse';
+          var name = 'jsPsychHtmlKeyboardResponse';
+          _usedPlugins[name] = true;
+          return name;
         }
 
         // Build styled stimulus HTML for a component (mirrors renderTrialHTML style)
+        // ---- Self-rendered response controls -------------------------------
+        // jsPsych's *-button / *-slider / survey-text plugins render their controls
+        // *below* the stimulus, which is why a control dragged to posY ended up
+        // outside the canvas. We draw the controls into the stimulus HTML at their
+        // real coordinates and end the trial ourselves with jsPsych.finishTrial().
+        function _esc(s) {
+          return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+        }
+        var _CTL_CSS =
+          'font:inherit;font-size:16px;padding:11px 24px;border-radius:10px;' +
+          'border:1px solid #c9c9d2;background:#ffffff;color:#17171c;cursor:pointer;';
+        function _ctlButton(label, kind, idx, val, extra) {
+          return '<button type="button" class="expvis-ctl" data-kind="' + kind + '"' +
+            (idx == null ? '' : ' data-index="' + idx + '"') +
+            ' data-value="' + _esc(val) + '" style="' + _CTL_CSS + (extra || '') + '">' +
+            _esc(label) + '</button>';
+        }
+        function _ctlHTML(c, px) {
+          if (c.type === 'button') {
+            var labels = String(c.labels || '').split(',').map(function (x) { return x.trim(); })
+              .filter(function (x) { return x; });
+            return '<div style="' + px + 'display:flex;gap:14px;justify-content:center">' +
+              labels.map(function (l, i) { return _ctlButton(l, 'button', i, l); }).join('') +
+              '</div>';
+          }
+          if (c.type === 'slider') {
+            var lo = c.min == null ? 0 : c.min, hi = c.max == null ? 100 : c.max;
+            var st = c.step || 1, mid = Math.round((lo + hi) / 2);
+            return '<div style="' + px + 'text-align:center">' +
+              '<input type="range" class="expvis-range" min="' + lo + '" max="' + hi +
+              '" step="' + st + '" value="' + mid + '" style="width:320px;accent-color:#6366f1">' +
+              '<div class="expvis-range-val" style="font-size:1.3em;font-weight:700;margin:6px 0 10px">' + mid + '</div>' +
+              _ctlButton('Continue', 'slider', null, mid) +
+              '</div>';
+          }
+          if (c.type === 'textInput') {
+            return '<div style="' + px + 'text-align:center">' +
+              '<input type="text" class="expvis-text" placeholder="' + _esc(c.placeholder || '') +
+              '" style="font:inherit;font-size:16px;padding:10px 14px;border:1px solid #c9c9d2;' +
+              'border-radius:8px;width:280px"> ' +
+              _ctlButton('Continue', 'textInput', null, 'submit') +
+              '</div>';
+          }
+          if (c.type === 'click') {
+            return '<div class="expvis-ctl expvis-clickzone" data-kind="click" data-value="click" ' +
+              'style="position:absolute;left:0;top:0;right:0;bottom:0;cursor:pointer"></div>';
+          }
+          return '';
+        }
+
         function compHTML(c) {
+          // jsPsych-style flow layout: components are blocks in a flex column,
+          // not absolutely positioned pixels. `position` becomes the alignment.
+          // This is what makes the stimulus responsive and matches how hand-written
+          // jsPsych lays out stimuli.
           var pos = c.position || 'center';
-          var tx =
-            pos === 'center' ? 'transform:translateX(-50%);' : pos === 'right' ? 'transform:translateX(-100%);' : '';
-          var px = 'position:absolute;left:' + (c.posX || 0) + 'px;top:' + (c.posY || 0) + 'px;' + tx;
+          var _al = pos === 'left' ? 'flex-start' : pos === 'right' ? 'flex-end' : 'center';
+          var _ta = pos === 'left' ? 'left' : pos === 'right' ? 'right' : 'center';
+          var px = 'align-self:' + _al + ';text-align:' + _ta + ';';
           switch (c.type) {
             case 'text':
               return (
@@ -3541,18 +3449,25 @@ function _applyI18n() {
                 '"></div>'
               );
             case 'fixation':
-              return '<div style="' + px + 'font-size:40px;color:#ccc">+</div>';
+              return '<div style="' + px + 'font-size:60px;color:#ccc">+</div>';
+            case 'button':
+            case 'slider':
+            case 'textInput':
+            case 'click':
+              return _ctlHTML(c, px);
             case 'image':
               return c.fileData
-                ? '<img src="' + c.fileData + '" style="' + px + 'max-width:' + (c.width || 200) + 'px">'
+                ? '<img src="@@' + _mediaRef(c) + '@@" style="' + px + 'max-width:' + (c.width || 200) + 'px">'
                 : '';
             case 'audio':
-              return c.fileData ? '<audio controls src="' + c.fileData + '" style="' + px + '"></audio>' : '';
+              return c.fileData
+                ? '<audio controls src="@@' + _mediaRef(c) + '@@" style="' + px + '"></audio>'
+                : '';
             case 'video':
               return c.fileData
-                ? '<video controls src="' +
-                    c.fileData +
-                    '" style="' +
+                ? '<video controls src="@@' +
+                    _mediaRef(c) +
+                    '@@" style="' +
                     px +
                     'max-width:' +
                     (c.width || 320) +
@@ -3564,54 +3479,77 @@ function _applyI18n() {
         }
 
         editor.phases.forEach(function (ph, phi) {
-          code += '// ── ' + ph.name + ' (' + (phi + 1) + '/' + editor.phases.length + ') ──\n';
+          code += '// ── ' + _stripEmoji(ph.name) + ' (' + (phi + 1) + '/' + editor.phases.length + ') ──\n';
           ph.trials.forEach(function (t, ti) {
                   // --- Classify components ---
       var stims = [],
         respType = null,
         respInfo = {},
-        logic = { delay: 0, loop: null, hints: [], randomizeMode: null, randomizeStims: [], timeout: 0, hasBranch: false, branchCond: '', branchTarget: '', hasVariable: false, varName: '', varInit: 0 };
+        logic = { loop: null, hints: [], randomizeMode: null, randomizeStims: [], timeout: 0, hasBranch: false, branchCond: 'correct', branchTarget: '', branchMatch: '', branchOp: '>=', branchCmp: '', hasVariable: false, varName: '', varInit: 0, varMode: 'correct' };
       var preStims = [], postStims = [], foundRandomize = false;
+      // fixation / delay are *timed segments*: each becomes its own jsPsych trial
+      // inside the node's timeline, so their durations actually take effect.
+      // (Previously they were folded into the stimulus HTML and the duration was
+      // recorded but never emitted.)
+      var preTiming = [], postTiming = [], seenVisual = false;
+      // response components drawn into the stimulus at their own coordinates
+      var respControls = [];
       t.components.forEach(function (c) {
-        var isStim = ['text', 'shape', 'image', 'fixation', 'audio', 'video'].indexOf(c.type) >= 0;
+        if (c.type === 'fixation' || c.type === 'delay') {
+          // Keep the component itself: its own renderer supplies the look
+          // (e.g. the fixation cross is 40px #ccc), so a trimmed {kind,duration}
+          // would silently lose that styling.
+          if (seenVisual) { postTiming.push(c); } else { preTiming.push(c); }
+          return;
+        }
+        var isStim = ['text', 'shape', 'image', 'audio', 'video'].indexOf(c.type) >= 0;
         if (isStim) {
+          seenVisual = true;
           if (!foundRandomize) { preStims.push(c); }
           else { postStims.push(c); logic.randomizeStims.push(c); }
           stims.push(c);
-          if (c.type === 'fixation' && c.duration) logic.delay = Math.max(logic.delay, c.duration);
           return;
         }
         if (c.type === 'keyboard') {
           respType = 'keyboard';
+          respInfo = respInfo || {};
           respInfo.choices = c.keys.split(',').map(function (k) { var t = k.trim(); return t || ' '; });
+          respInfo.correctKey = c.correctKey || '';
           if (c.timeout) logic.timeout = Math.max(logic.timeout || 0, c.timeout);
-        } else if (c.type === 'button') {
-          if (!respType || respType === 'keyboard') respType = 'button';
-          respInfo.choices = c.labels.split(',').map(function (l) { return l.trim(); });
-        } else if (c.type === 'slider') {
-          respType = 'slider';
-          respInfo.min = c.min; respInfo.max = c.max; respInfo.step = c.step;
-          respInfo.labels = [c.min + ' — ' + c.max];
-        } else if (c.type === 'textInput') {
-          respType = 'textInput';
-          respInfo.questions = [{ prompt: c.placeholder || 'Enter text' }];
-        } else if (c.type === 'click') {
-          respType = 'click'; respInfo.choices = ['Click to continue'];
+        } else if (c.type === 'button' || c.type === 'slider' ||
+                   c.type === 'textInput' || c.type === 'click') {
+          // Self-rendered: drawn into the stimulus, so posX/posY are honoured.
+          if (!respType) respType = c.type;
+          respInfo = respInfo || {};
+          if (c.type === 'button') {
+            respInfo.choices = String(c.labels || '').split(',').map(function (l) { return l.trim(); });
+          } else if (c.type === 'slider') {
+            respInfo.min = c.min; respInfo.max = c.max; respInfo.step = c.step;
+            respInfo.labelMin = c.labelMin || '';
+            respInfo.labelMax = c.labelMax || '';
+          } else if (c.type === 'textInput') {
+            respInfo.placeholder = c.placeholder || '';
+            respInfo.correctAnswer = c.correctAnswer || '';
+            respInfo.validation = c.validation || 'none';
+          }
+          respControls.push(c);
         } else if (c.type === 'loop') {
           logic.loop = c.count;
-        } else if (c.type === 'delay') {
-          logic.delay = Math.max(logic.delay, c.duration || 0);
         } else if (c.type === 'randomize') {
           foundRandomize = true;
           logic.randomizeMode = c.mode || 'pick-one';
         } else if (c.type === 'branch') {
           logic.hasBranch = true;
-          logic.branchCond = c.condition;
+          logic.branchCond = c.condition || 'correct';
           logic.branchTarget = c.targetFail || '';
+          logic.branchMatch = c.matchValue || '';
+          logic.branchOp = c.operator || '>=';
+          logic.branchCmp = c.compareValue || '';
         } else if (c.type === 'variable') {
           logic.hasVariable = true;
           logic.varName = c.name;
           logic.varInit = c.initial;
+          logic.varMode = c.mode || 'correct';
         }
       });
 // Default: any-key to continue (for instructions / feedback / stimulus-only)
@@ -3620,20 +3558,67 @@ function _applyI18n() {
               if (stims.length > 0) respInfo = {choices: [' ']};
             }
 
+            // A jsPsych trial runs exactly one response plugin, so a trial carrying
+            // several response components can only emit one of them. Say so loudly
+            // instead of dropping the rest silently.
+            var respComps = t.components.filter(function (c) {
+              return ['keyboard', 'button', 'slider', 'textInput', 'click'].indexOf(c.type) >= 0;
+            });
+            if (respComps.length > 1) {
+              logic.hints.push('// !! This trial has ' + respComps.length +
+                ' response components (' + respComps.map(function (c) { return c.type; }).join(', ') +
+                '), but a jsPsych trial runs a single response plugin.');
+              logic.hints.push('// !! Only "' + respType + '" was generated. Split the others into ' +
+                'their own trials if you need to capture all responses.');
+            }
+
             var trialName = 'trial_' + ph.id + '_' + ti;
             var pname = pluginName(respType);
 
             // --- Build stimulus HTML ---
             // For randomize pick-one: generate timeline_variables per stimulus variant
             var hasRandomizePickOne = logic.randomizeMode === 'pick-one' && logic.randomizeStims.length > 1;
+            var hasRandomizeShuffle = logic.randomizeMode === 'shuffle' && logic.randomizeStims.length > 1;
+            // Both modes drive the trial from timeline_variables; they differ only in
+            // how many variants run per repetition (see the `sample` / `randomize_order` below).
+            var hasVariantTimeline = hasRandomizePickOne || hasRandomizeShuffle;
             // Build HTML for pre-randomize components (fixation etc.)
             var preHTML = preStims.map(function (c) { return compHTML(c); }).join('');
             // Individual stimulus variants for timeline_variables
             var stimVariants = logic.randomizeStims.map(function (c) {
               return { html: compHTML(c), correctKey: c.映射按键 || '' };
             });
-            var fullStimHTML = '<div style="position:relative;width:' + dev.w + 'px;height:' + dev.h + 'px;overflow:hidden">' + preHTML + (hasRandomizePickOne ? '__VARIANT__' : postStims.map(function(c){return compHTML(c);}).join('')) + '</div>';
-            fullStimHTML = fullStimHTML.replace(/'/g, "\\'");
+            // Self-rendered controls join the stimulus at their own coordinates.
+            // A click-anywhere zone goes first so it sits *under* the other controls
+            // (otherwise it would swallow their clicks).
+            var _clickZones = respControls.filter(function (c) { return c.type === 'click'; });
+            var _otherCtls = respControls.filter(function (c) { return c.type !== 'click'; });
+            var ctlHTML = _clickZones.map(function (c) {
+                            // click-anywhere spans the viewport, independent of the flow
+                            return _ctlHTML(c, 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:1;');
+                          }).join('') +
+                          _otherCtls.map(function (c) {
+                            var cp = c.position || 'center';
+                            var cal = cp === 'left' ? 'flex-start' : cp === 'right' ? 'flex-end' : 'center';
+                            return _ctlHTML(c, 'align-self:' + cal + ';');
+                          }).join('');
+            // Flow container: no fixed canvas, no absolute positioning — content
+            // stacks in a centred flex column and adapts to any viewport.
+            var fullStimHTML = '<div style="display:flex;flex-direction:column;align-items:center;' +
+              'justify-content:center;min-height:60vh;gap:1.5em;padding:2em;box-sizing:border-box">' +
+              preHTML + ctlHTML +
+              (hasVariantTimeline ? '__VARIANT__' : postStims.map(function(c){return compHTML(c);}).join('')) +
+              '</div>';
+            fullStimHTML = _jsStr(fullStimHTML);
+
+            // Where the correct answer comes from. Recorded into the trial's `data`
+            // so the export is directly analysable, and used to score the trial.
+            var correctResponseExpr = null;
+            if (hasVariantTimeline && stimVariants.length > 1) {
+              correctResponseExpr = "jsPsych.timelineVariable('correctKey')";
+            } else if (respInfo.correctKey) {
+              correctResponseExpr = "'" + String(respInfo.correctKey).replace(/'/g, "\\'") + "'";
+            }
 
             // --- Generate trial object ---
             var lines = [];
@@ -3645,105 +3630,264 @@ function _applyI18n() {
             if (logic.hasVariable && logic.varName) {
               code += 'var ' + logic.varName + ' = ' + (logic.varInit || 0) + ';\n';
             }
-            // Branch: generate conditional_function
-            if (logic.hasBranch && logic.branchTarget) {
-              code += '// Error feedback: called on incorrect answer\n';
-              code += 'var showError' + ph.id + '_' + ti + ' = {\n';
-              code += '  type: jsPsychHtmlButtonResponse,\n';
-              code += '  stimulus: \'<p style="color:#ef4444;font-size:24px">Press the key according to the rules!</p>\',\n';
-              code += '  choices: ["Continue"],\n';
-              code += '  trial_duration: 1500\n';
-              code += '};\n';
-            }
-
             // Emit hints for remaining unsupported logic
             logic.hints.forEach(function (h) {
               code += h + '\n';
             });
 
             L(0, 'var ' + trialName + ' = {');
-            
-            if (hasRandomizePickOne && stimVariants.length > 1) {
+
+            if (hasVariantTimeline && stimVariants.length > 1) {
               // Use timeline_variables with per-variant stimulus
-              L(1, '// pick-one: each loop randomly selects one stimulus variant');
               L(1, 'timeline_variables: [');
               stimVariants.forEach(function (v, vi) {
-                L(2, '{stim: \'' + (preHTML + v.html).replace(/'/g, "\\'") + '\', correctKey: "' + (v.correctKey || '') + '"},');
+                L(2, '{stim: \'' + _jsStr(preHTML + v.html) + '\', correctKey: "' + (v.correctKey || '') + '"},');
               });
               L(1, '],');
-              L(1, 'randomize_order: true,');
+              if (hasRandomizePickOne) {
+                // pick-one: draw ONE variant per repetition.
+                // (randomize_order would instead run every variant each round.)
+                L(1, "sample: {type: 'with-replacement', size: 1},");
+              } else {
+                // shuffle: run every variant, in a random order, each repetition.
+                L(1, 'randomize_order: true,');
+              }
               if (logic.loop) {
                 L(1, 'repetitions: ' + logic.loop + ',');
               }
-              L(1, 'timeline: [{');
             } else if (logic.loop) {
-              L(1, '// Repeat ' + logic.loop + ' times');
-              L(1, 'timeline: [{');
+              L(1, 'repetitions: ' + logic.loop + ',');
             }
 
-            var indent = (hasRandomizePickOne && stimVariants.length > 1) ? 3 : (logic.loop ? 2 : 1);
+            // --- node timeline: timed segments around the stimulus trial ---
+            L(1, 'timeline: [');
+            var ei = 2;
+            // A fixed-duration trial that waits for nothing.
+            function emitTimingTrial(c) {
+              _usedPlugins['jsPsychHtmlKeyboardResponse'] = true;
+              // fixation renders its cross through the normal component renderer
+              // (so font size / colour are preserved); delay is a blank wait.
+              var stim = c.type === 'fixation' ? compHTML(c) : '';
+              L(ei, '{');
+              L(ei + 1, 'type: jsPsychHtmlKeyboardResponse,');
+              L(ei + 1, "stimulus: '" + _jsStr(stim) + "',");
+              L(ei + 1, "choices: 'NO_KEYS',");
+              // A min<max range turns the duration into a dynamic parameter, the
+              // same idiom the jsPsych tutorial uses for a jittered fixation.
+              var _lo = Number(c.durationMin) || 0, _hi = Number(c.durationMax) || 0;
+              if (_hi > _lo) {
+                var _step = Number(c.durationStep) || 250;
+                var _vals = [];
+                for (var _v = _lo; _v <= _hi; _v += _step) _vals.push(_v);
+                if (_vals[_vals.length - 1] !== _hi) _vals.push(_hi);
+                L(ei + 1, 'trial_duration: function () {');
+                L(ei + 2, 'return jsPsych.randomization.sampleWithoutReplacement(' +
+                          JSON.stringify(_vals) + ', 1)[0];');
+                L(ei + 1, '},');
+              } else {
+                L(ei + 1, 'trial_duration: ' + (c.duration || 0) + ',');
+              }
+              L(ei + 1, "data: {task: '" + c.type + "'}");
+              L(ei, '},');
+            }
+            preTiming.forEach(emitTimingTrial);
+
+            L(ei, '{');
+            var indent = ei + 1;
             L(indent, 'type: ' + pname + ',');
             if (respType === 'textInput') {
               L(indent, 'questions: ' + JSON.stringify(respInfo.questions) + ',');
             } else {
-              if (hasRandomizePickOne && stimVariants.length > 1) {
+              if (hasVariantTimeline && stimVariants.length > 1) {
                 L(indent, "stimulus: jsPsych.timelineVariable('stim'),");
               } else if (preHTML || postStims.length > 0) {
                 L(indent, "stimulus: '" + fullStimHTML + "',");
               }
-              if (respInfo.choices)
+              if (respControls.length > 0 && respType !== 'keyboard') {
+                // controls are self-rendered; the plugin must not listen for anything
+                L(indent, "choices: 'NO_KEYS',");
+              } else if (respInfo.choices) {
                 L(indent,'choices: [' + respInfo.choices.map(function (x) { return '"' + x + '"'; }).join(',') + '],');
+              }
             }
             if (respInfo.min != null) L(indent, 'min: ' + respInfo.min + ',');
             if (respInfo.max != null) L(indent, 'max: ' + respInfo.max + ',');
             if (respInfo.step != null) L(indent, 'step: ' + respInfo.step + ',');
-            if (respInfo.labels && respType === 'slider')
-              L(indent,'labels: [' + respInfo.labels.map(function (x) { return '"' + x + '"'; }).join(',') + '],');
+            if (respType === 'slider' && (respInfo.labelMin || respInfo.labelMax))
+              L(indent, 'labels: ["' + respInfo.labelMin + '", "' + respInfo.labelMax + '"],');
+            // ---- self-rendered controls: wire up their events ----
+            var _selfRendered = respControls.length > 0 && respType !== 'keyboard';
+            if (_selfRendered) {
+              var _scored = respType === 'textInput' && !!respInfo.correctAnswer && respInfo.validation !== 'none';
+              var _acc = _scored
+                ? String(respInfo.correctAnswer).split(',').map(function (a) { return a.trim().toLowerCase(); })
+                    .filter(function (a) { return a; })
+                : [];
+              L(indent, 'on_load: function () {');
+              L(indent + 1, 'var _t0 = performance.now();');
+              L(indent + 1, 'function _done(p) {');
+              L(indent + 2, 'p.rt = Math.round(performance.now() - _t0);');
+              L(indent + 2, 'jsPsych.finishTrial(p);');
+              L(indent + 1, '}');
+              if (respType === 'button') {
+                L(indent + 1, "Array.prototype.forEach.call(document.querySelectorAll('.expvis-ctl[data-kind=\"button\"]'), function (b) {");
+                L(indent + 2, "b.addEventListener('click', function () {");
+                L(indent + 3, "_done({response: b.getAttribute('data-value'), button_index: Number(b.getAttribute('data-index'))});");
+                L(indent + 2, '});');
+                L(indent + 1, '});');
+              } else if (respType === 'slider') {
+                L(indent + 1, "var _r = document.querySelector('.expvis-range');");
+                L(indent + 1, "var _v = document.querySelector('.expvis-range-val');");
+                L(indent + 1, "if (_r && _v) { _r.addEventListener('input', function () { _v.textContent = _r.value; }); }");
+                L(indent + 1, "var _sb = document.querySelector('.expvis-ctl[data-kind=\"slider\"]');");
+                L(indent + 1, "if (_sb) { _sb.addEventListener('click', function () { _done({response: _r ? Number(_r.value) : null}); }); }");
+              } else if (respType === 'textInput') {
+                L(indent + 1, "var _inp = document.querySelector('.expvis-text');");
+                L(indent + 1, "var _tb = document.querySelector('.expvis-ctl[data-kind=\"textInput\"]');");
+                L(indent + 1, 'function _submit() {');
+                L(indent + 2, "var _ans = _inp ? _inp.value : '';");
+                if (_scored) {
+                  L(indent + 2, 'var _acc = ' + JSON.stringify(_acc) + ';');
+                  L(indent + 2, 'var _low = _ans.trim().toLowerCase();');
+                  L(indent + 2, respInfo.validation === 'exact'
+                    ? 'var _ok = _acc.indexOf(_low) >= 0;'
+                    : 'var _ok = _acc.some(function (a) { return _low.indexOf(a) >= 0; });');
+                  L(indent + 2, '_done({response: _ans, correct: _ok});');
+                } else {
+                  L(indent + 2, '_done({response: _ans});');
+                }
+                L(indent + 1, '}');
+                L(indent + 1, "if (_tb) { _tb.addEventListener('click', _submit); }");
+                L(indent + 1, "if (_inp) { _inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') _submit(); }); }");
+              } else if (respType === 'click') {
+                L(indent + 1, "var _z = document.querySelector('.expvis-clickzone');");
+                L(indent + 1, "if (_z) { _z.addEventListener('click', function () { _done({response: 'click'}); }); }");
+              }
+              L(indent, '},');
+            }
             if (logic.timeout) L(indent, 'trial_duration: ' + logic.timeout + ',');
             if (stims.length === 0 && respType === 'keyboard') L(indent, "prompt: '<p>Press any key to continue</p>',");
-            
-            // Variable tracking in data
-            var dataStr = "data: {phase:'" + ph.name + "',trial_index:" + (ti + 1);
+
+            // --- what runs after the response: scoring, counter, branch jump ---
+            var hasScore = !!correctResponseExpr;
+            // free-text answers are scored here (survey-text returns an object)
+            var hasTextScore = respType === 'textInput' && !!respInfo.correctAnswer &&
+              respInfo.validation !== 'none';
+            var hasVarUpdate = !!(logic.hasVariable && logic.varName && logic.varMode !== 'manual');
+            var branchCondCode = null;
+            if (logic.hasBranch && logic.branchTarget) {
+              if (logic.branchCond === 'correct') {
+                if (hasScore) {
+                  branchCondCode = '!data.correct';
+                } else {
+                  logic.hints.push('// NOTE: branch waits on correctness, but no correct key is ' +
+                    'configured for this trial — the jump will be skipped. Set the keyboard ' +
+                    "component's correct key, or use a shape/text key mapping.");
+                }
+              } else if (logic.branchCond === 'response') {
+                branchCondCode = 'data.response === "' +
+                  String(logic.branchMatch).replace(/"/g, '\\"') + '"';
+              } else if (logic.branchCond === 'variable' && logic.branchMatch) {
+                branchCondCode = logic.branchMatch + ' ' + logic.branchOp + ' ' +
+                  (logic.branchCmp === '' ? '0' : logic.branchCmp);
+              }
+            }
+            var needsOnFinish = hasScore || hasTextScore || hasVarUpdate || !!branchCondCode;
+
+            // Variable tracking in data.
+            // NB: `trial_index` is a jsPsych reserved key — a custom value would be
+            // silently ignored, so use a non-conflicting name for the in-phase index.
+            var dataStr = "data: {phase:'" + _stripEmoji(ph.name) + "',trial_in_phase:" + (ti + 1);
             if (logic.hasVariable && logic.varName) {
               dataStr += ',' + logic.varName + ':' + logic.varName;
             }
+            if (correctResponseExpr) {
+              dataStr += ',correct_response: ' + correctResponseExpr;
+            }
+            if (hasTextScore) {
+              dataStr += ',correct_answer: "' + String(respInfo.correctAnswer).replace(/"/g, '\\"') + '"';
+            }
             dataStr += '}';
-            if (logic.hasBranch && logic.branchCond === 'correct') dataStr += ',';
+            if (needsOnFinish) dataStr += ',';
             L(indent, dataStr);
 
-            // Branch: add on_finish for error feedback
-            if (logic.hasBranch && logic.branchCond === 'correct') {
-              var correctKeyVar = (hasRandomizePickOne && stimVariants.length > 1)
-                ? "jsPsych.timelineVariable('correctKey')"
-                : '""';
-              L(indent, "on_finish: function(data) {");
-              L(indent + 1, 'var resp = data.response;');
-              L(indent + 1, 'var correctKey = ' + correctKeyVar + ';');
-              L(indent + 1, 'if (correctKey && resp !== correctKey) {');
-              L(indent + 1, '  jsPsych.addNodeToEndOfTimeline({');
-              L(indent + 2, 'type: jsPsychHtmlButtonResponse,');
-              L(indent + 2, "stimulus: '<p style=\"color:#ef4444;font-size:22px\">❌ Wrong answer! Press the key according to the rules.</p>',");
-              L(indent + 2, 'choices: ["Continue"],');
-              L(indent + 2, 'trial_duration: 1500');
-              L(indent + 1, '  });');
-              L(indent + 1, '}');
-              L(indent, '},');
-            }var last = lines[lines.length - 1];
-            if (last.slice(-1) === ',') lines[lines.length - 1] = last.slice(0, -1);
-
-            if (hasRandomizePickOne && stimVariants.length > 1) {
-              L(1, '}],'); // close timeline
-              if (logic.loop) {
-                // repetitions already added above with timeline_variables
+            if (needsOnFinish) {
+              L(indent, 'on_finish: function(data) {');
+              if (hasTextScore) {
+                var accepted = String(respInfo.correctAnswer).split(',').map(function (a) {
+                  return a.trim().toLowerCase();
+                }).filter(function (a) { return a; });
+                L(indent + 1, "var ans = String((data.response && data.response.response) || '').trim().toLowerCase();");
+                L(indent + 1, 'var accepted = ' + JSON.stringify(accepted) + ';');
+                L(indent + 1, respInfo.validation === 'exact'
+                  ? 'data.correct = accepted.indexOf(ans) >= 0;'
+                  : 'data.correct = accepted.some(function (a) { return ans.indexOf(a) >= 0; });');
+              } else if (hasScore) {
+                L(indent + 1, 'data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);');
               }
-              L(0, '});'); // close timeline_variables object
-            } else if (logic.loop) {
-              L(1, '}],');
-              L(1, 'repetitions: ' + logic.loop);
-              L(0, '});');
-            } else {
-              L(0, '});');
+              if (hasVarUpdate) {
+                L(indent + 1, (logic.varMode === 'correct' ? 'if (data.correct) ' : '') +
+                  logic.varName + ' += 1;');
+              }
+              // The branch is emitted as a conditional timeline entry below, so
+              // on_finish only scores the trial.
+              L(indent, '},');
             }
+            // strip the trial's trailing property comma, then close the entry
+            var last = lines[lines.length - 1];
+            if (last.slice(-1) === ',') lines[lines.length - 1] = last.slice(0, -1);
+            L(ei, '},');
+
+            // timed segments after the stimulus
+            // Branch jump as a conditional timeline entry — the jsPsych idiom
+            // (conditional_function), rather than mutating the timeline mid-run.
+            if (branchCondCode) {
+              _usedPlugins['jsPsychHtmlButtonResponse'] = true;
+              // Render the branch's target trial as the error page, so what the
+              // researcher designed in the GUI is what the participant sees.
+              var failTrialObj = logic.branchTarget ? findTrial(logic.branchTarget) : null;
+              var failHTML = null;
+              var failDuration = 1500;
+              if (failTrialObj && failTrialObj.components.length) {
+                failHTML = failTrialObj.components
+                  .filter(function (fc) { return fc.type !== 'delay'; })
+                  .map(function (fc) { return compHTML(fc); }).join('');
+                failTrialObj.components.forEach(function (fc) {
+                  if (fc.type === 'delay' && fc.duration) failDuration = fc.duration;
+                });
+              }
+              var prevRef = "jsPsych.data.get().last(1).values()[0]";
+              var condExpr;
+              if (logic.branchCond === 'correct') {
+                condExpr = '!' + prevRef + '.correct';
+              } else if (logic.branchCond === 'response') {
+                condExpr = prevRef + '.response === "' + String(logic.branchMatch).replace(/"/g, '\\"') + '"';
+              } else {
+                condExpr = logic.branchMatch + ' ' + logic.branchOp + ' ' + (logic.branchCmp === '' ? '0' : logic.branchCmp);
+              }
+              L(ei, '{');
+              L(ei + 1, 'timeline: [{');
+              L(ei + 2, 'type: jsPsychHtmlButtonResponse,');
+              L(ei + 2, failHTML
+                ? "stimulus: '" + _jsStr(failHTML) + "',"
+                : "stimulus: '<p style=\"color:#ef4444;font-size:22px\">Wrong answer! Press the key according to the rules.</p>',");
+              L(ei + 2, 'choices: ["Continue"],');
+              L(ei + 2, 'trial_duration: ' + failDuration);
+              L(ei + 1, '}],');
+              L(ei + 1, 'conditional_function: function () {');
+              L(ei + 2, 'return ' + condExpr + ';');
+              L(ei + 1, '}');
+              L(ei, '},');
+            }
+
+            postTiming.forEach(emitTimingTrial);
+
+            // strip the trailing comma of the last timeline entry
+            var tlLast = lines[lines.length - 1];
+            if (tlLast.slice(-1) === ',') lines[lines.length - 1] = tlLast.slice(0, -1);
+
+            L(1, ']');
+            L(0, '};');
 
             code += lines.join('\n') + '\n';
             code += 'timeline.push(' + trialName + ');\n\n';
@@ -3751,7 +3895,107 @@ function _applyI18n() {
         });
 
         code += 'jsPsych.run(timeline);\n';
-        return code;
+        // Assemble the media block now that every component has been scanned:
+        // one declaration per unique asset, plus a preload trial up front.
+        var mediaBlock = '';
+        if (_mediaDecls.length > 0) {
+          _usedPlugins['jsPsychPreload'] = true;
+          mediaBlock += '// Media assets (declared once, shared with the trials below)\n';
+          _mediaDecls.forEach(function (m) {
+            mediaBlock += 'var ' + m.name + " = '" + m.data + "';\n";
+          });
+          var groups = {images: [], audio: [], video: []};
+          _mediaDecls.forEach(function (m) {
+            groups[m.type === 'image' ? 'images' : m.type].push(m.name);
+          });
+          var entries = [];
+          ['images', 'audio', 'video'].forEach(function (k) {
+            if (groups[k].length) entries.push('  ' + k + ': [' + groups[k].join(', ') + ']');
+          });
+          mediaBlock += '\n// Preload so media is decoded before a trial needs it\n';
+          mediaBlock += 'timeline.push({\n  type: jsPsychPreload,\n' + entries.join(',\n') + '\n});\n\n';
+        }
+        code = code.replace('@@MEDIA_PRELOAD@@', mediaBlock);
+        return { code: code, usedPlugins: _usedPlugins };
+      }
+
+      // Code export: the compiled experiment as a standalone runnable HTML file.
+      function generateCode() {
+        var r = _compileExperiment({});
+        return _buildJsPsychHTML(r.code, r.usedPlugins);
+      }
+
+      // ============ jsPsych target version & CDN dependencies ============
+      // Pinned to jsPsych v8.3.0 (core). Plugins ship as separate npm packages
+      // with their own version numbers. All URLs verified loadable 2026-09-13.
+      var _JSPsychVersion = '8.3.0';
+      var _jspsychPluginCDN = {
+        jsPsychHtmlKeyboardResponse: {pkg: '@jspsych/plugin-html-keyboard-response', ver: '2.2.0'},
+        jsPsychHtmlButtonResponse: {pkg: '@jspsych/plugin-html-button-response', ver: '2.1.0'},
+        jsPsychHtmlSliderResponse: {pkg: '@jspsych/plugin-html-slider-response', ver: '2.1.0'},
+        jsPsychSurveyText: {pkg: '@jspsych/plugin-survey-text', ver: '2.1.1'},
+        jsPsychPreload: {pkg: '@jspsych/plugin-preload', ver: '2.1.0'},
+      };
+
+      // CDN script tags for the core plus every plugin this experiment actually uses.
+      function _cdnTags(usedPlugins) {
+        var tags = ['<script src="https://unpkg.com/jspsych@' + _JSPsychVersion + '"><\/script>'];
+        Object.keys(_jspsychPluginCDN).forEach(function (n) {
+          if (usedPlugins[n]) {
+            var p = _jspsychPluginCDN[n];
+            tags.push('<script src="https://unpkg.com/' + p.pkg + '@' + p.ver + '"><\/script>');
+          }
+        });
+        return tags;
+      }
+
+      // Styles for the published file (participant-facing shell + data panel).
+      // Shared <head> for both outputs, so the code export and the published file
+      // differ only where they must (an extra <style> block for the data layer's UI).
+      function _htmlHead(usedPlugins, extraStyle) {
+        var devName = editor.device ? _stripEmoji(editor.device.name) : 'Default 1280×720';
+        var today = new Date().toISOString().slice(0, 10);
+        var title = (editor.projectName || 'ExpVis Experiment').replace(/</g, '&lt;');
+        var h = '';
+        h += '<!doctype html>\n<html lang="en">\n<head>\n';
+        h += '  <meta charset="UTF-8">\n';
+        h += '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+        h += '  <title>' + title + '</title>\n';
+        h += '  <!--\n';
+        h += '    Generated by ExpVis on ' + today + ' | Device: ' + devName + '\n';
+        h += '    Target: jsPsych v' + _JSPsychVersion + '\n';
+        h += '    Save this file and open it in a browser to run the experiment.\n';
+        h += '    Docs: https://www.jspsych.org\n';
+        h += '    Only the jsPsych plugins used by this experiment are loaded below.\n';
+        h += '  -->\n';
+        _cdnTags(usedPlugins).forEach(function (t) { h += '  ' + t + '\n'; });
+        h += '  <link href="https://unpkg.com/jspsych@' + _JSPsychVersion +
+             '/css/jspsych.css" rel="stylesheet" type="text/css">\n';
+        if (extraStyle) h += '  <style>\n' + extraStyle + '  </style>\n';
+        h += '</head>\n';
+        return h;
+      }
+
+      // Wrap experiment logic into a standalone runnable HTML file.
+      // Load order matters: plugins read the global `jsPsychModule` while being
+      // parsed, so the core script must always come first.
+      function _buildJsPsychHTML(code, usedPlugins) {
+        // A literal "</script" inside the experiment code would close the inline
+        // script tag early; the escaped form is equivalent when parsed as JS.
+        var safe = code.replace(/<\/script/gi, '<\\/script');
+        var h = _htmlHead(usedPlugins);
+        h += '<body>\n';
+        h += '  <script>\n';
+        h += safe
+          .split('\n')
+          .map(function (l) {
+            return l ? '    ' + l : '';
+          })
+          .join('\n');
+        h += '\n  <\/script>\n';
+        h += '</body>\n';
+        h += '</html>\n';
+        return h;
       }
 
       function showCodeEditor() {
@@ -4129,7 +4373,7 @@ function _applyI18n() {
         devicePresets.forEach(function (d, i) {
           var o = document.createElement('option');
           o.value = i;
-          o.textContent = d.name;
+          o.textContent = d.icon + ' ' + d.name;
           sel.appendChild(o);
         });
         sel.value = '0';
@@ -4235,13 +4479,8 @@ function _applyI18n() {
           var saved = saveVersion();
           if (!saved && !editor.projectName) return;
         }
-        // Run review directly, then download
-        runExperimentReview(function (passed) {
-          if (passed) {
-            downloadPublishedExperiment();
-            alert('🎉 Review passed!\n\n✅ Published experiment file downloaded.\n📊 Open it in a browser to run the experiment.\n📋 Data is stored in browser localStorage.');
-          }
-        });
+        downloadPublishedExperiment();
+        alert('Experiment file downloaded.\n\nOpen it in a browser to run the experiment.\nData is collected in the browser and stored in localStorage.');
       }
 
       function showPublishConfig(callback) {
@@ -4256,7 +4495,7 @@ function _applyI18n() {
           '<div style="margin-bottom:12px"><label style="font-size:0.78rem;color:#666;display:block;margin-bottom:4px">👥 Target Participants</label><input id="pub-target" type="number" value="200" min="10" max="5000" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:0.85rem;font-family:inherit"></div>' +
           '<div style="margin-bottom:12px"><label style="font-size:0.78rem;color:#666;display:block;margin-bottom:4px">💰 Reward (¥/person)</label><input id="pub-reward" type="number" value="3" min="0.5" max="100" step="0.5" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:0.85rem;font-family:inherit"></div>' +
           '<div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between"><div><strong style="font-size:0.85rem">🌐 Show in Experiment Hall</strong><p style="font-size:0.7rem;color:#888">When enabled, participants can find this experiment in the hall</p></div><label class="pub-toggle" style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer"><input type="checkbox" id="pub-public" checked style="opacity:0;width:0;height:0"><span style="position:absolute;inset:0;background:#6366f1;border-radius:12px;transition:0.3s"></span><span style="position:absolute;left:2px;top:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:0.3s"></span></label></div>' +
-          '<div style="display:flex;gap:8px"><button id="pub-cancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;font-size:0.85rem;font-family:inherit">Cancel</button><button id="pub-confirm" style="flex:1;padding:10px;border-radius:8px;border:none;background:#6366f1;color:#ffffff;cursor:pointer;font-size:0.85rem;font-family:inherit;font-weight:600">Confirm & Review →</button></div>';
+          '<div style="display:flex;gap:8px"><button id="pub-cancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;font-size:0.85rem;font-family:inherit">Cancel</button><button id="pub-confirm" style="flex:1;padding:10px;border-radius:8px;border:none;background:#6366f1;color:#ffffff;cursor:pointer;font-size:0.85rem;font-family:inherit;font-weight:600">Confirm & Publish →</button></div>';
         overlay.appendChild(box);
         document.body.appendChild(overlay);
 
@@ -4284,231 +4523,7 @@ function _applyI18n() {
 
       // ============ MULTI-AGENT EXPERIMENT REVIEW ============
 
-      function runExperimentReview(onComplete) {
-        // Collect experiment data for analysis
-        var allText = '';
-        var stimuliCount = 0, responseCount = 0, logicCount = 0;
-        editor.phases.forEach(function (p) {
-          p.trials.forEach(function (t) {
-            t.components.forEach(function (c) {
-              if (c.type === 'text') allText += (c.content || '') + ' ';
-              if (c.cat === 's') stimuliCount++;
-              if (c.cat === 'r') responseCount++;
-              if (c.cat === 'l') logicCount++;
-            });
-          });
-        });
-        var phaseCount = editor.phases.length;
-        var trialCount = editor.phases.reduce(function (s, p) { return s + p.trials.length; }, 0);
-        var hasInstructions = editor.phases.some(function (p) { return p.type === 'instructions'; });
-
-        // Check if real LLM review is available
-        var reviewProvider = localStorage.getItem('ve_ai_provider') || 'deepseek';
-        var reviewModel = localStorage.getItem('ve_ai_model') || (_getAIProvider(reviewProvider).defaultModel || '');
-        var reviewKey = localStorage.getItem('ve_ai_key_' + reviewProvider) || '';
-        var useLLM = !!(reviewKey && reviewProvider);
-
-        // Define 3 agents
-        var agents = [
-          {name: i18n('review.agent.ethics'), icon: '⚖️', color: '#6366f1', status: 'waiting', findings: []},
-          {name: i18n('review.agent.security'), icon: '🛡️', color: '#3b82f6', status: 'waiting', findings: []},
-          {name: i18n('review.agent.methodology'), icon: '🔍', color: '#22c55e', status: 'waiting', findings: []},
-        ];
-
-        // Build overlay
-        var overlay = document.createElement('div');
-        overlay.style.cssText =
-          'position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-family:sans-serif';
-        var box = document.createElement('div');
-        box.style.cssText =
-          'background:#fff;border-radius:16px;width:560px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden';
-        var h =
-          '<div style="padding:20px 24px;border-bottom:1px solid #e0e0e8;display:flex;justify-content:space-between;align-items:center">';
-        h += '<div><span style="font-weight:800;font-size:1rem">' + i18n('review.title') + '</span><p style="font-size:0.72rem;color:#888;margin-top:2px">' + i18n('review.subtitle') + (useLLM ? ' <span style="color:var(--accent);font-size:0.65rem">(via ' + _getAIProvider(reviewProvider).name + ')</span>' : ' <span style="color:var(--amber);font-size:0.65rem">(simulated)</span>') + '</p></div>';
-        h += '<button id="review-close" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#888">✕</button></div>';
-        h += '<div id="review-agents" style="padding:16px 24px;display:flex;flex-direction:column;gap:12px;min-height:200px">';
-        agents.forEach(function (a, i) {
-          h += '<div class="review-agent" data-idx="' + i + '" style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:12px;border:2px solid #e0e0e8;transition:all 0.3s;min-height:72px">';
-          h += '<div style="width:44px;height:44px;border-radius:12px;background:#f5f5fa;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;margin-top:2px">' + a.icon + '</div>';
-          h += '<div style="flex:1;min-width:0;overflow:hidden"><div style="font-weight:700;font-size:0.85rem;margin-bottom:4px">' + a.name + '</div><div class="review-status" style="font-size:0.72rem;color:#888;line-height:1.5;word-break:break-word;max-height:300px;overflow-y:auto">' + i18n('review.waiting') + '</div></div>';
-          h += '<div class="review-indicator" style="width:20px;height:20px;border-radius:50%;border:2px solid #e0e0e8;flex-shrink:0;margin-top:2px"></div>';
-          h += '</div>';
-        });
-        h += '</div>';
-        h += '<div id="review-summary" style="padding:16px 24px;border-top:1px solid #e0e0e8;display:none"></div>';
-        h += '<div id="review-actions" style="padding:12px 24px 16px;display:none;gap:8px;justify-content:flex-end">';
-        h += '<button id="review-dismiss" style="padding:8px 20px;border-radius:8px;border:1px solid #e0e0e8;background:#fff;cursor:pointer;font-size:0.82rem;font-family:inherit">' + i18n('review.close') + '</button>';
-        h += '<button id="review-fix" style="padding:8px 20px;border-radius:8px;border:none;background:#6366f1;color:#ffffff;cursor:pointer;font-size:0.82rem;font-family:inherit;font-weight:600">' + i18n('review.got_it') + '</button>';
-        h += '</div>';
-        box.innerHTML = h;
-        overlay.appendChild(box);
-        document.body.appendChild(overlay);
-
-        var dismissed = false;
-        function closeReview(passed) {
-          if (dismissed) return;
-          dismissed = true;
-          overlay.remove();
-          if (onComplete) onComplete(!!passed);
-        }
-        overlay.onclick = function (e) { if (e.target === overlay) closeReview(false); };
-
-        function updateAgent(idx, status, findings) {
-          var el = document.querySelector('.review-agent[data-idx="' + idx + '"]');
-          if (!el) return;
-          var statusEl = el.querySelector('.review-status');
-          var indicator = el.querySelector('.review-indicator');
-          if (status === 'processing') {
-            el.style.borderColor = agents[idx].color;
-            statusEl.innerHTML = '<span style="display:flex;align-items:center;gap:4px"><span class="agent-dot" style="animation:blink 0.6s infinite">●</span> ' + i18n('review.analyzing') + '</span>';
-            indicator.style.background = agents[idx].color;
-            indicator.style.borderColor = agents[idx].color;
-          } else {
-            var emoji = status === 'pass' ? '✓' : status === 'warn' ? '💡' : '✗';
-            var color = status === 'pass' ? '#22c55e' : status === 'warn' ? '#3b82f6' : '#ef4444';
-            el.style.borderColor = color;
-            var findingsHTML = findings.map(function(f) { return '<div style="margin-bottom:3px;padding-left:12px">' + f + '</div>'; }).join('');
-            statusEl.innerHTML = '<div style="color:' + color + '"><strong>' + emoji + '</strong> ' + findingsHTML + '</div>';
-            indicator.style.background = color;
-            indicator.style.borderColor = color;
-          }
-        }
-
-        // Simulated review logic (used as fallback)
-        function simulatedReview(agentIdx, callback) {
-          var findings = [];
-          if (agentIdx === 0) {
-            // Ethics
-            if (!hasInstructions) findings.push(i18n('review.missing_instructions'));
-            if (allText.length < 10) findings.push(i18n('review.too_short'));
-            if (allText.indexOf('deception') >= 0 || allText.indexOf('欺骗') >= 0) findings.push(i18n('review.deception'));
-            if (allText.indexOf('minor') >= 0 || allText.indexOf('未成年') >= 0 || allText.indexOf('儿童') >= 0) findings.push(i18n('review.minors'));
-            if (findings.length === 0) findings.push(i18n('review.ethics_ok'));
-          } else if (agentIdx === 1) {
-            // Security
-            var hasScript = allText.indexOf('<script') >= 0 || allText.indexOf('onerror') >= 0 || allText.indexOf('javascript:') >= 0;
-            var hasIframe = allText.indexOf('<iframe') >= 0;
-            if (hasScript) findings.push(i18n('review.script_injection'));
-            if (hasIframe) findings.push(i18n('review.iframe'));
-            if (trialCount > 500) findings.push(i18n('review.too_many_trials') + ' (' + trialCount + '), ' + i18n('review.server_load'));
-            if (findings.length === 0) findings.push(i18n('review.security_ok'));
-          } else {
-            // Methodology
-            if (stimuliCount === 0) findings.push(i18n('review.no_stimuli'));
-            if (responseCount === 0) findings.push(i18n('review.no_response'));
-            if (trialCount === 0) findings.push(i18n('review.no_trials'));
-            if (phaseCount === 0) findings.push(i18n('review.empty_experiment'));
-            if (stimuliCount > 0 && responseCount === 0) findings.push(i18n('review.stimulus_no_response'));
-            if (findings.length === 0) findings.push(i18n('review.methodology_ok'));
-          }
-          var status = findings[0] === i18n('review.ethics_ok') || findings[0] === i18n('review.security_ok') || findings[0] === i18n('review.methodology_ok') ? 'pass' : (agentIdx === 1 && hasScript) ? 'fail' : findings.length > 0 ? 'warn' : 'pass';
-          callback(status, findings);
-        }
-
-        // LLM-based review
-        function llmReview(agentIdx, callback) {
-          var agentNames = ['ethics', 'security', 'methodology'];
-          var agentName = agents[agentIdx].name;
-          var reviewPrompt = 'You are an ' + agentNames[agentIdx] + ' reviewer for online behavioral experiments. ' +
-            'Review this experiment and output ONE short finding per line (max 15 words each). Be concise.\n' +
-            (agentIdx === 0 ?
-              'Check: informed consent, deception, vulnerable populations.' :
-              agentIdx === 1 ?
-              'Check: script injection, iframe, trial count load.' :
-              'Check: stimuli present, response present, phase/trial structure.') +
-            '\nExperiment: ' + phaseCount + ' phases, ' + trialCount + ' trials, ' +
-            stimuliCount + ' stimuli, ' + responseCount + ' responses, ' + logicCount + ' logic. ' +
-            (hasInstructions ? 'Has instructions. ' : 'No instructions! ') +
-            'Text: ' + allText.slice(0, 200) + '\n' +
-            'If OK, output exactly: No issues found.\n' +
-            'Otherwise, output one short finding per line. NO markdown, NO bullet points, NO explanations.';
-
-          _callAI(reviewProvider, reviewModel, [{role:'user',content:reviewPrompt}], 150)
-            .then(function(result) {
-              var lines = result.split('\n').filter(function(l) { return l.trim(); });
-              var findings = lines.length > 0 ? lines : [result.trim()];
-              var status = result.toLowerCase().indexOf('no issues') >= 0 ? 'pass' : 'warn';
-              callback(status, findings);
-            })
-            .catch(function() {
-              // Fall back to simulated
-              simulatedReview(agentIdx, callback);
-            });
-        }
-
-        var reviewFn = useLLM ? llmReview : simulatedReview;
-
-        // Run reviews with staggered timing
-        var results = [{},{},{}];
-        var completed = 0;
-
-        function checkAllDone() {
-          completed++;
-          if (completed < 3) return;
-          // Show summary
-          var passCount = results.filter(function(r) { return r.status === 'pass'; }).length;
-          var failCount = results.filter(function(r) { return r.status === 'fail'; }).length;
-          var summary = document.getElementById('review-summary');
-          var actions = document.getElementById('review-actions');
-          var hasFail = failCount > 0, hasWarn = 3 - passCount - failCount > 0;
-          var overallColor = hasFail ? '#ef4444' : hasWarn ? '#3b82f6' : '#22c55e';
-          var overallIcon = hasFail ? '❌' : hasWarn ? '💡' : '✅';
-          var overallText = hasFail ? i18n('review.fail') : hasWarn ? i18n('review.warn') : i18n('review.pass');
-          summary.style.display = 'block';
-          summary.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:10px;background:' + overallColor + '10;border:1px solid ' + overallColor + '30">' +
-            '<span style="font-size:1.5rem">' + overallIcon + '</span>' +
-            '<div><strong style="color:' + overallColor + '">' + overallText + '</strong>' +
-            '<p style="font-size:0.72rem;color:#888;margin-top:2px">' +
-            '<span style="color:#22c55e">' + passCount + ' pass</span> · ' +
-            '<span style="color:#3b82f6">' + (3 - passCount - failCount) + ' suggestions</span> · ' +
-            '<span style="color:#ef4444">' + failCount + ' fail</span></p></div></div>';
-          actions.style.display = 'flex';
-          var passed = !hasFail;
-          var fixBtn = document.getElementById('review-fix');
-          if (hasFail) {
-            fixBtn.textContent = 'Revise & Re-submit';
-            fixBtn.onclick = function() { closeReview(false); };
-          } else {
-            fixBtn.onclick = function() { closeReview(true); };
-          }
-          document.getElementById('review-dismiss').onclick = function() { closeReview(false); };
-        }
-
-        // Agent 1: Ethics
-        setTimeout(function() {
-          updateAgent(0, 'processing');
-          reviewFn(0, function(status, findings) {
-            results[0] = {status:status, findings:findings};
-            agents[0].status = status; agents[0].findings = findings;
-            updateAgent(0, status, findings);
-            checkAllDone();
-          });
-        }, 300);
-
-        // Agent 2: Security
-        setTimeout(function() {
-          updateAgent(1, 'processing');
-          reviewFn(1, function(status, findings) {
-            results[1] = {status:status, findings:findings};
-            agents[1].status = status; agents[1].findings = findings;
-            updateAgent(1, status, findings);
-            checkAllDone();
-          });
-        }, 800);
-
-        // Agent 3: Methodology
-        setTimeout(function() {
-          updateAgent(2, 'processing');
-          reviewFn(2, function(status, findings) {
-            results[2] = {status:status, findings:findings};
-            agents[2].status = status; agents[2].findings = findings;
-            updateAgent(2, status, findings);
-            checkAllDone();
-          });
-        }, 1300);
-      }
-
-      function showVersionHistory() {
+function showVersionHistory() {
         var overlay = document.createElement('div');
         overlay.style.cssText =
           'position:fixed;inset:0;z-index:2100;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center';
@@ -4618,10 +4633,10 @@ function _applyI18n() {
             '<div class="device-option" data-idx="' +
             i +
             "\" style=\"padding:16px 12px;border:2px solid #e0e0e8;border-radius:12px;cursor:pointer;transition:all 0.15s;text-align:center\" onmouseover=\"this.style.borderColor='#818cf8';this.style.background='#f8f8ff'\" onmouseout=\"this.style.borderColor='#e0e0e8';this.style.background='#ffffff'\">";
-          h += '<div style="font-size:1.6rem;margin-bottom:6px">' + d.name.split(' ')[0] + '</div>';
+          h += '<div style="font-size:1.6rem;margin-bottom:6px">' + d.icon + '</div>';
           h +=
             '<div style="font-weight:700;font-size:0.82rem;margin-bottom:2px">' +
-            d.name.substring(d.name.indexOf(' ') + 1) +
+            d.name +
             '</div>';
           h += '<div style="font-size:0.68rem;color:var(--text2)">' + d.w + ' × ' + d.h + '</div></div>';
         });
@@ -4893,14 +4908,14 @@ function _applyI18n() {
             },
             {
               title: '🧩 Component-Based Building',
-              desc: 'The toolbox on the left provides <strong>multiple components</strong> in three categories:<br><br>📺 <strong>Display</strong> — Text, Shape, Image, Fixation<br>🎮 <strong>Response</strong> — Keyboard, Button, Slider, Click, Text Input<br>🧠 <strong>Logic</strong> — Loop, Branch, Delay, Randomize, Variable<br><br>Drag into a trial node to add. Click a node to edit properties.<br>Preset templates at the bottom for a quick start.',
+              desc: 'The toolbox on the left provides <strong>components</strong> in two categories:<br><br>📺 <strong>Display</strong> — Text, Shape, Image, Audio, Video, Fixation<br>🎮 <strong>Response</strong> — Keyboard, Button, Slider, Click, Text Input<br><br>Drag into a trial node to add. Click a node to edit its properties.<br>Preset templates at the bottom for a quick start.',
               el: 'panel-left',
               btn: 'Next →',
             },
             {
-              title: '🎨 Visual Editor + Free Drag',
-              desc: 'Click <strong>⛶ Expand</strong> on the right to enter visual editing.<br>Drag components to any pixel position,<br>double-click to reset, rulers for guidance, WYSIWYG.<br><br><strong>⚡ Quick Layout</strong> auto-centers all elements in one click.',
-              el: 'preview-panel-body',
+              title: '🧩 Trial Settings',
+              desc: 'Click a <strong>trial</strong> (not a component) to open its settings:<br>loop count · randomization · branch condition · delay · counter.<br>These become jsPsych <strong>node / trial parameters</strong>, not trials.<br><br>Components stack in a responsive flow — click <strong>⛶ Expand</strong> for a full-window layout preview.',
+              el: 'inspector',
               btn: 'Next →',
             },
             {
@@ -5013,252 +5028,11 @@ function _switchBranchCondition(trialId, compId, newVal) {
 
 // ============ Published Experiment File Generator ============
 function generatePublishedFile() {
-  var dev = editor.device || {w: 1280, h: 720};
-  var versionId = 'v' + Date.now();
-  var expData = JSON.stringify({
-    phases: editor.phases,
-    device: dev,
-    title: editor.projectName || 'Experiment',
-    generated: new Date().toISOString(),
-    versionId: versionId
-  });
-
-  // Build the standalone experiment runner JS as a separate string for clarity
-  var runnerJS = ''
-    + 'var EXP=' + expData + ';\n'
-    + 'var dev=EXP.device||{w:1280,h:720};\n'
-    + 'var pi=0,ti=0,count=0,loopRemaining=0,_lastTrialId=null,_branchJumped=false;\n'
-    + 'var variables={},responses=[],advTimer=null;\n'
-    + 'var visualT=["text","shape","image","fixation","audio","video","keyboard","button","slider","click","textInput"];\n'
-    + 'var stimT=["text","shape","image","fixation","audio","video"];\n'
-    + 'var respT=["keyboard","button","slider","textInput","click"];\n'
-    + '\n'
-    // Shape CSS helper
-    + 'function shapeCSS(s){return s==="circle"?"border-radius:50%":s==="triangle"?"clip-path:polygon(50% 0%,0% 100%,100% 100%)":s==="diamond"?"clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)":s==="star"?"clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)":"";}\n'
-    + 'function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\\n/g,"<br>");}\n'
-    + '\n'
-    // Render components — matches editor renderTrialHTML
-    + 'function renderHTML(comps,usePixel){\n'
-    + '  var h="";\n'
-    + '  comps.forEach(function(c){\n'
-    + '    var hp=usePixel&&typeof c.posX==="number"&&typeof c.posY==="number";\n'
-    + '    var tx="";\n'
-    + '    if(hp&&(!c.position||c.position==="center"))tx="transform:translateX(-50%);";\n'
-    + '    else if(hp&&c.position==="right")tx="transform:translateX(-100%);";\n'
-    + '    var px=hp?"position:absolute;left:"+(c.posX||0)+"px;top:"+(c.posY||0)+"px;"+tx:"";\n'
-    + '    var ww=usePixel||hp?"":"width:100%;";\n'
-    + '    var al=c.position==="left"?"flex-start":c.position==="right"?"flex-end":"center";\n'
-    + '    var ta=c.position==="left"?"left":c.position==="right"?"right":"center";\n'
-    + '    if(c.type==="text")h+="<div style=\\""+px+"display:flex;justify-content:"+al+";"+ww+"\\"><span style=\\"font-size:"+(c.fontSize||32)+"px;color:"+(c.color||"#333333")+";font-weight:"+(c.fontWeight||"bold")+";text-align:"+ta+";line-height:1.5;max-width:700px;word-wrap:break-word\\">"+esc(c.content||"")+"</span></div>";\n'
-    + '    if(c.type==="shape")h+="<div style=\\""+px+"display:flex;justify-content:"+al+";"+ww+"\\"><div style=\\"width:"+(c.size||80)+"px;height:"+(c.size||80)+"px;background:"+(c.color||"#6366f1")+";"+shapeCSS(c.shape)+"\\"></div></div>";\n'
-    + '    if(c.type==="fixation")h+="<div style=\\""+px+"font-size:40px;color:#ccc;font-weight:300\\">+</div>";\n'
-    + '    if(c.type==="image"&&c.fileData)h+="<div style=\\""+px+"display:flex;justify-content:"+al+";"+ww+"\\"><img src=\\""+c.fileData+"\\" style=\\"max-width:260px;max-height:300px;border-radius:8px;object-fit:contain\\"></div>";\n'
-    + '    if(c.type==="audio"&&c.fileData)h+="<div style=\\""+px+"\\"><audio controls src=\\""+c.fileData+"\\"></audio></div>";\n'
-    + '    if(c.type==="video"&&c.fileData)h+="<div style=\\""+px+"\\"><video controls src=\\""+c.fileData+"\\" style=\\"max-width:320px\\"></video></div>";\n'
-    + '    if(c.type==="keyboard")h+="<div style=\\""+px+"margin-top:16px;font-size:0.85rem;color:#888;text-align:center\\">"+(c.prompt||"Press a key")+"</div>";\n'
-    + '    if(c.type==="button")h+="<div style=\\""+px+"display:flex;gap:10px;justify-content:"+al+";"+ww+"margin-top:16px\\">"+c.labels.split(",").map(function(l){return "<button class=\\"pub-btn\\">"+l.trim()+"</button>"}).join("")+"</div>";\n'
-    + '    if(c.type==="slider")h+="<div style=\\""+px+"text-align:center\\"><div class=\\"pub-slide-val\\" id=\\"slide-val\\">"+Math.round(((c.min||0)+(c.max||100))/2)+"</div><input type=\\"range\\" id=\\"slide-rng\\" min=\\""+(c.min||0)+"\\" max=\\""+(c.max||100)+"\\" step=\\""+(c.step||1)+"\\" value=\\""+Math.round(((c.min||0)+(c.max||100))/2)+"\\"><div style=\\"display:flex;justify-content:space-between;font-size:0.7rem;color:#888;margin-top:4px\\"><span>"+(c.labelMin||"")+"</span><span>"+(c.labelMax||"")+"</span></div><button class=\\"pub-btn\\" id=\\"slide-ok\\" style=\\"margin-top:12px\\">Confirm</button></div>";\n'
-    + '    if(c.type==="textInput")h+="<div style=\\""+px+"display:flex;flex-direction:column;align-items:center;gap:10px\\"><input type=\\"text\\" class=\\"pub-input\\" id=\\"text-in\\" placeholder=\\""+(c.placeholder||"Type here")+"\\"><button class=\\"pub-btn\\" id=\\"text-ok\\">Confirm</button></div>";\n'
-    + '  });\n'
-    + '  return h;\n'
-    + '}\n'
-    + '\n'
-    // Helpers
-    + 'function findComp(t,types){if(!t||!t.components)return null;for(var i=0;i<t.components.length;i++){if(types.indexOf(t.components[i].type)>=0)return t.components[i];}return null;}\n'
-    + 'function hasVisual(t){return t&&t.components&&t.components.some(function(c){return visualT.indexOf(c.type)>=0;});}\n'
-    + 'function isBranchTarget(ph,trialId){return EXP.phases.some(function(p){return p.trials.some(function(t){var bc=findComp(t,["branch"]);return bc&&bc.targetFail&&bc.targetFail===trialId;});});}\n'
-    + 'function cleanup(){if(advTimer){clearTimeout(advTimer);advTimer=null;}document.onkeydown=null;}\n'
-    + '\n'
-    // Main showTrial — mirrors editor previewExperiment showCurrent
-    + 'function showTrial(){\n'
-    + '  cleanup();\n'
-    // Phase transition
-    + '  if(pi>=EXP.phases.length){showDone();return;}\n'
-    + '  var ph=EXP.phases[pi];\n'
-    + '  if(ti>=ph.trials.length){pi++;ti=0;showTrial();return;}\n'
-    // Skip branch targets in normal flow
-    + '  if(!_branchJumped&&isBranchTarget(ph,ph.trials[ti].id)){ti++;showTrial();return;}\n'
-    + '  _branchJumped=false;\n'
-    // Skip logic-only trials
-    + '  if(!hasVisual(ph.trials[ti])){ti++;showTrial();return;}\n'
-    + '  var t=ph.trials[ti];\n'
-    + '  if(!t){ti++;showTrial();return;}\n'
-    + '  count++;\n'
-    // Reset loop on new trial
-    + '  if(t.id!==_lastTrialId){loopRemaining=0;_lastTrialId=t.id;}\n'
-    // Analyze trial — extract key components
-    + '  var hasKey=false,hasBtn=false,hasSld=false,hasClk=false,hasTxt=false;\n'
-    + '  var kbKeys="",kbCorrect="",kbTimeout=0;\n'
-    + '  var hasBranch=false,brTarget="",brCond="correct",brMatch="",brOp=">=",brCmp="";\n'
-    + '  var hasVar=false,varName="",varInit=0,varMode="correct";\n'
-    + '  var autoDelay=0;\n'
-    + '  var rnd=null,rndStart=-1;\n'
-    + '  t.components.forEach(function(c){\n'
-    + '    if(c.type==="keyboard"){hasKey=true;kbKeys=c.keys||"";kbCorrect=c.correctKey||"";kbTimeout=c.timeout||0;}\n'
-    + '    if(c.type==="button")hasBtn=true;\n'
-    + '    if(c.type==="slider")hasSld=true;\n'
-    + '    if(c.type==="click")hasClk=true;\n'
-    + '    if(c.type==="textInput")hasTxt=true;\n'
-    + '    if(c.type==="fixation"&&c.duration)autoDelay=c.duration;\n'
-    + '    if(c.type==="delay"&&c.duration)autoDelay=Math.max(autoDelay,c.duration);\n'
-    + '    if(c.type==="loop"&&loopRemaining===0)loopRemaining=c.count||0;\n'
-    + '    if(c.type==="branch"){hasBranch=true;brTarget=c.targetFail||"";brCond=c.condition||"correct";brMatch=c.matchValue||"";brOp=c.operator||">=";brCmp=c.compareValue||"";}\n'
-    + '    if(c.type==="variable"){hasVar=true;varName=c.name||"";varInit=c.initial||0;varMode=c.mode||"correct";}\n'
-    + '    if(c.type==="randomize"){rnd=c;}\n'
-    + '  });\n'
-    // Find randomize start index
-    + '  if(rnd){for(var i=0;i<t.components.length;i++){if(t.components[i].id===rnd.id){rndStart=i+1;break;}}}\n'
-    // Init variable
-    + '  if(hasVar&&!(varName in variables))variables[varName]=varInit;\n'
-    // Handle randomize — build displayTrial
-    + '  var dTrial=t;\n'
-    + '  var pickedStim=null;\n'
-    + '  if(rnd&&rnd.mode==="pick-one"&&rndStart>=0){\n'
-    + '    var stims=[];\n'
-    + '    for(var i=rndStart;i<t.components.length;i++){if(stimT.indexOf(t.components[i].type)>=0)stims.push(t.components[i]);}\n'
-    + '    if(stims.length>0){\n'
-    + '      pickedStim=stims[Math.floor(Math.random()*stims.length)];\n'
-    + '      var ncs=[];\n'
-    + '      t.components.forEach(function(c){\n'
-    + '        if(stimT.indexOf(c.type)>=0){if(c.id===pickedStim.id)ncs.push(c);}\n'
-    + '        else{ncs.push(c);}\n'
-    + '      });\n'
-    + '      dTrial={id:t.id,components:ncs};\n'
-    // Apply key mapping from picked stimulus
-    + '      if(pickedStim["映射按键"]){\n'
-    + '        kbCorrect=pickedStim["映射按键"];\n'
-    + '      }else if(pickedStim.correctKeyHint){\n'
-    + '        kbCorrect=pickedStim.correctKeyHint;\n'
-    + '      }\n'
-    + '    }\n'
-    + '  }\n'
-    + '  var isInteractive=hasKey||hasBtn||hasSld||hasClk||hasTxt;\n'
-    // Scale & render
-    + '  var mw=Math.min(dev.w,window.innerWidth-40);\n'
-    + '  var mh=Math.min(dev.h,window.innerHeight-140);\n'
-    + '  var sc=Math.min(1,mw/dev.w,mh/dev.h);\n'
-    + '  var cw=Math.round(dev.w*sc),ch=Math.round(dev.h*sc);\n'
-    + '  var inner="<div style=\\"position:relative;width:"+dev.w+"px;height:"+dev.h+"px;overflow:hidden\\">"+renderHTML(dTrial.components,true)+"</div>";\n'
-    + '  var nav="<div class=\\"pub-nav\\"><span>"+(ph.name||"")+" · Trial "+(ti+1)+"/"+ph.trials.length+"</span>"+(loopRemaining>0?"<span>Loop "+loopRemaining+"</span>":"")+(Object.keys(variables).length>0?"<span>"+Object.keys(variables).map(function(k){return k+":"+variables[k];}).join(" ")+"</span>":"")+"</div>";\n'
-    + '  document.getElementById("main").innerHTML=nav+"<div class=\\"pub-card\\" style=\\"width:"+cw+"px;height:"+ch+"px\\"><div style=\\"transform:scale("+sc+");transform-origin:0 0;width:"+dev.w+"px;height:"+dev.h+"px\\">"+inner+"</div></div>";\n'
-    + '  var t0=Date.now();\n'
-    // Advance function — handles branch, loop, variable
-    + '  function advance(correct){\n'
-    + '    cleanup();\n'
-    + '    if(hasVar&&varMode==="correct"&&correct)variables[varName]=(variables[varName]||0)+1;\n'
-    + '    if(hasVar&&varMode==="always")variables[varName]=(variables[varName]||0)+1;\n'
-    // Branch
-    + '    if(hasBranch&&brTarget){\n'
-    + '      var jump=false;\n'
-    + '      if(brCond==="correct")jump=!correct;\n'
-    + '      else if(brCond==="response")jump=brMatch.split(",").indexOf(String(correct))<0;\n'
-    // Jump to target trial
-    + '      if(jump){for(var p2=0;p2<EXP.phases.length;p2++){for(var t2=0;t2<EXP.phases[p2].trials.length;t2++){if(EXP.phases[p2].trials[t2].id===brTarget){pi=p2;ti=t2;_branchJumped=true;showTrial();return;}}}}\n'
-    + '    }\n'
-    // Loop
-    + '    if(loopRemaining>1){loopRemaining--;showTrial();}\n'
-    + '    else{loopRemaining=0;ti++;showTrial();}\n'
-    + '  }\n'
-    // Interaction handlers
-    + '  if(!isInteractive){advTimer=setTimeout(function(){advance(true);},autoDelay||50);}\n'
-    + '  else if(hasKey){\n'
-    + '    var keys=kbKeys.split(",").map(function(k){var t=k.trim();return t||" ";});\n'
-    + '    var cKeys=kbCorrect?kbCorrect.split(",").map(function(k){var t=k.trim();return t||" ";}):[];\n'
-    + '    document.onkeydown=function(e){var k=e.key.toLowerCase();if(k===" ")k=" ";if(keys.indexOf(k)<0)return;var rt=Date.now()-t0;var ok=cKeys.length>0?cKeys.indexOf(k)>=0:true;responses.push({trial:t.id,phase:ph.name,type:"keyboard",response:k,correct:ok,rt:rt,time:new Date().toISOString()});advance(ok);};\n'
-    + '    if(kbTimeout>0){advTimer=setTimeout(function(){responses.push({trial:t.id,phase:ph.name,type:"keyboard",response:"timeout",correct:false,rt:kbTimeout,time:new Date().toISOString()});advance(false);},kbTimeout);}\n'
-    + '  }else if(hasBtn){\n'
-    + '    setTimeout(function(){var bs=document.querySelectorAll(".pub-btn");bs.forEach(function(b){b.onclick=function(){var rt=Date.now()-t0;responses.push({trial:t.id,phase:ph.name,type:"button",response:b.textContent,correct:true,rt:rt,time:new Date().toISOString()});advance(true);};});},50);\n'
-    + '  }else if(hasSld){\n'
-    + '    setTimeout(function(){var sl=document.getElementById("slide-rng");var vl=document.getElementById("slide-val");var ok=document.getElementById("slide-ok");if(sl&&vl)sl.oninput=function(){vl.textContent=this.value;};if(ok)ok.onclick=function(){var rt=Date.now()-t0;var v=sl?sl.value:0;responses.push({trial:t.id,phase:ph.name,type:"slider",response:v,correct:true,rt:rt,time:new Date().toISOString()});advance(true);};},50);\n'
-    + '  }else if(hasTxt){\n'
-    + '    setTimeout(function(){var inp=document.getElementById("text-in");var ok=document.getElementById("text-ok");if(ok&&inp)ok.onclick=function(){var rt=Date.now()-t0;var v=inp.value;var corr=true;var rc=findComp(t,["textInput"]);if(rc&&rc.validation&&rc.validation!=="none"&&rc.correctAnswer){var ans=rc.correctAnswer.split(",").map(function(a){return a.trim().toLowerCase();});if(rc.validation==="exact")corr=ans.indexOf(v.trim().toLowerCase())>=0;else corr=ans.some(function(a){return v.toLowerCase().indexOf(a)>=0;});}responses.push({trial:t.id,phase:ph.name,type:"textInput",response:v,correct:corr,rt:rt,time:new Date().toISOString()});advance(corr);};},50);\n'
-    + '  }else if(hasClk){\n'
-    + '    document.querySelector(".pub-card").onclick=function(e){var rt=Date.now()-t0;responses.push({trial:t.id,phase:ph.name,type:"click",response:"click",correct:true,rt:rt,time:new Date().toISOString()});advance(true);};\n'
-    + '  }\n'
-    + '}\n'
-    // Done screen
-    + 'function showDone(){\n'
-    + '  var cc=responses.filter(function(r){return r.correct;}).length;\n'
-    + '  var avg=responses.length>0?Math.round(responses.reduce(function(s,r){return s+r.rt;},0)/responses.length):0;\n'
-    + '  try{var sid="s"+Date.now();var ad=JSON.parse(localStorage.getItem("expvis_data_"+EXP.versionId)||"[]");ad.push({session:sid,time:new Date().toISOString(),responses:responses,stats:{total:responses.length,correct:cc,avgRT:avg}});localStorage.setItem("expvis_data_"+EXP.versionId,JSON.stringify(ad));}catch(e){}\n'
-    + '  var dh="<div class=\\"pub-done\\"><div style=\\"font-size:3rem;margin-bottom:16px\\">🎉</div><h2>Experiment Complete</h2><p>"+responses.length+" trials | ✅ "+cc+"/"+responses.length+" correct | ⏱ Avg RT: "+avg+"ms</p><div style=\\"margin-top:20px;display:flex;gap:10px;justify-content:center\\"><button class=\\"pub-btn\\" onclick=\\"location.reload()\\">🔄 Run Again</button><button class=\\"pub-btn\\" id=\\"done-dash\\" style=\\"background:#f59e0b\\">📊 View Data</button></div></div>";\n'
-    + '  document.getElementById("main").innerHTML=dh;\n'
-    + '  setTimeout(function(){var b=document.getElementById("done-dash");if(b)b.onclick=showDashboard;},100);\n'
-    + '}\n'
-    // Dashboard
-    + 'function showDashboard(){\n'
-    + '  var ad=JSON.parse(localStorage.getItem("expvis_data_"+EXP.versionId)||"[]");\n'
-    + '  var tt=ad.reduce(function(s,d){return s+d.responses.length;},0);\n'
-    + '  var tc=ad.reduce(function(s,d){return s+d.stats.correct;},0);\n'
-    + '  var allR=[];ad.forEach(function(d){d.responses.forEach(function(r){allR.push(r.rt);});});\n'
-    + '  var av=allR.length>0?Math.round(allR.reduce(function(s,r){return s+r;},0)/allR.length):0;\n'
-    + '  var h="<div style=\\"background:#fff;color:#1a1a2e;border-radius:20px;padding:32px;max-width:700px;width:95vw;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4)\\">";\n'
-    + '  h+="<div style=\\"display:flex;justify-content:space-between;align-items:center;margin-bottom:20px\\"><h2 style=\\"font-size:1.2rem\\">📊 Data Dashboard</h2><span style=\\"font-size:0.75rem;color:#888\\">"+ad.length+" sessions</span></div>";\n'
-    + '  h+="<div style=\\"display:flex;gap:10px;margin-bottom:20px\\">";\n'
-    + '  h+="<div style=\\"flex:1;padding:12px;border-radius:8px;background:#f5f5fa;text-align:center\\"><div style=\\"font-size:1.4rem;font-weight:800;color:#6366f1\\">"+ad.length+"</div><div style=\\"font-size:0.65rem;color:#888\\">Sessions</div></div>";\n'
-    + '  h+="<div style=\\"flex:1;padding:12px;border-radius:8px;background:#f0fdf4;text-align:center\\"><div style=\\"font-size:1.4rem;font-weight:800;color:#22c55e\\">"+tt+"</div><div style=\\"font-size:0.65rem;color:#888\\">Trials</div></div>";\n'
-    + '  h+="<div style=\\"flex:1;padding:12px;border-radius:8px;background:#fffbeb;text-align:center\\"><div style=\\"font-size:1.4rem;font-weight:800;color:#f59e0b\\">"+(tt>0?Math.round(tc/tt*100):0)+"%</div><div style=\\"font-size:0.65rem;color:#888\\">Accuracy</div></div>";\n'
-    + '  h+="<div style=\\"flex:1;padding:12px;border-radius:8px;background:#fff7ed;text-align:center\\"><div style=\\"font-size:1.4rem;font-weight:800;color:#f97316\\">"+av+"ms</div><div style=\\"font-size:0.65rem;color:#888\\">Avg RT</div></div>";\n'
-    + '  h+="</div>";\n'
-    + '  ad.forEach(function(d,di){\n'
-    + '    var sc=d.responses.filter(function(r){return r.correct;}).length;\n'
-    + '    var sa=d.responses.length>0?Math.round(d.responses.reduce(function(s,r){return s+r.rt;},0)/d.responses.length):0;\n'
-    + '    h+="<div style=\\"margin-bottom:6px;border:1px solid #e0e0e8;border-radius:8px;overflow:hidden\\">";\n'
-    + '    h+="<div class=\\"db-row-header\\" style=\\"padding:8px 14px;background:#fafafe;cursor:pointer;font-size:0.78rem;display:flex;gap:12px\\"><b>#"+(di+1)+"</b> "+d.time.slice(0,19)+" <span>✅ "+sc+"/"+d.responses.length+"</span><span>⏱ "+sa+"ms</span></div>";\n'
-    + '    h+="<div style=\\"display:none;font-size:0.7rem\\"><table style=\\"width:100%;border-collapse:collapse\\"><tr style=\\"background:#f5f5fa\\"><th style=\\"padding:4px 10px;text-align:left\\">#</th><th>Type</th><th>Response</th><th>✓</th><th style=\\"text-align:right\\">RT</th></tr>";\n'
-    + '    d.responses.forEach(function(r,ri){h+="<tr style=\\"border-bottom:1px solid #f0f0f5\\"><td style=\\"padding:3px 10px\\">"+(ri+1)+"</td><td>"+r.type+"</td><td>"+r.response+"</td><td>"+(r.correct?"✅":"❌")+"</td><td style=\\"text-align:right\\">"+r.rt+"ms</td></tr>";});\n'
-    + '    h+="</table></div></div>";\n'
-    + '  });\n'
-    + '  h+="<div style=\\"display:flex;gap:8px;margin-top:16px\\">";\n'
-    + '  h+="<button class=\\"pub-btn\\" id=\\"db-run\\">🔄 Run Experiment</button>";\n'
-    + '  h+="<button class=\\"pub-btn\\" id=\\"db-csv\\" style=\\"background:#22c55e\\">📥 Export CSV</button>";\n'
-    + '  h+="<button class=\\"pub-btn\\" id=\\"db-clear\\" style=\\"background:#ef4444\\">🗑 Clear</button>";\n'
-    + '  h+="</div></div>";\n'
-    + '  document.getElementById("main").innerHTML=h;\n'
-    + '  document.querySelectorAll(".db-row-header").forEach(function(el){el.onclick=function(){var t=this.nextElementSibling;t.style.display=t.style.display==="none"?"block":"none";};});\n'
-    + '  document.getElementById("db-run").onclick=function(){location.reload();};\n'
-    + '  document.getElementById("db-csv").onclick=exportCSV;\n'
-    + '  document.getElementById("db-clear").onclick=function(){if(confirm("Delete all data?")){localStorage.removeItem("expvis_data_"+EXP.versionId);showDashboard();}};\n'
-    + '}\n'
-    // CSV
-    + 'function exportCSV(){\n'
-    + '  var ad=JSON.parse(localStorage.getItem("expvis_data_"+EXP.versionId)||"[]");if(!ad.length)return;\n'
-    + '  var csv="\\uFEFFsession,trial,phase,type,response,correct,rt_ms,time\\n";\n'
-    + '  ad.forEach(function(d){d.responses.forEach(function(r){csv+=d.session+","+r.trial+","+r.phase+","+r.type+",\\""+r.response+"\\","+r.correct+","+r.rt+","+r.time+"\\n";});});\n'
-    + '  var b=new Blob([csv],{type:"text/csv"});var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=EXP.title.replace(/[^a-zA-Z0-9_-]/g,"_")+"_data.csv";a.click();\n'
-    + '}\n'
-    // Landing
-    + 'function landing(){\n'
-    + '  var ad=JSON.parse(localStorage.getItem("expvis_data_"+EXP.versionId)||"[]");\n'
-    + '  var h="<div class=\\"pub-done\\"><div style=\\"font-size:3rem;margin-bottom:16px\\">🧪</div><h2>"+EXP.title+"</h2>";\n'
-    + '  if(ad.length>0){var last=ad[ad.length-1];h+="<p style=\\"margin-top:8px;font-size:0.85rem\\">"+ad.length+" session(s) recorded</p><p style=\\"font-size:0.75rem;color:#888\\">Last: "+last.time.slice(0,19)+" | ✅ "+last.stats.correct+"/"+last.stats.total+"</p>";}\n'
-    + '  else{h+="<p style=\\"margin-top:8px;font-size:0.85rem;color:#888\\">No data recorded yet.</p>";}\n'
-    + '  h+="<div style=\\"margin-top:24px;display:flex;gap:10px;justify-content:center\\"><button class=\\"pub-btn\\" onclick=\\"showTrial()\\">▶ Run Experiment</button>";\n'
-    + '  if(ad.length>0){h+="<button class=\\"pub-btn\\" onclick=\\"showDashboard()\\" style=\\"background:#f59e0b\\">📊 View Data</button>";}\n'
-    + '  h+="</div></div>";\n'
-    + '  document.getElementById("main").innerHTML=h;\n'
-    + '}\n'
-    + 'landing();\n';
-
-  return '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width,initial-scale=1.0">\n' +
-    '<title>' + (editor.projectName || 'Experiment') + '</title>\n<style>\n' +
-    '*{margin:0;padding:0;box-sizing:border-box}\n' +
-    'body{font-family:Inter,Noto Sans SC,sans-serif;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);color:#fff;overflow:hidden;height:100vh}\n' +
-    '#main{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}\n' +
-    '.pub-nav{display:flex;gap:16px;align-items:center;padding:8px 20px;font-size:0.78rem;color:rgba(255,255,255,0.6)}\n' +
-    '.pub-card{position:relative;overflow:hidden;background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.5)}\n' +
-    '.pub-btn{padding:10px 24px;border-radius:10px;border:none;background:#6366f1;color:#fff;cursor:pointer;font:inherit;font-size:0.9rem;font-weight:700;transition:all 0.15s}\n' +
-    '.pub-btn:hover{background:#4f46e5;transform:translateY(-1px)}\n' +
-    '.pub-input{padding:10px 14px;border:2px solid #e0e0e8;border-radius:8px;font-size:1rem;outline:none;width:260px;font:inherit}\n' +
-    '.pub-input:focus{border-color:#6366f1}\n' +
-    '.pub-slide-val{font-size:2rem;font-weight:800;margin-bottom:8px;color:#333}\n' +
-    'input[type=range]{width:300px;accent-color:#6366f1}\n' +
-    '.pub-done{background:#fff;border-radius:20px;padding:56px 64px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);color:#1a1a2e}\n' +
-    '.pub-done h2{font-size:1.4rem;margin-bottom:8px}\n' +
-    '.pub-done p{color:#888;font-size:0.9rem}\n' +
-    '</style>\n</head>\n<body>\n<div id="main"></div>\n<script>\n' +
-    runnerJS +
-    '</script>\n</body>\n</html>';
+  // The published file *is* the jsPsych experiment — byte-for-byte the same HTML
+  // the code export produces. No data layer, no private runtime: participants run
+  // plain jsPsych, and data is handled with jsPsych's own API (displayData /
+  // localSave / DataPipe …) exactly as it would be for hand-written code.
+  return generateCode();
 }
 
 function downloadPublishedExperiment() {

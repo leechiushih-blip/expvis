@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>随机点运动方向判断</title>
+<script src="https://cdn.jsdelivr.net/npm/jspsych@8.3.0/dist/index.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@jspsych/plugin-html-keyboard-response@2.2.0/dist/index.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@jspsych/plugin-canvas-keyboard-response@2.1.0/dist/index.browser.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/jspsych@8.3.0/css/jspsych.css" rel="stylesheet">
+<style>
+  body { background: #fafafa; }
+  .jspsych-content { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+  kbd { background:#eef; border:1px solid #ccd; border-radius:5px; padding:2px 8px; font-family:monospace; font-weight:700; }
+  canvas { border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.28); }
+</style>
+</head>
+<body>
+<script>
+/* ============================================================
+   随机点运动图 (Random Dot Kinematogram) 方向判断任务
+   - 用途：视觉运动知觉阈限测量，心理物理学经典范式
+   - 必须用 canvas：需要逐帧控制上百个移动元素
+   ============================================================ */
+
+var jsPsych = initJsPsych({
+  on_finish: function () {
+    var d = jsPsych.data.get().filter({ task: 'rdk' });
+    var acc = d.count() ? Math.round(d.filter({ correct: true }).count() / d.count() * 100) : 0;
+    var rows = d.values().map(function (t) {
+      return '<tr style="border-bottom:1px solid #eee">' +
+        '<td style="padding:6px 14px;font-family:monospace">' + t.coherence.toFixed(2) + '</td>' +
+        '<td style="padding:6px 14px">' + (t.direction === 'left' ? '← 左' : '→ 右') + '</td>' +
+        '<td style="padding:6px 14px">' + (t.response === 'f' ? 'F' : t.response === 'j' ? 'J' : '—') + '</td>' +
+        '<td style="padding:6px 14px;color:' + (t.correct ? '#16a34a' : '#dc2626') + '">' + (t.correct ? '✓' : '✗') + '</td>' +
+        '<td style="padding:6px 14px;text-align:right;font-family:monospace">' + Math.round(t.rt) + ' ms</td>' +
+        '</tr>';
+    }).join('');
+    document.body.innerHTML =
+      '<div style="max-width:560px;margin:48px auto;font-family:-apple-system,\'PingFang SC\',system-ui,sans-serif;text-align:center">' +
+      '<h2 style="margin-bottom:4px">实验结束</h2>' +
+      '<p style="color:#666;margin-top:0">共 ' + d.count() + ' 试次　正确率 <b style="font-size:1.3em;color:#2563eb">' + acc + '%</b></p>' +
+      '<table style="width:100%;border-collapse:collapse;margin-top:24px;font-size:14px;text-align:left">' +
+      '<tr style="background:#f3f4f6"><th style="padding:8px 14px">一致性</th><th style="padding:8px 14px">方向</th>' +
+      '<th style="padding:8px 14px">反应</th><th style="padding:8px 14px">判定</th>' +
+      '<th style="padding:8px 14px;text-align:right">RT</th></tr>' + rows + '</table>' +
+      '<p style="color:#aaa;font-size:12px;margin-top:24px">数据字段：' +
+      Object.keys(d.values()[0]).join(', ') + '</p></div>';
+  }
+});
+
+var timeline = [];
+
+/* ---------- 指导语 ---------- */
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus:
+    '<div style="max-width:600px;text-align:left;line-height:1.75">' +
+    '<h2 style="text-align:center">随机点运动方向判断</h2>' +
+    '<p>屏幕中央会出现一簇随机移动的白点。其中<b>一部分点</b>会朝同一个方向移动（向左或向右），' +
+    '其余点只是随机抖动。</p>' +
+    '<p>你的任务：判断这簇点的<b>整体运动方向</b>。难度会逐级增加——一致性越低越难看出来。</p>' +
+    '<p style="font-size:19px;margin:22px 0"><kbd>F</kbd>&nbsp;= 向左　　<kbd>J</kbd>&nbsp;= 向右</p>' +
+    '<p style="color:#888">共 12 个试次。按任意键开始。</p></div>',
+  choices: [' ']
+});
+
+/* ---------- 单个 RDK 试次 ---------- */
+var rdk_trial = {
+  type: jsPsychCanvasKeyboardResponse,
+  canvas_size: [400, 600],              // [高, 宽]
+  choices: ['f', 'j'],
+
+  // stimulus 必须是函数：jsPsych 会把 canvas 元素传进来，由我们逐帧绘制
+  stimulus: function (c) {
+    // 动态参数里取时间线变量必须用 evaluateTimelineVariable（不是 timelineVariable）
+    var coherence = jsPsych.evaluateTimelineVariable('coherence');
+    var direction = jsPsych.evaluateTimelineVariable('direction');
+
+    var ctx = c.getContext('2d');
+    var W = c.width, H = c.height;
+    var N = 220;                        // 点的总数
+    var SPEED = 4.2;                    // 一致点的移动速度 (px/帧)
+    var MOTION_MS = 1200;               // 运动持续时间
+
+    var dots = [];
+    for (var i = 0; i < N; i++) {
+      dots.push({ x: Math.random() * W, y: Math.random() * H, r: 2.6 });
+    }
+    var nCoherent = Math.round(N * coherence);
+    var start = performance.now();
+
+    function frame() {
+      // 试次结束时 jsPsych 会移除 canvas，isConnected 变 false → 停止动画
+      if (!c.isConnected) return;
+
+      var elapsed = performance.now() - start;
+      var moving = elapsed < MOTION_MS;
+
+      ctx.fillStyle = '#0b0b12';
+      ctx.fillRect(0, 0, W, H);
+
+      for (var i = 0; i < N; i++) {
+        var d = dots[i];
+        if (moving) {
+          if (i < nCoherent) {
+            d.x += direction === 'left' ? -SPEED : SPEED;   // 一致点：整体平移
+          } else {
+            d.x += (Math.random() - 0.5) * SPEED * 2.4;     // 噪声点：随机游走
+            d.y += (Math.random() - 0.5) * SPEED * 2.4;
+          }
+          // 环形边界：从一侧出去就从另一侧回来
+          if (d.x < 0) d.x += W; else if (d.x > W) d.x -= W;
+          if (d.y < 0) d.y += H; else if (d.y > H) d.y -= H;
+        }
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.fillStyle = i < nCoherent ? '#ffffff' : 'rgba(255,255,255,.82)';
+        ctx.fill();
+      }
+
+      // 运动结束后点保持静止，等待被试反应
+      requestAnimationFrame(frame);
+    }
+    frame();
+  },
+
+  // 动态 data 参数：把该试次的条件写进数据
+  data: function () {
+    return {
+      task: 'rdk',
+      coherence: jsPsych.evaluateTimelineVariable('coherence'),
+      direction: jsPsych.evaluateTimelineVariable('direction'),
+      correct_response: jsPsych.evaluateTimelineVariable('correct_response')
+    };
+  },
+
+  // 用官方推荐的 compareKeys 判分，结果写回 data.correct
+  on_finish: function (data) {
+    data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);
+  }
+};
+
+/* ---------- 试次程序：注视点 → RDK ---------- */
+var rdk_procedure = {
+  timeline: [
+    {
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: '<div style="font-size:76px;color:#222;line-height:1">+</div>',
+      choices: 'NO_KEYS',
+      trial_duration: 600
+    },
+    rdk_trial
+  ],
+
+  timeline_variables: [
+    { coherence: 0.50, direction: 'left',  correct_response: 'f' },
+    { coherence: 0.50, direction: 'right', correct_response: 'j' },
+    { coherence: 0.25, direction: 'left',  correct_response: 'f' },
+    { coherence: 0.25, direction: 'right', correct_response: 'j' },
+    { coherence: 0.10, direction: 'left',  correct_response: 'f' },
+    { coherence: 0.10, direction: 'right', correct_response: 'j' }
+  ],
+
+  // 每个条件各跑 2 次 = 12 试次，顺序随机
+  sample: { type: 'fixed-repetitions', size: 2 },
+  randomize_order: true
+};
+
+timeline.push(rdk_procedure);
+
+jsPsych.run(timeline);
+</script>
+</body>
+</html>
