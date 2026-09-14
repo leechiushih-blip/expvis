@@ -1,11 +1,14 @@
 # docs/ 整体忽略，但交接文档要进版本控制（否则回滚/换机器就丢了）
 docs/*
 !docs/HANDOFF.md
-tests/
+# tests/ 忽略，但回归探针与它的 golden 基线要进版本控制 ——
+# 数据模型重构的唯一安全网，不进 git 就没法复现验证
+tests/*
+!tests/expvis_probe.py
+!tests/golden/
 .DS_Store
 *.docx
 *.md
 !README.md
-tests/
 !data/rating_rubric_CN.md
 !docs/HANDOFF.md
