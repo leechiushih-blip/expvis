@@ -3572,7 +3572,11 @@ function _applyI18n() {
                 'their own trials if you need to capture all responses.');
             }
 
-            var trialName = 'trial_' + ph.id + '_' + ti;
+            // Semantic, stable names in the generated code: the phase type plus
+            // the trial's index within that phase.
+            var _slug = ph.type === 'instructions' ? 'instructions'
+                      : ph.type === 'feedback' ? 'feedback' : 'trials';
+            var trialName = _slug + '_trial_' + (ti + 1);
             var pname = pluginName(respType);
 
             // --- Build stimulus HTML ---
@@ -3615,7 +3619,7 @@ function _applyI18n() {
             // so the export is directly analysable, and used to score the trial.
             var correctResponseExpr = null;
             if (hasVariantTimeline && stimVariants.length > 1) {
-              correctResponseExpr = "jsPsych.timelineVariable('correctKey')";
+              correctResponseExpr = "jsPsych.timelineVariable('correct_response')";
             } else if (respInfo.correctKey) {
               correctResponseExpr = "'" + String(respInfo.correctKey).replace(/'/g, "\\'") + "'";
             }
@@ -3638,12 +3642,16 @@ function _applyI18n() {
             L(0, 'var ' + trialName + ' = {');
 
             if (hasVariantTimeline && stimVariants.length > 1) {
-              // Use timeline_variables with per-variant stimulus
-              L(1, 'timeline_variables: [');
-              stimVariants.forEach(function (v, vi) {
-                L(2, '{stim: \'' + _jsStr(preHTML + v.html) + '\', correctKey: "' + (v.correctKey || '') + '"},');
+              // Variants live in their own named array (as in the jsPsych
+              // tutorial), which keeps the node itself readable.
+              code += '// Stimulus variants for ' + trialName + '\n';
+              code += 'var ' + trialName + '_variants = [\n';
+              stimVariants.forEach(function (v) {
+                code += '  {stimulus: \'' + _jsStr(preHTML + v.html) +
+                        '\', correct_response: "' + (v.correctKey || '') + '"},\n';
               });
-              L(1, '],');
+              code += '];\n\n';
+              L(1, 'timeline_variables: ' + trialName + '_variants,');
               if (hasRandomizePickOne) {
                 // pick-one: draw ONE variant per repetition.
                 // (randomize_order would instead run every variant each round.)
@@ -3699,7 +3707,7 @@ function _applyI18n() {
               L(indent, 'questions: ' + JSON.stringify(respInfo.questions) + ',');
             } else {
               if (hasVariantTimeline && stimVariants.length > 1) {
-                L(indent, "stimulus: jsPsych.timelineVariable('stim'),");
+                L(indent, "stimulus: jsPsych.timelineVariable('stimulus'),");
               } else if (preHTML || postStims.length > 0) {
                 L(indent, "stimulus: '" + fullStimHTML + "',");
               }
