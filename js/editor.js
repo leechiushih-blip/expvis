@@ -467,7 +467,7 @@ function _applyI18n() {
           type: type,
           name: labels[type] || type,
           color: type === 'instructions' ? 'i' : type === 'feedback' ? 'f' : 't',
-          trials: [],
+          timeline: [],
         });
         document.getElementById('empty-state').style.display = 'none';
         renderFlow();
@@ -478,7 +478,7 @@ function _applyI18n() {
         var ph = editor.phases.find((p) => p.id === pid);
         if (ph) {
           saveState();
-          ph.trials.push(t);
+          ph.timeline.push(t);
           editor.selectedTrial = t.id;
         }
         document.getElementById('empty-state').style.display = 'none';
@@ -497,7 +497,7 @@ function _applyI18n() {
       function removeTrial(id) {
         saveState();
         editor.phases.forEach((p) => {
-          p.trials = p.trials.filter((t) => t.id !== id);
+          p.timeline = p.timeline.filter((t) => t.id !== id);
         });
         if (editor.selectedTrial === id) editor.selectedTrial = null;
         renderAll();
@@ -510,7 +510,7 @@ function _applyI18n() {
         renderAll();
       }
       function findTrial(id) {
-        for (var p of editor.phases) for (var t of p.trials) if (t.id === id) return t;
+        for (var p of editor.phases) for (var t of p.timeline) if (t.id === id) return t;
         return null;
       }
 
@@ -939,14 +939,9 @@ function _applyI18n() {
           return;
         }
         es.style.display = 'none';
-        // Remove old rendered nodes (keep SVG and empty-state)
+        // Remove old rendered nodes (keep the empty-state placeholder)
         fc.querySelectorAll('.phase-card,.phase-arrow').forEach((el) => el.remove());
         fc.querySelectorAll('.flow-row').forEach((el) => el.remove());
-        var svg = document.getElementById('flow-svg');
-        svg.innerHTML = '';
-
-        var allNodes = []; // {el, x, y, w, h} for SVG arrows
-        var nodeY = 20;
 
         editor.phases.forEach(function (ph, i) {
           // Phase card wrapper
@@ -977,14 +972,14 @@ function _applyI18n() {
             var mt = e.dataTransfer.getData('moveTrial') || window._mt;
             window._mc = null;
             window._mt = null;
-            if (mc && mt && ph.trials.length > 0) {
-              moveComponent(mt, mc, ph.trials[0].id);
+            if (mc && mt && ph.timeline.length > 0) {
+              moveComponent(mt, mc, ph.timeline[0].id);
             }
           };
           card.onclick = function (e) {
-            if (ph.trials.length > 0) {
-              editor.selectedTrial = ph.trials[0].id;
-              editor.selComp = ph.trials[0].components.length > 0 ? ph.trials[0].components[0].id : null;
+            if (ph.timeline.length > 0) {
+              editor.selectedTrial = ph.timeline[0].id;
+              editor.selComp = ph.timeline[0].components.length > 0 ? ph.timeline[0].components[0].id : null;
               renderPreview();
             }
           };
@@ -1000,7 +995,7 @@ function _applyI18n() {
             '</span><span style="font-weight:700;font-size:0.82rem">' +
             _phaseLabel(ph) +
             '</span><span style="font-size:0.68rem;color:var(--text2)">' +
-            ph.trials.length +
+            ph.timeline.length +
             ' trials</span><button data-phase="' +
             ph.id +
             '" class="phase-delete-btn" style="margin-left:auto;background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;padding:2px 8px;border-radius:4px" title="Delete this phase">✕ Delete</button>';
@@ -1010,7 +1005,7 @@ function _applyI18n() {
           var cardBody = document.createElement('div');
           cardBody.className = 'phase-card-body';
 
-          if (ph.trials.length === 0) {
+          if (ph.timeline.length === 0) {
             var emptyRow = document.createElement('div');
             emptyRow.className = 'flow-row';
             emptyRow.ondragover = function (e) {
@@ -1031,11 +1026,11 @@ function _applyI18n() {
               window._mt = null;
               if (mc && mt) {
                 addTrial(ph.id);
-                var nt = ph.trials[ph.trials.length - 1];
+                var nt = ph.timeline[ph.timeline.length - 1];
                 if (nt) moveComponent(mt, mc, nt.id);
               } else if (window._dt) {
                 addTrial(ph.id);
-                var nt = ph.trials[ph.trials.length - 1];
+                var nt = ph.timeline[ph.timeline.length - 1];
                 if (nt) addComponent(nt.id, window._dt, window._dc);
               }
             };
@@ -1048,7 +1043,7 @@ function _applyI18n() {
             emptyRow.appendChild(emptyCard);
             cardBody.appendChild(emptyRow);
           }
-          ph.trials.forEach(function (t) {
+          ph.timeline.forEach(function (t) {
             var row = document.createElement('div');
             row.className = 'flow-row';
             row.setAttribute('data-trial', t.id);
@@ -1324,7 +1319,7 @@ function _applyI18n() {
               // Search all phases for the target trial
               var targetTrial = null, targetPhaseIdx = -1, targetTrialIdx = -1;
               editor.phases.forEach(function (p2, pi2) {
-                p2.trials.forEach(function (tr, ti2) { if (tr.id === branchComp.targetFail) { targetTrial = tr; targetPhaseIdx = pi2; targetTrialIdx = ti2; } });
+                p2.timeline.forEach(function (tr, ti2) { if (tr.id === branchComp.targetFail) { targetTrial = tr; targetPhaseIdx = pi2; targetTrialIdx = ti2; } });
               });
               if (targetTrial) {
                 var targetPhase = editor.phases[targetPhaseIdx];
@@ -1341,9 +1336,9 @@ function _applyI18n() {
             // Branch target indicator: show which trial(s) point here
             var srcTrials = [];
             editor.phases.forEach(function (p2) {
-              p2.trials.forEach(function (t2) {
+              p2.timeline.forEach(function (t2) {
                 var bc = t2.components.find(function (c) { return c.type === 'branch' && c.targetFail && c.targetFail === t.id; });
-                if (bc) srcTrials.push({phaseName: _stripEmoji(p2.name), trialIdx: p2.trials.indexOf(t2) + 1, condition: bc.condition});
+                if (bc) srcTrials.push({phaseName: _stripEmoji(p2.name), trialIdx: p2.timeline.indexOf(t2) + 1, condition: bc.condition});
               });
             });
             if (srcTrials.length > 0) {
@@ -1701,7 +1696,7 @@ function _applyI18n() {
           };
           // For branch targetFail: build dropdown from same-phase trial IDs
           var currentPhase = editor.phases.find(function (p) {
-            return p.trials.some(function (tr) {
+            return p.timeline.some(function (tr) {
               return tr.id === t.id;
             });
           });
@@ -1795,13 +1790,13 @@ function _applyI18n() {
               if (c.condition === 'variable') {
                 h += '<select onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'targetFail\',this.value)">';
                 h += '<option value=""' + (v ? '' : ' selected') + '>Retry current trial</option>';
-                editor.phases.forEach(function (ph2, pi2) { ph2.trials.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _phaseLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
+                editor.phases.forEach(function (ph2, pi2) { ph2.timeline.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _phaseLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
                 h += '</select>';
               }
               else {
                 h += '<select onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'targetFail\',this.value)">';
                 h += '<option value=""' + (v ? '' : ' selected') + '>Retry current trial</option>';
-                editor.phases.forEach(function (ph2, pi2) { ph2.trials.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _phaseLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
+                editor.phases.forEach(function (ph2, pi2) { ph2.timeline.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _phaseLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
                 h += '</select>';
               }
               h += '<div style="font-size:0.6rem;color:var(--text2);flex-basis:100%;margin-top:2px">' + failHint + '</div>';
@@ -2399,7 +2394,7 @@ function _applyI18n() {
         }
         var ph = null;
         editor.phases.forEach(function (p) {
-          p.trials.forEach(function (tr) {
+          p.timeline.forEach(function (tr) {
             if (tr.id === t.id) ph = p;
           });
         });
@@ -2503,7 +2498,7 @@ function _applyI18n() {
         var dev = editor.device || {w: 1280, h: 720};
         var ph = null;
         editor.phases.forEach(function (p) {
-          if (p.trials.some(function (x) { return x.id === t.id; })) ph = p;
+          if (p.timeline.some(function (x) { return x.id === t.id; })) ph = p;
         });
 
         var overlay = document.createElement('div');
@@ -2599,8 +2594,15 @@ function _applyI18n() {
       function migratePos() {
         var droppedDelays = 0;
         var droppedClicks = 0;
+        // The per-phase array is `timeline` now — the same name jsPsych uses for
+        // a node's children, so the later step to a nested tree is about nesting
+        // rather than about renaming.
         editor.phases.forEach(function (p) {
-          p.trials.forEach(function (t) {
+          if (!Array.isArray(p.timeline)) p.timeline = Array.isArray(p.trials) ? p.trials : [];
+          delete p.trials;
+        });
+        editor.phases.forEach(function (p) {
+          p.timeline.forEach(function (t) {
             // `click` is gone — it had no official counterpart.
             var clicks = t.components.filter(function (c) { return c.type === 'click'; });
             if (clicks.length) {
@@ -2773,7 +2775,9 @@ function _applyI18n() {
         var s = editor.history[editor.hi];
         editor.hi--;
         if (!s) return;
-        editor.phases = s.phases;
+        // Deep copy: assigning the snapshot by reference means the next edit
+        // mutates the history entry too, so redo/undo drifts.
+        editor.phases = JSON.parse(JSON.stringify(s.phases));
         migratePos();
         editor.selectedTrial = s.sel;
         editor.selComp = s.sc;
@@ -3426,7 +3430,7 @@ function _applyI18n() {
 
         editor.phases.forEach(function (ph, phi) {
           code += '// ── ' + _stripEmoji(ph.name) + ' (' + (phi + 1) + '/' + editor.phases.length + ') ──\n';
-          ph.trials.forEach(function (t, ti) {
+          ph.timeline.forEach(function (t, ti) {
                   // --- Classify components ---
       var stims = [],
         respType = null,
@@ -4502,8 +4506,8 @@ function _applyI18n() {
             editor.phases.forEach(function (ph) {
               ph.id = 'ph' + ++editor.pc;
               if (!ph.color) ph.color = ph.type === 'instructions' ? 'i' : ph.type === 'feedback' ? 'f' : 't';
-              if (!ph.name) ph.name = ph.type === 'instructions' ? i18n('phase.instructions') : ph.type === 'feedback' ? i18n('phase.feedback') : i18n('phase.trials');
-              ph.trials.forEach(function (tr) {
+              if (!ph.name) ph.name = ph.type === 'instructions' ? i18n('phase.instructions') : ph.type === 'feedback' ? i18n('phase.feedback') : i18n('phase.timeline');
+              ph.timeline.forEach(function (tr) {
                 tr.id = 't' + ++editor.tc;
                 tr.components.forEach(function (c) {
                   c.id = 'c' + ++editor.cc;
@@ -4513,19 +4517,19 @@ function _applyI18n() {
             migratePos();
             // Ensure 3-phase structure
             if (editor.phases.length === 0 || editor.phases[0].type !== 'instructions') {
-              var instrPh = { id:'ph_ai_inst', type:'instructions', name: i18n('phase.instructions'), color:'i', trials:[{ id:'t_ai_inst', components:[ { id:'c_ai_txt', type:'text', content:'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize:20, color:'#333333', position:'center', fontWeight:'bold', cat:'s' }, { id:'c_ai_btn', type:'button', choices:['Start Experiment'], prompt:'', button_layout:'grid', grid_rows:1, grid_columns:0, trial_duration:0, stimulus_duration:0, response_ends_trial:true, enable_button_after:0, cat:'r' } ] }] };
+              var instrPh = { id:'ph_ai_inst', type:'instructions', name: i18n('phase.instructions'), color:'i', timeline:[{ id:'t_ai_inst', components:[ { id:'c_ai_txt', type:'text', content:'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize:20, color:'#333333', position:'center', fontWeight:'bold', cat:'s' }, { id:'c_ai_btn', type:'button', choices:['Start Experiment'], prompt:'', button_layout:'grid', grid_rows:1, grid_columns:0, trial_duration:0, stimulus_duration:0, response_ends_trial:true, enable_button_after:0, cat:'r' } ] }] };
               editor.phases.unshift(instrPh);
               editor.tc++; editor.cc += 2;
             }
             var lastPh = editor.phases[editor.phases.length - 1];
             if (!lastPh || lastPh.type !== 'feedback') {
-              var fbPh = { id:'ph_ai_fb', type:'feedback', name: i18n('phase.feedback'), color:'f', trials:[{ id:'t_ai_fb', components:[ { id:'c_ai_fbt', type:'text', content:'Experiment complete!\n\nThank you for your participation.', fontSize:24, color:'#333333', position:'center', fontWeight:'bold', cat:'s' } ] }] };
+              var fbPh = { id:'ph_ai_fb', type:'feedback', name: i18n('phase.feedback'), color:'f', timeline:[{ id:'t_ai_fb', components:[ { id:'c_ai_fbt', type:'text', content:'Experiment complete!\n\nThank you for your participation.', fontSize:24, color:'#333333', position:'center', fontWeight:'bold', cat:'s' } ] }] };
               editor.phases.push(fbPh);
               editor.tc++; editor.cc++;
             }
-            if (editor.phases.length > 0 && editor.phases[0].trials.length > 0) {
-              editor.selectedTrial = editor.phases[0].trials[0].id;
-              if (editor.phases[0].trials[0].components.length > 0) editor.selComp = editor.phases[0].trials[0].components[0].id;
+            if (editor.phases.length > 0 && editor.phases[0].timeline.length > 0) {
+              editor.selectedTrial = editor.phases[0].timeline[0].id;
+              if (editor.phases[0].timeline[0].components.length > 0) editor.selComp = editor.phases[0].timeline[0].components[0].id;
             }
             renderAll();
             overlay.remove();
@@ -4594,7 +4598,7 @@ function _applyI18n() {
           if (!editor.projectId) editor.projectId = pid;
           var phaseCount = editor.phases.length,
             trialCount = editor.phases.reduce(function (s, p) {
-              return s + p.trials.length;
+              return s + p.timeline.length;
             }, 0);
           var exp = {
             id: pid,
@@ -4640,7 +4644,7 @@ function _applyI18n() {
         if (
           editor.phases.length === 0 ||
           editor.phases.every(function (p) {
-            return p.trials.length === 0;
+            return p.timeline.length === 0;
           })
         ) {
           alert('Experiment is empty. Please add phases and trials before publishing.');

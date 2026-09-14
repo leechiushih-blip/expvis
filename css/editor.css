@@ -194,21 +194,6 @@
         max-width: 900px;
         margin: 0 auto;
       }
-      .flow-svg {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        z-index: 1;
-      }
-      .flow-svg path {
-        fill: none;
-        stroke: #c0c0d0;
-        stroke-width: 2;
-      }
-      .flow-svg path.highlight {
-        stroke: var(--accent2);
-      }
-
       /* Phase card */
       .phase-card {
         background: var(--surface);
