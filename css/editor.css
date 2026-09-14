@@ -276,29 +276,6 @@
         margin-bottom: 8px;
         margin-left: 12px;
       }
-      /* Drop strip under a trial's steps: dropping here starts a new
-         presentation step instead of joining the screen above. */
-      .flow-newstep {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-left: 26px;
-        padding: 7px 10px;
-        border: 1px dashed var(--border);
-        border-radius: 8px;
-        font-size: 0.6rem;
-        color: var(--text2);
-        opacity: 0.6;
-        cursor: default;
-        transition: all 0.15s;
-      }
-      .flow-newstep.drag-over {
-        border-color: var(--accent2);
-        background: rgba(99, 102, 241, 0.06);
-        color: var(--accent);
-        opacity: 1;
-      }
-
       /* One presentation step: a gutter number plus whatever it shows. */
       .flow-step {
         display: flex;

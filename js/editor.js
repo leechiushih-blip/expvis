@@ -506,9 +506,7 @@ function _applyI18n() {
         return null;
       }
 
-      // `opts.newStep` — set when the component is dropped on the "new step" zone
-      // rather than onto the trial's shared screen.
-      function addComponent(tid, type, cat, opts) {
+      function addComponent(tid, type, cat) {
         var t = findTrial(tid);
         if (!t) return;
         var defs = {
@@ -519,14 +517,8 @@ function _applyI18n() {
             color: '#333333',
             position: 'center',
             fontWeight: 'bold',
-            // `newStep` breaks the component out of the trial's shared screen:
-            // it becomes its own presentation step, shown for `step_duration`
-            // ms before the next step starts. Off by default, so a component
-            // dropped in the usual way still joins the same screen.
-            newStep: false,
-            step_duration: 500,
           },
-          shape: {type: 'shape', shape: 'circle', size: 80, color: '#6366f1', position: 'center', newStep: false, step_duration: 500},
+          shape: {type: 'shape', shape: 'circle', size: 80, color: '#6366f1', position: 'center'},
           // stimulus_width/height/maintain_aspect_ratio are the image plugins'
           // own parameters; they apply when the trial runs on one of them (see
           // the image-plugin rule in _compileExperiment) and as max-width in the
@@ -535,8 +527,6 @@ function _applyI18n() {
             type: 'image',
             fileData: '',
             fileName: '',
-            newStep: false,
-            step_duration: 500,
             stimulus_width: 200,
             stimulus_height: 0,
             maintain_aspect_ratio: true,
@@ -555,8 +545,8 @@ function _applyI18n() {
             prompt: '',
             render_on_canvas: true,
           },
-          audio: {type: 'audio', fileData: '', fileName: '', newStep: false, step_duration: 500},
-          video: {type: 'video', fileData: '', fileName: '', width: 320, newStep: false, step_duration: 500},
+          audio: {type: 'audio', fileData: '', fileName: ''},
+          video: {type: 'video', fileData: '', fileName: '', width: 320},
           // Emitted as a jsPsychHtmlKeyboardResponse trial with choices NO_KEYS,
           // so `trial_duration` is the parameter it actually sets. The jitter trio
           // is an ExpVis extension that turns that value into a dynamic parameter
@@ -642,22 +632,8 @@ function _applyI18n() {
         var c = JSON.parse(JSON.stringify(defs[type]));
         c.id = 'c' + ++editor.cc;
         c.cat = cat;
-        if (opts && opts.newStep && 'newStep' in c) c.newStep = true;
         saveState();
-        // A component that opens its own step belongs with the other presentation
-        // steps, i.e. before whatever collects the response — appending it to the
-        // very end would put the new screen *after* the response screen and flip
-        // the order. Plain components still go to the end.
-        if (opts && opts.newStep && 'newStep' in c) {
-          var _firstResp = -1;
-          for (var _i = 0; _i < t.components.length; _i++) {
-            if (t.components[_i].cat === 'r') { _firstResp = _i; break; }
-          }
-          if (_firstResp >= 0) t.components.splice(_firstResp, 0, c);
-          else t.components.push(c);
-        } else {
-          t.components.push(c);
-        }
+        t.components.push(c);
         if (editor.selectedTrial) {
           var ft = findTrial(editor.selectedTrial);
           if (ft && ft.components.length > 0) editor.selComp = ft.components[0].id;
@@ -837,8 +813,6 @@ function _applyI18n() {
         durationMin: 'Jitter Min',
         durationMax: 'Jitter Max',
         durationStep: 'Jitter Step',
-        newStep: 'Start A New Step',
-        step_duration: 'Step Duration',
         // button — labels mirror jsPsychHtmlButtonResponse's parameter names
         choices: 'Choices',
         prompt: 'Prompt',
@@ -1094,11 +1068,6 @@ function _applyI18n() {
                     labels[c.type] +
                     '</div><div class="flow-node-detail">' +
                     getDetail(c) +
-                    (c.cat === 's' && c.type !== 'fixation' && c.newStep
-                      ? (_untilResponse[c.id]
-                          ? ' · own screen · until response'
-                          : ' · own screen ' + (c.step_duration || 500) + 'ms')
-                      : '') +
                     '</div></div>';
                 }
                 node.setAttribute('draggable', 'true');
@@ -1181,29 +1150,23 @@ function _applyI18n() {
               // as a sequence, which is exactly what confused the BRM reviewer
               // ("if I add two shapes, they show as a sequence"). Only fixation,
               // delay and responses are genuinely sequential.
+              // The steps are the trials jsPsych will actually run inside this
+              // node: a fixation is its own timed trial, every stimulus shares one
+              // screen, and the response is the trial's plugin. A stimulus joining
+              // the group already open is what "shown together" means — and only a
+              // simultaneous group can be joined, because a fixation is its own
+              // trial rather than part of the screen that follows it.
               var steps = [];
               var curSimul = null;
-              // The last screen keeps its stimulus until the response, so that
-              // step's duration is never used — the node detail says so instead of
-              // showing a number that does nothing.
-              var _lastStimStep = -1;
               visualComps.forEach(function (c) {
                 var isStim = c.cat === 's' && c.type !== 'fixation';
-                // A stimulus joins the SIMULTANEOUS screen already open — and only
-                // that kind. A fixation, a response or a logic component closes the
-                // group, because each of those is its own step in the trial.
-                if (isStim && !c.newStep && curSimul && curSimul.simul) {
+                if (isStim && curSimul && curSimul.simul) {
                   curSimul.comps.push(c);
                 } else {
                   curSimul = {simul: isStim, comps: [c]};
-                  if (isStim) _lastStimStep = steps.length;
                   steps.push(curSimul);
                 }
               });
-              var _untilResponse = {};
-              if (_lastStimStep >= 0) {
-                steps[_lastStimStep].comps.forEach(function (c) { _untilResponse[c.id] = true; });
-              }
 
               // One row per presentation step, numbered down a gutter, so the
               // ORDER reads top-to-bottom. Components that share a step stay side
@@ -1239,45 +1202,6 @@ function _applyI18n() {
                 row.appendChild(stepRow);
               });
 
-              // A blank strip under the steps. Dropping here does not join the
-              // screen above — it starts a NEW presentation step, which is how a
-              // trial shows one thing and then another.
-              var newStepZone = document.createElement('div');
-              newStepZone.className = 'flow-newstep';
-              newStepZone.innerHTML = '<span>+ 拖到此处新建一步 · 顺序呈现</span>';
-              newStepZone.title = 'Drop a component here to give it its own screen, ' +
-                'shown for its Step Duration before the next step starts';
-              newStepZone.ondragover = function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                newStepZone.classList.add('drag-over');
-              };
-              newStepZone.ondragleave = function () {
-                newStepZone.classList.remove('drag-over');
-              };
-              newStepZone.ondrop = function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                newStepZone.classList.remove('drag-over');
-                var mc = e.dataTransfer.getData('moveComp') || window._mc;
-                var mt = e.dataTransfer.getData('moveTrial') || window._mt;
-                var dt = window._dt;
-                var dc = window._dc;
-                window._mc = null;
-                window._mt = null;
-                window._dt = null;
-                window._dc = null;
-                if (mc && mt) {
-                  // An existing component dragged here: bring it over and give it
-                  // its own step.
-                  if (mt !== t.id) moveComponent(mt, mc, t.id);
-                  var moved = t.components.filter(function (c) { return c.id === mc; })[0];
-                  if (moved && 'newStep' in moved) { moved.newStep = true; saveState(); renderAll(); }
-                } else if (dt) {
-                  addComponent(t.id, dt, dc, {newStep: true});
-                }
-              };
-              row.appendChild(newStepZone);
             }
 
             // Action buttons
@@ -1525,8 +1449,6 @@ function _applyI18n() {
             durationMin: 'Set this and Jitter Max (Max > Min) to randomise the duration trial by trial. 0 = no jitter.',
             durationMax: 'Upper end of the jitter range. Must be greater than Jitter Min for the jitter to apply.',
             durationStep: 'Spacing of the values between Min and Max, e.g. 250 gives 500/750/1000. Only used when jitter is on.',
-            newStep: 'true = this component gets its own screen, shown for Step Duration before the next step begins. false = it shares the screen with the components around it.',
-            step_duration: 'How long this step stays on screen before the next one starts, in ms. Only used when Start A New Step is on. The last step waits for the response instead.',
             required: 'true = the browser refuses to submit an empty box.',
             rows: '1 = a single-line box. 2 or more = a multi-line textarea.',
             columns: 'Width of the box in characters. jsPsych default is 40.',
@@ -1578,7 +1500,7 @@ function _applyI18n() {
                 '>shuffle — all, random order</option></select>';
             else if (k === 'response_ends_trial' || k === 'require_movement' ||
                      k === 'wait_for_key_release' || k === 'maintain_aspect_ratio' ||
-                     k === 'render_on_canvas' || k === 'newStep') {
+                     k === 'render_on_canvas') {
               // Every boolean plugin parameter gets the same true/false control;
               // only the wording of the options differs.
               var _boolLabels = {
@@ -1586,7 +1508,6 @@ function _applyI18n() {
                 require_movement: ['true — must move the slider first', 'false — may submit as-is'],
                 wait_for_key_release: ['true — time to the key release', 'false — time to the key press'],
                 maintain_aspect_ratio: ['true — keep the aspect ratio', 'false — stretch to fit'],
-                newStep: ['true — own screen, for Step Duration', 'false — shared screen with its neighbours'],
                 render_on_canvas: ['true — draw to a canvas', 'false — use an <img> element'],
               }[k];
               var _isOn = !(v === false || v === 'false');
@@ -2481,10 +2402,11 @@ function _applyI18n() {
                 return;
               }
               if (['text', 'shape', 'image', 'audio', 'video'].indexOf(c.type) >= 0) {
-                // Defaults to off, which reproduces the behaviour these
-                // experiments already had: one shared screen per trial.
-                if (c.newStep == null) c.newStep = false;
-                if (c.step_duration == null) c.step_duration = 500;
+                // A trial shows one screen, so these are gone. Dropped rather
+                // than left inert: a component carrying fields nothing reads is
+                // how the next reader gets misled.
+                delete c.newStep;
+                delete c.step_duration;
               }
               if (c.type === 'fixation') {
                 // `duration` was the old name; the emitted parameter is
@@ -3461,27 +3383,10 @@ function _applyI18n() {
             }
 
             // --- Build stimulus HTML ---
-            // Presentation steps. Components dropped on the trial's shared screen
-            // collect into one step; a component marked `newStep` opens a new one,
-            // shown on its own for its Step Duration. Only the LAST step shares the
-            // trial with the response component — the earlier ones become their own
-            // NO_KEYS trials inside the node.
-            // `newStep` is a SEPARATOR, matching the canvas: it ends the screen
-            // that is open and starts the next one. The components after it join
-            // that new screen until another separator appears.
-            var _stepGroups = [];
-            stims.forEach(function (c) {
-              if (!_stepGroups.length || c.newStep) _stepGroups.push([c]);
-              else _stepGroups[_stepGroups.length - 1].push(c);
-            });
-            // The final screen is the response screen: it stays up until the
-            // participant answers (or, with no response component, until any key),
-            // which is exactly what a trial with no trial_duration does in
-            // hand-written jsPsych. The canvas marks that step as "until response"
-            // rather than showing a Step Duration that would not be used.
-            var _splitSteps = _stepGroups.length > 1;
-            var _leadGroups = _splitSteps ? _stepGroups.slice(0, -1) : [];
-            // All visual components go into this trial's screens.
+            // Every visual component shares the trial's one screen, which stays up
+            // until the participant answers — or, with no response component, until
+            // any key. That is exactly what a trial with no trial_duration does in
+            // hand-written jsPsych.
             var preHTML = preStims.map(function (c) { return compHTML(c); }).join('');
             // Flow container: components stack in a flex column. jsPsych's own
             // `.jspsych-content-wrapper { margin:auto }` already centres this block,
@@ -3495,9 +3400,7 @@ function _applyI18n() {
             // tall as the device would push buttons and sliders off the bottom of
             // the screen. The design height is applied to jsPsych's display area
             // instead — see _deviceStyle().
-            var _bodyHTML = _splitSteps
-              ? _stepGroups[_stepGroups.length - 1].map(function (c) { return compHTML(c); }).join('')
-              : preHTML + postStims.map(function(c){return compHTML(c);}).join('');
+            var _bodyHTML = preHTML + postStims.map(function(c){return compHTML(c);}).join('');
             var fullStimHTML = _jsStr(_stage(_bodyHTML));
 
             // Where the correct answer comes from. Recorded into the trial's `data`
@@ -3523,10 +3426,9 @@ function _applyI18n() {
             // A node holding exactly one trial and carrying no node-level
             // parameters IS just a trial, so it is emitted flat — the shape
             // hand-written jsPsych uses. A wrapper is needed only when the node
-            // really holds more than one trial: extra timed segments, or the
-            // presentation steps of a multi-screen trial.
-            var _plainNode = preTiming.length === 0 && postTiming.length === 0 &&
-              _leadGroups.length === 0;
+            // really holds more than one trial, i.e. when it has extra timed
+            // segments around the stimulus.
+            var _plainNode = preTiming.length === 0 && postTiming.length === 0;
 
             L(0, 'var ' + trialName + ' = {');
 
@@ -3562,19 +3464,6 @@ function _applyI18n() {
             }
             preTiming.forEach(emitTimingTrial);
 
-            // Each leading step is its own timed trial: the participant sees it
-            // for Step Duration, then the next one replaces it.
-            _leadGroups.forEach(function (grp) {
-              _usedPlugins['jsPsychHtmlKeyboardResponse'] = true;
-              var html = grp.map(function (c) { return compHTML(c); }).join('');
-              var dur = Number(grp[0].step_duration) || 500;
-              L(ei, '{');
-              L(ei + 1, 'type: jsPsychHtmlKeyboardResponse,');
-              L(ei + 1, "stimulus: '" + _jsStr(_stage(html)) + "',");
-              L(ei + 1, "choices: 'NO_KEYS',");
-              L(ei + 1, 'trial_duration: ' + dur);
-              L(ei, '},');
-            });
 
             if (!_plainNode) L(ei, '{');
             var indent = _plainNode ? 1 : ei + 1;
