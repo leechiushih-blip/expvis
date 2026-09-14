@@ -375,6 +375,30 @@ function _applyI18n() {
           '',
         );
       }
+      // Turn a phase name into the prefix of its generated variable names, so
+      // "Trials" becomes `trials_trial_1` and `trials_timeline`. The name is the
+      // user's, so the slug has to survive two things the old type-based one
+      // could not: a name that is not ASCII (an identifier cannot be, even
+      // though the header comment above it keeps the name as typed) and a name
+      // that repeats (two phases both called "Trials" would otherwise declare
+      // `var trials_trial_1` twice, and the second would silently win).
+      function _slugify(name) {
+        var s = _stripEmoji(String(name == null ? '' : name))
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '');
+        if (!s) return 'phase';
+        // A leading digit is legal in neither a slug nor a JS identifier.
+        return /^[0-9]/.test(s) ? 'phase_' + s : s;
+      }
+      // "Trials", "Trials" → "trials", "trials_2". `seen` is the caller's set,
+      // so uniqueness holds across the whole experiment, not within one phase.
+      function _uniqueSlug(base, seen) {
+        var s = base, n = 2;
+        while (seen[s]) s = base + '_' + n++;
+        seen[s] = true;
+        return s;
+      }
       function _phaseLabel(ph) {
         var icon = _phaseIcons[ph.type];
         return (icon ? icon + ' ' : '') + _stripEmoji(ph.name);
@@ -3176,8 +3200,20 @@ function _applyI18n() {
           }
         }
 
+        // One jsPsych node per phase. The trials are declared first, then
+        // collected into the node's `timeline` — the shape the jsPsych timeline
+        // docs use for a block of trials. Semantically it is a pass-through: a
+        // node with no node-level parameters runs its children exactly as
+        // pushing them one at a time would (same order, same `trial_index`,
+        // and the node itself records no data). What it buys is that the
+        // generated code mirrors the canvas, and that each phase has a named
+        // place to add `repetitions` / `sample` / `conditional_function` by hand.
+        var _phaseSlugs = {};
         editor.phases.forEach(function (ph, phi) {
           code += '// ── ' + _stripEmoji(ph.name) + ' (' + (phi + 1) + '/' + editor.phases.length + ') ──\n';
+          var phaseSlug = _uniqueSlug(_slugify(ph.name), _phaseSlugs);
+          // Trial variable names, in timeline order, for the node below.
+          var phaseTrials = [];
           ph.timeline.forEach(function (t, ti) {
                   // --- Classify components ---
       var stims = [],
@@ -3344,11 +3380,10 @@ function _applyI18n() {
               _mediaRef(stims[0])) ? stims[0] : null;
             var useImagePlugin = !!imageOnlyComp && !!_imagePlugins[respType];
 
-            // Semantic, stable names in the generated code: the phase type plus
+            // Semantic, stable names in the generated code: the phase name plus
             // the trial's index within that phase.
-            var _slug = ph.type === 'instructions' ? 'instructions'
-                      : ph.type === 'feedback' ? 'feedback' : 'trials';
-            var trialName = _slug + '_trial_' + (ti + 1);
+            var trialName = phaseSlug + '_trial_' + (ti + 1);
+            phaseTrials.push(trialName);
             var pname = pluginName(respType, useImagePlugin);
 
             // ---- jsPsychAnimation owns the display element, so it is emitted as
@@ -3382,8 +3417,7 @@ function _applyI18n() {
               if (!respInfo.renderOnCanvas) code += _a + 'render_on_canvas: false,\n';
               // strip the trailing comma off the last property
               code = code.replace(/,\n$/, '\n');
-              code += '};\n';
-              code += 'timeline.push(' + trialName + ');\n\n';
+              code += '};\n\n';
               return; // this trial is complete
             }
 
@@ -3589,9 +3623,29 @@ function _applyI18n() {
             if (!_plainNode) L(1, ']');
             L(0, '};');
 
-            code += lines.join('\n') + '\n';
-            code += 'timeline.push(' + trialName + ');\n\n';
+            code += lines.join('\n') + '\n\n';
           });
+
+          // Close the phase node. An empty phase contributes nothing to run, so
+          // it is noted rather than emitted as an empty `timeline: []`.
+          if (phaseTrials.length === 0) {
+            code += '// (this phase holds no trials, so it adds nothing to the timeline)\n\n';
+            return;
+          }
+          var nodeName = phaseSlug + '_timeline';
+          var collected = '  timeline: [' + phaseTrials.join(', ') + ']';
+          code += 'var ' + nodeName + ' = {\n';
+          if (collected.length <= 96) {
+            code += collected + '\n';
+          } else {
+            code += '  timeline: [\n';
+            phaseTrials.forEach(function (n, i) {
+              code += '    ' + n + (i < phaseTrials.length - 1 ? ',' : '') + '\n';
+            });
+            code += '  ]\n';
+          }
+          code += '};\n';
+          code += 'timeline.push(' + nodeName + ');\n\n';
         });
 
         code += 'jsPsych.run(timeline);\n';

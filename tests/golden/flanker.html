@@ -37,7 +37,11 @@
       button_layout: 'grid',
       grid_rows: 1
     };
-    timeline.push(instructions_trial_1);
+
+    var instructions_timeline = {
+      timeline: [instructions_trial_1]
+    };
+    timeline.push(instructions_timeline);
 
     // ── Trials (2/3) ──
     var trials_trial_1 = {
@@ -56,14 +60,12 @@
         }
       ]
     };
-    timeline.push(trials_trial_1);
 
     var trials_trial_2 = {
       type: jsPsychHtmlKeyboardResponse,
       stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:20px;color:#ef4444;font-weight:bold">Press the key according to the rules!</div></div>',
       trial_duration: 1500
     };
-    timeline.push(trials_trial_2);
 
     var trials_trial_3 = {
       type: jsPsychHtmlKeyboardResponse,
@@ -71,7 +73,11 @@
       choices: [" "],
       prompt: 'Press space to continue'
     };
-    timeline.push(trials_trial_3);
+
+    var trials_timeline = {
+      timeline: [trials_trial_1, trials_trial_2, trials_trial_3]
+    };
+    timeline.push(trials_timeline);
 
     // ── Feedback (3/3) ──
     var feedback_trial_1 = {
@@ -80,7 +86,11 @@
       choices: [" "],
       prompt: 'Press a key'
     };
-    timeline.push(feedback_trial_1);
+
+    var feedback_timeline = {
+      timeline: [feedback_trial_1]
+    };
+    timeline.push(feedback_timeline);
 
     jsPsych.run(timeline);
 

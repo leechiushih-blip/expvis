@@ -27,6 +27,40 @@ TEMPLATES = ["stroop", "simon", "flanker", "branch-demo", "randomize-demo"]
 # the result in a <pre id="PROBE_OUT"> for --dump-dom to pick up.
 PROBE = """
 <script>
+// Evaluate the generated experiment against a stub of the jsPsych surface it
+// expects. This is the only way to assert its SHAPE rather than its bytes: that
+// every phase became one node pushed in canvas order, that each node collects
+// the trials the canvas shows, and that no node carries a node-level parameter
+// ExpVis no longer supports. A syntax error in the generated code throws here.
+var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
+  'jsPsychHtmlSliderResponse', 'jsPsychSurveyText', 'jsPsychPreload', 'jsPsychAnimation',
+  'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
+var __FORBIDDEN = ['timeline_variables', 'repetitions', 'sample', 'conditional_function',
+  'randomize_order', 'loop_function'];
+function inspectStructure(code) {
+  var stub = {
+    run: function (tl) { stub._timeline = tl; },
+    data: {displayData: function () {}},
+    randomization: {sampleWithoutReplacement: function (a, n) { return a.slice(0, n); }},
+    pluginAPI: {compareKeys: function () { return false; }},
+    timelineVariable: function (n) { return '__TV__' + n; }
+  };
+  var src = 'var initJsPsych = function () { return __stub; };\\nvar jsPsych = __stub;\\n' +
+    __PLUGINS.map(function (p) { return 'var ' + p + ' = {};'; }).join('\\n') + '\\n' + code;
+  new Function('__stub', src)(stub);
+  var tl = stub._timeline || [];
+  var forbidden = [];
+  JSON.stringify(tl, function (k, v) {
+    if (__FORBIDDEN.indexOf(k) >= 0 && forbidden.indexOf(k) < 0) forbidden.push(k);
+    return v;
+  });
+  return {
+    // one entry per phase node; the number is how many trials it collects
+    trialsPerNode: tl.map(function (n) { return n && n.timeline ? n.timeline.length : null; }),
+    forbiddenParams: forbidden
+  };
+}
+
 window.addEventListener('load', function () {
   var out = { ok: true, templates: {}, errors: [] };
   window.addEventListener('error', function (e) { out.errors.push(String(e.message)); });
@@ -40,12 +74,12 @@ window.addEventListener('load', function () {
         out.templates[name] = {
           code: code,
           publishedMatches: generatePublishedFile() === code,
-          // structural facts, independent of the exact bytes
-          nodeNames: (code.match(/var (\\w+) = \\{/g) || []).length,
-          nestedTimelines: (code.match(/timeline: \\[/g) || []).length,
-          repetitions: (code.match(/repetitions:/g) || []).length,
-          conditional: (code.match(/conditional_function/g) || []).length,
-          timelineVars: (code.match(/timeline_variables/g) || []).length
+          // Structural facts, independent of the exact bytes. Regexes over the
+          // generated text were tried first and were worse than useless — they
+          // cannot tell a node from a trial, and they tripped over nested
+          // brackets. Evaluating the code is exact.
+          // Inspect the experiment JS itself, not the HTML shell around it.
+          structure: inspectStructure(_compileExperiment({}).code)
         };
       } catch (e) {
         out.ok = false;
@@ -105,7 +139,17 @@ def cmd_check():
         print(json.dumps(res, indent=1)[:2000])
         sys.exit("FAIL: the probe itself errored")
     bad = 0
+    broken = []
     for name, t in res["templates"].items():
+        struct = t["structure"]
+        # Invariants that must hold whatever the bytes are.
+        if struct["forbiddenParams"]:
+            broken.append(f"{name}: node-level parameter(s) {struct['forbiddenParams']}")
+        if any(n is None or n == 0 for n in struct["trialsPerNode"]):
+            broken.append(f"{name}: a phase node collects no trials ({struct['trialsPerNode']})")
+        if not t.get("publishedMatches"):
+            broken.append(f"{name}: publish != export")
+
         path = os.path.join(GOLDEN, name + ".html")
         if not os.path.exists(path):
             print(f"  ?? {name}: no baseline")
@@ -115,8 +159,13 @@ def cmd_check():
         if not same:
             bad += 1
         print(f"  {'OK  ' if same else 'DIFF'} {name:16s} "
-              f"{len(want)} -> {len(t['code'])} chars"
-              + ("" if t.get("publishedMatches") else "   !! publish != export"))
+              f"{len(want)} -> {len(t['code'])} chars   "
+              f"phases={struct['trialsPerNode']}")
+    if broken:
+        print()
+        for b in broken:
+            print("  !! " + b)
+        sys.exit(f"{len(broken)} structural problem(s)")
     sys.exit(f"{bad} template(s) differ from the baseline" if bad else None)
 
 
