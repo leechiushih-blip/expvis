@@ -199,9 +199,7 @@ var _i18n = {
   'comp.button.desc': {en:'Multi-Button · Click Response', zh:'多按钮 · 点击响应'},
   'comp.slider':      {en:'Slider', zh:'滑块'},
   'comp.slider.desc': {en:'Continuous Value · Range / Step', zh:'连续数值 · 范围 / 步长'},
-  'comp.click':       {en:'Click', zh:'点击'},
-  'comp.click.desc':  {en:'Click / Touch Anywhere', zh:'任意位置点击 / 触屏'},
-  'comp.textInput':   {en:'Text Input', zh:'文本输入'},
+  'comp.textInput':   {en:'Survey Text', zh:'问卷文本'},
   'comp.textInput.desc':{en:'Free Input · Placeholder', zh:'自由输入 · 占位提示'},
   'comp.loop':        {en:'Loop', zh:'循环'},
   'comp.loop.desc':   {en:'Repeat Trial N Times', zh:'重复当前试次 N 次'},
@@ -393,13 +391,73 @@ function _applyI18n() {
         if (!d) return '';
         var icon = d.icon || '';
         var name = _stripEmoji(d.name);
-        return icon ? icon + ' ' + name : name;
+        var size = d.w && d.h ? ' · ' + d.w + '×' + d.h : '';
+        return (icon ? icon + ' ' + name : name) + size;
       }
 
+      // ---- Device / stage size --------------------------------------------
+      // `editor.device` is the stage the experiment is designed for. The presets
+      // fill it in; the width/height fields can override either of them, which
+      // switches the label to Custom. One value drives everything: the generated
+      // experiment's stage, the sidebar live preview and the layout preview.
       var devicePresets = [
-        {name: 'Desktop', icon: '🖥️', w: 1280, h: 720},
-        {name: 'Mobile', icon: '📱', w: 390, h: 844},
+        {name: 'Desktop', icon: '💻', w: 1280, h: 720},
+        {name: 'Mobile', icon: '📱', w: 375, h: 667},
       ];
+      var DEVICE_MIN = 240;
+      var DEVICE_MAX = 4096;
+
+      function _devicePresetIndex(w, h) {
+        for (var i = 0; i < devicePresets.length; i++) {
+          if (devicePresets[i].w === w && devicePresets[i].h === h) return i;
+        }
+        return -1;
+      }
+
+      function _saveDevice() {
+        try {
+          localStorage.setItem(_vek('device'), JSON.stringify({w: editor.device.w, h: editor.device.h}));
+        } catch (e) {}
+      }
+
+      // Every entry point into the size goes through here, so the label, the
+      // dropdown, the number fields and both previews can never disagree.
+      function setDeviceSize(w, h) {
+        w = Math.round(Number(w));
+        h = Math.round(Number(h));
+        if (!isFinite(w) || !isFinite(h)) return;
+        w = Math.max(DEVICE_MIN, Math.min(DEVICE_MAX, w));
+        h = Math.max(DEVICE_MIN, Math.min(DEVICE_MAX, h));
+        var i = _devicePresetIndex(w, h);
+        editor.device = i >= 0
+          ? {name: devicePresets[i].name, icon: devicePresets[i].icon, w: w, h: h}
+          : {name: 'Custom', icon: '⚙️', w: w, h: h};
+        _saveDevice();
+        syncDeviceControls();
+        renderAll();
+      }
+
+      // Repaint the header controls from editor.device.
+      function syncDeviceControls() {
+        var d = editor.device || devicePresets[0];
+        var idx = _devicePresetIndex(d.w, d.h);
+        var sel = document.getElementById('device-select');
+        if (sel) {
+          var html = '';
+          devicePresets.forEach(function (p, i) {
+            html += '<option value="' + i + '"' + (idx === i ? ' selected' : '') + '>' +
+              p.icon + ' ' + p.name + ' · ' + p.w + '×' + p.h + '</option>';
+          });
+          html += '<option value="custom"' + (idx < 0 ? ' selected' : '') + '>⚙️ Custom · ' +
+            d.w + '×' + d.h + '</option>';
+          sel.innerHTML = html;
+        }
+        // Don't fight the user while they are typing in the fields.
+        var wi = document.getElementById('device-w');
+        var hi = document.getElementById('device-h');
+        if (wi && document.activeElement !== wi) wi.value = d.w;
+        if (hi && document.activeElement !== hi) hi.value = d.h;
+      }
 
       function addPhase(type) {
         var labels = {instructions: 'Instructions', trials: 'Trials', feedback: 'Feedback'};
@@ -456,7 +514,9 @@ function _applyI18n() {
         return null;
       }
 
-      function addComponent(tid, type, cat) {
+      // `opts.newStep` — set when the component is dropped on the "new step" zone
+      // rather than onto the trial's shared screen.
+      function addComponent(tid, type, cat, opts) {
         var t = findTrial(tid);
         if (!t) return;
         var defs = {
@@ -467,42 +527,151 @@ function _applyI18n() {
             color: '#333333',
             position: 'center',
             fontWeight: 'bold',
-            posX: 0,
-            posY: 0,
+            // `newStep` breaks the component out of the trial's shared screen:
+            // it becomes its own presentation step, shown for `step_duration`
+            // ms before the next step starts. Off by default, so a component
+            // dropped in the usual way still joins the same screen.
+            newStep: false,
+            step_duration: 500,
             映射按键: '',
           },
-          shape: {type: 'shape', shape: 'circle', size: 80, color: '#6366f1', position: 'center', posX: 0, posY: 0, 映射按键: ''},
-          image: {type: 'image', fileData: '', fileName: '', width: 200, posX: 0, posY: 0, 映射按键: ''},
-          audio: {type: 'audio', fileData: '', fileName: '', posX: 0, posY: 0},
-          video: {type: 'video', fileData: '', fileName: '', width: 320, posX: 0, posY: 0},
-          fixation: {type: 'fixation', duration: 500, durationMin: 0, durationMax: 0, posX: 0, posY: 0},
-          keyboard: {type: 'keyboard', keys: 'a,l', prompt: 'Press a key', timeout: 0, posX: 0, posY: 0},
-          button: {type: 'button', labels: 'Yes,No', color: '#6366f1', posX: 0, posY: 0},
-          slider: {type: 'slider', min: 0, max: 100, step: 1, labelMin: '', labelMax: '', showValue: true, posX: 0, posY: 0},
-          click: {type: 'click', posX: 0, posY: 0},
+          shape: {type: 'shape', shape: 'circle', size: 80, color: '#6366f1', position: 'center', newStep: false, step_duration: 500, 映射按键: ''},
+          // stimulus_width/height/maintain_aspect_ratio are the image plugins'
+          // own parameters; they apply when the trial runs on one of them (see
+          // the image-plugin rule in _compileExperiment) and as max-width in the
+          // HTML path otherwise.
+          image: {
+            type: 'image',
+            fileData: '',
+            fileName: '',
+            newStep: false,
+            step_duration: 500,
+            stimulus_width: 200,
+            stimulus_height: 0,
+            maintain_aspect_ratio: true,
+            render_on_canvas: true,
+            映射按键: '',
+          },
+          // Frame-by-frame animation (jsPsychAnimation). It OWNS the display —
+          // the plugin clears the display element each frame — so it carries no
+          // position and cannot share a trial with other components.
+          animation: {
+            type: 'animation',
+            frames: [],
+            frame_time: 250,
+            frame_isi: 0,
+            sequence_reps: 1,
+            choices: [],
+            prompt: '',
+            render_on_canvas: true,
+          },
+          audio: {type: 'audio', fileData: '', fileName: '', newStep: false, step_duration: 500},
+          video: {type: 'video', fileData: '', fileName: '', width: 320, newStep: false, step_duration: 500},
+          // Emitted as a jsPsychHtmlKeyboardResponse trial with choices NO_KEYS,
+          // so `trial_duration` is the parameter it actually sets. The jitter trio
+          // is an ExpVis extension that turns that value into a dynamic parameter
+          // (a function sampling from a list) — the same idiom the official
+          // rt-task demo uses for its fixation.
+          fixation: {
+            type: 'fixation',
+            trial_duration: 500,
+            durationMin: 0,
+            durationMax: 0,
+            durationStep: 250,
+          },
+          // Field names mirror jsPsychHtmlKeyboardResponse's parameters. `choices`
+          // is an array of key strings; an EMPTY array means "ALL_KEYS" (jsPsych's
+          // own sentinel for any key) — see keyboardChoices() below.
+          keyboard: {
+            type: 'keyboard',
+            choices: ['a', 'l'],
+            correctKey: '',
+            prompt: 'Press a key',
+            trial_duration: 0,
+            stimulus_duration: 0,
+            response_ends_trial: true,
+            wait_for_key_release: false,
+          },
+          // Field names mirror jsPsychHtmlButtonResponse's parameters exactly, so
+          // the inspector reads like the plugin's docs. `choices` is a real array
+          // (the inspector edits it as comma-separated text and converts back).
+          // 0 means "not set" for the numeric params — jsPsych's own default is null.
+          button: {
+            type: 'button',
+            choices: ['Yes', 'No'],
+            prompt: '',
+            button_layout: 'grid',
+            grid_rows: 1,
+            grid_columns: 0,
+            trial_duration: 0,
+            stimulus_duration: 0,
+            response_ends_trial: true,
+            enable_button_after: 0,
+          },
+          // Field names mirror jsPsychHtmlSliderResponse's parameters. `labels`
+          // is an array placed at equal spacing (0, or 2+ — one label would divide
+          // by zero in the plugin's layout maths). 0 means "not set" for numbers.
+          slider: {
+            type: 'slider',
+            min: 0,
+            max: 100,
+            step: 1,
+            slider_start: 50,
+            labels: [],
+            button_label: 'Continue',
+            slider_width: 0,
+            require_movement: false,
+            prompt: '',
+            trial_duration: 0,
+            stimulus_duration: 0,
+            response_ends_trial: true,
+          },
+          // Runs on jsPsychSurveyText. `prompt` is the question text and MUST be
+          // emitted as a string — the plugin renders <p>prompt</p> unconditionally,
+          // so an empty one would print the literal word "undefined".
+          // survey-text has no correctAnswer and no trial_duration: a free-text
+          // question has no right answer and cannot auto-advance.
           textInput: {
             type: 'textInput',
+            prompt: '',
             placeholder: 'Enter text',
-            correctAnswer: '',
-            validation: 'contains',
-            posX: 0,
-            posY: 0,
-            映射按键: '',
+            name: 'Q0',
+            required: false,
+            rows: 1,
+            columns: 40,
+            button_label: 'Continue',
+            autocomplete: false,
           },
-          loop: {type: 'loop', count: 10, posX: 0, posY: 0},
-          branch: {type: 'branch', condition: 'correct', matchValue: '', targetFail: '', operator: '>=', compareValue: '', posX: 0, posY: 0},
-          randomize: {type: 'randomize', mode: 'pick-one', posX: 0, posY: 0},
-          delay: {type: 'delay', duration: 1000, durationMin: 0, durationMax: 0, posX: 0, posY: 0},
-          variable: {type: 'variable', name: 'score', initial: 0, mode: 'correct', posX: 0, posY: 0},
+          loop: {type: 'loop', count: 10},
+          branch: {type: 'branch', condition: 'correct', matchValue: '', targetFail: '', operator: '>=', compareValue: ''},
+          randomize: {type: 'randomize', mode: 'pick-one'},
+          variable: {type: 'variable', name: 'score', initial: 0, mode: 'correct'},
         };
-        var c = JSON.parse(JSON.stringify(defs[type] || {type: type}));
+        if (!defs[type]) {
+          // A retired or unknown type: refuse rather than create an inert shell
+          // that renders as an empty node and generates nothing.
+          console.warn('[ExpVis] Unknown component type "' + type + '" — nothing was added.');
+          return;
+        }
+        var c = JSON.parse(JSON.stringify(defs[type]));
         c.id = 'c' + ++editor.cc;
         c.cat = cat;
-        var dev = editor.device || {w: 1280, h: 720};
-        c.posX = Math.round(dev.w / 2);
-        c.posY = Math.round(dev.h / 2);
+        if (opts && opts.newStep && 'newStep' in c) c.newStep = true;
         saveState();
-        t.components.push(c);
+        // A component that opens its own step belongs with the other presentation
+        // steps, i.e. before whatever collects the response — appending it to the
+        // very end would put the new screen *after* the response screen and flip
+        // the order. Plain components still go to the end.
+        if (opts && opts.newStep && 'newStep' in c) {
+          var _firstResp = -1;
+          for (var _i = 0; _i < t.components.length; _i++) {
+            if (t.components[_i].cat === 'r') { _firstResp = _i; break; }
+          }
+          if (_firstResp >= 0) t.components.splice(_firstResp, 0, c);
+          else t.components.push(c);
+        } else {
+          t.components.push(c);
+        }
         if (editor.selectedTrial) {
           var ft = findTrial(editor.selectedTrial);
           if (ft && ft.components.length > 0) editor.selComp = ft.components[0].id;
@@ -576,7 +745,7 @@ function _applyI18n() {
             'fontSize',
             'size',
             'duration',
-            'timeout',
+            'trial_duration',
             'maxSize',
             'count',
             'min',
@@ -584,6 +753,10 @@ function _applyI18n() {
             'step',
             'width',
             'initial',
+            'grid_rows',
+            'grid_columns',
+            'stimulus_duration',
+            'enable_button_after',
           ].includes(field)
         )
           value = parseFloat(value) || 0;
@@ -634,17 +807,16 @@ function _applyI18n() {
         text: '📝',
         shape: '⏺️',
         image: '🖼️',
+        animation: '🎞️',
         audio: '🎵',
         video: '🎬',
         fixation: '➕',
         keyboard: '⌨️',
         button: '🔘',
         slider: '🎚️',
-        click: '👆',
         textInput: '📝',
         loop: '🔄',
         branch: '🔀',
-        delay: '⏱️',
         randomize: '🎲',
         variable: '📊',
       };
@@ -652,17 +824,16 @@ function _applyI18n() {
         text: 'Text',
         shape: 'Shape',
         image: 'Image',
+        animation: 'Animation',
         audio: 'Audio',
         video: 'Video',
         fixation: 'Fixation',
         keyboard: 'Keyboard',
         button: 'Button',
         slider: 'Slider',
-        click: 'Click',
-        textInput: 'Text Input',
+        textInput: 'Survey Text',
         loop: 'Loop',
         branch: 'Branch',
-        delay: 'Delay',
         randomize: 'Randomize',
         variable: 'Variable',
       };
@@ -672,25 +843,54 @@ function _applyI18n() {
         color: 'Color',
         position: 'Position',
         fontWeight: 'Weight',
-        posX: 'X Offset',
-        posY: 'Y Offset',
         shape: 'Shape',
         size: 'Size',
         correctKeyHint: 'Key Hint',
         width: 'Width',
+        stimulus_width: 'Stimulus Width',
+        stimulus_height: 'Stimulus Height',
+        maintain_aspect_ratio: 'Maintain Aspect Ratio',
         height: 'Height',
         duration: 'Duration',
         behavior: 'Behavior',
         maxSize: 'Max Size',
-        keys: 'Keys',
         映射按键: '🎯 Key Mapping',
-        timeout: 'Timeout',
-        labels: 'Labels', color: 'Btn Color',
+        trial_duration: 'Trial Duration',
+        durationMin: 'Jitter Min',
+        durationMax: 'Jitter Max',
+        durationStep: 'Jitter Step',
+        newStep: 'Start A New Step',
+        step_duration: 'Step Duration',
+        // button — labels mirror jsPsychHtmlButtonResponse's parameter names
+        choices: 'Choices',
+        prompt: 'Prompt',
+        button_layout: 'Button Layout',
+        grid_rows: 'Grid Rows',
+        grid_columns: 'Grid Columns',
+        stimulus_duration: 'Stimulus Duration',
+        response_ends_trial: 'Response Ends Trial',
+        enable_button_after: 'Enable Button After',
+        wait_for_key_release: 'Wait For Key Release',
         min: 'Min',
         max: 'Max',
-        step: 'Step', labelMin: 'Left Label', labelMax: 'Right Label', showValue: 'Show Value',
+        step: 'Step',
+        frames: 'Frames',
+        frame_time: 'Frame Time',
+        frame_isi: 'Frame ISI',
+        sequence_reps: 'Sequence Reps',
+        render_on_canvas: 'Render On Canvas',
+        slider_start: 'Slider Start',
+        labels: 'Labels',
+        button_label: 'Button Label',
+        slider_width: 'Slider Width',
+        require_movement: 'Require Movement',
+        prompt: 'Prompt',
         placeholder: 'Placeholder',
-        validation: 'Validation',
+        required: 'Required',
+        rows: 'Rows',
+        columns: 'Columns',
+        button_label: 'Button Label',
+        autocomplete: 'Autocomplete',
         count: 'Count',
         mode: 'Mode',
         condition: 'Condition',
@@ -929,6 +1129,11 @@ function _applyI18n() {
                     labels[c.type] +
                     '</div><div class="flow-node-detail">' +
                     getDetail(c) +
+                    (c.cat === 's' && c.type !== 'fixation' && c.newStep
+                      ? (_untilResponse[c.id]
+                          ? ' · own screen · until response'
+                          : ' · own screen ' + (c.step_duration || 500) + 'ms')
+                      : '') +
                     '</div></div>';
                 }
                 node.setAttribute('draggable', 'true');
@@ -987,7 +1192,10 @@ function _applyI18n() {
                     dropOnNode(e, t.id);
                   }
                 };
-                // Individual component delete button - uses data attributes to avoid closure issues
+                // Individual component delete button. The ids live on the node
+                // event target's ancestor, so read them off `node` directly — a
+                // closest('.flow-node') lookup misses the compact `.flow-chip`
+                // nodes used inside a simultaneous group.
                 node.setAttribute('data-trial-id', t.id);
                 node.setAttribute('data-comp-id', c.id);
                 var compDel = document.createElement('button');
@@ -997,8 +1205,7 @@ function _applyI18n() {
                 compDel.title = 'Remove this component';
                 compDel.onclick = function (e) {
                   e.stopPropagation();
-                  var n = e.target.closest('.flow-node');
-                  removeComponent(n.getAttribute('data-trial-id'), n.getAttribute('data-comp-id'));
+                  removeComponent(node.getAttribute('data-trial-id'), node.getAttribute('data-comp-id'));
                 };
                 node.appendChild(compDel);
                 return node;
@@ -1011,18 +1218,44 @@ function _applyI18n() {
               // delay and responses are genuinely sequential.
               var steps = [];
               var curSimul = null;
+              // The last screen keeps its stimulus until the response, so that
+              // step's duration is never used — the node detail says so instead of
+              // showing a number that does nothing.
+              var _lastStimStep = -1;
               visualComps.forEach(function (c) {
-                var isSimul = c.cat === 's' && c.type !== 'fixation';
-                if (isSimul) {
-                  if (!curSimul) { curSimul = {simul: true, comps: []}; steps.push(curSimul); }
+                var isStim = c.cat === 's' && c.type !== 'fixation';
+                // A stimulus joins the SIMULTANEOUS screen already open — and only
+                // that kind. A fixation, a response or a logic component closes the
+                // group, because each of those is its own step in the trial.
+                if (isStim && !c.newStep && curSimul && curSimul.simul) {
                   curSimul.comps.push(c);
                 } else {
-                  curSimul = null;
-                  steps.push({simul: false, comps: [c]});
+                  curSimul = {simul: isStim, comps: [c]};
+                  if (isStim) _lastStimStep = steps.length;
+                  steps.push(curSimul);
                 }
               });
+              var _untilResponse = {};
+              if (_lastStimStep >= 0) {
+                steps[_lastStimStep].comps.forEach(function (c) { _untilResponse[c.id] = true; });
+              }
 
+              // One row per presentation step, numbered down a gutter, so the
+              // ORDER reads top-to-bottom. Components that share a step stay side
+              // by side inside it — stacking them vertically would read as
+              // "one after another", the opposite of what a group means.
               steps.forEach(function (step, si) {
+                var stepRow = document.createElement('div');
+                stepRow.className = 'flow-step';
+                var num = document.createElement('span');
+                num.className = 'flow-step-num';
+                num.textContent = si + 1;
+                num.title = 'Presentation step ' + (si + 1) +
+                  (step.simul && step.comps.length > 1
+                    ? ' — ' + step.comps.length + ' components shown together on one screen'
+                    : '');
+                stepRow.appendChild(num);
+
                 var box;
                 if (step.simul && step.comps.length > 1) {
                   box = document.createElement('div');
@@ -1037,14 +1270,49 @@ function _applyI18n() {
                 } else {
                   box = makeNode(step.comps[0]);
                 }
-                row.appendChild(box);
-                if (si < steps.length - 1) {
-                  var arrow = document.createElement('span');
-                  arrow.className = 'flow-arrow';
-                  arrow.textContent = '→';
-                  row.appendChild(arrow);
-                }
+                stepRow.appendChild(box);
+                row.appendChild(stepRow);
               });
+
+              // A blank strip under the steps. Dropping here does not join the
+              // screen above — it starts a NEW presentation step, which is how a
+              // trial shows one thing and then another.
+              var newStepZone = document.createElement('div');
+              newStepZone.className = 'flow-newstep';
+              newStepZone.innerHTML = '<span>+ 拖到此处新建一步 · 顺序呈现</span>';
+              newStepZone.title = 'Drop a component here to give it its own screen, ' +
+                'shown for its Step Duration before the next step starts';
+              newStepZone.ondragover = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                newStepZone.classList.add('drag-over');
+              };
+              newStepZone.ondragleave = function () {
+                newStepZone.classList.remove('drag-over');
+              };
+              newStepZone.ondrop = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                newStepZone.classList.remove('drag-over');
+                var mc = e.dataTransfer.getData('moveComp') || window._mc;
+                var mt = e.dataTransfer.getData('moveTrial') || window._mt;
+                var dt = window._dt;
+                var dc = window._dc;
+                window._mc = null;
+                window._mt = null;
+                window._dt = null;
+                window._dc = null;
+                if (mc && mt) {
+                  // An existing component dragged here: bring it over and give it
+                  // its own step.
+                  if (mt !== t.id) moveComponent(mt, mc, t.id);
+                  var moved = t.components.filter(function (c) { return c.id === mc; })[0];
+                  if (moved && 'newStep' in moved) { moved.newStep = true; saveState(); renderAll(); }
+                } else if (dt) {
+                  addComponent(t.id, dt, dc, {newStep: true});
+                }
+              };
+              row.appendChild(newStepZone);
             }
 
             // Branch annotation: visual hint when trial contains a branch component
@@ -1088,8 +1356,10 @@ function _applyI18n() {
 
             // Action buttons
             var del = document.createElement('button');
+            // The trial container is a column now, so pin this to the right edge
+            // instead of letting it stretch across the row.
             del.style.cssText =
-              'background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;margin-left:12px;z-index:2';
+              'background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;z-index:2;align-self:flex-end;padding:0 4px;margin-top:2px';
             del.textContent = '✕';
             del.onclick = function (e) {
               e.stopPropagation();
@@ -1167,15 +1437,23 @@ function _applyI18n() {
             (c.size || 80) +
             'px'
           );
-        if (c.type === 'fixation') return (c.duration || 500) + 'ms';
+        if (c.type === 'fixation') {
+          return (c.trial_duration || 500) + 'ms' +
+            (c.durationMax > c.durationMin && c.durationMax > 0 ? ' ~ ' + c.durationMax + 'ms' : '');
+        }
+        if (c.type === 'animation') {
+          var nfr = (c.frames || []).filter(function (f) { return f && f.fileData; }).length;
+          return nfr + ' frame' + (nfr === 1 ? '' : 's') + ' @ ' + (c.frame_time || 250) + 'ms';
+        }
         if (c.type === 'image') return c.fileName || 'Not uploaded';
         if (c.type === 'audio') return c.fileName || 'Not uploaded';
         if (c.type === 'video') return c.fileName || 'Not uploaded';
-        if (c.type === 'keyboard') return 'Keys: ' + c.keys.split(',').map(function(k) { var t = k.trim(); return t || 'space'; }).join(',');
-        if (c.type === 'button') return c.labels;
-        if (c.type === 'slider') return c.min + '-' + c.max;
-        if (c.type === 'click') return 'Click anywhere';
-        if (c.type === 'delay') return (c.duration || 1000) + 'ms';
+        if (c.type === 'keyboard') {
+          var kk = Array.isArray(c.choices) ? c.choices : [];
+          return kk.length ? 'Keys: ' + kk.join(',') : 'Keys: any key';
+        }
+        if (c.type === 'button') return (c.choices || []).join(', ');
+        if (c.type === 'slider') return c.min + '-' + c.max + (c.labels && c.labels.length ? ' · ' + c.labels.join('/') : '');
         if (c.type === 'loop') return '×' + c.count;
         if (c.type === 'branch') return 'if ' + c.condition;
         return '';
@@ -1191,7 +1469,6 @@ function _applyI18n() {
           if (c.type === 'loop') out.push('↻ ' + (c.count || 1) + '×');
           else if (c.type === 'randomize') out.push('🎲 ' + (c.mode === 'shuffle' ? 'shuffle' : 'pick-one'));
           else if (c.type === 'branch') out.push('🔀 ' + (c.condition || 'correct'));
-          else if (c.type === 'delay') out.push('⏱ ' + (c.duration || 0) + 'ms');
           else if (c.type === 'variable') out.push('📊 ' + (c.name || 'var'));
         });
         if (!out.length) return null;
@@ -1224,7 +1501,7 @@ function _applyI18n() {
           return "_setTrialLogic('" + t.id + "','" + type + "','" + field + "',this.value)";
         }
         var loop = get('loop'), rand = get('randomize'), br = get('branch'),
-            dly = get('delay'), v = get('variable');
+            v = get('variable');
 
         var h = '';
         h += '<div style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:14px">';
@@ -1252,9 +1529,12 @@ function _applyI18n() {
           '<option value="variable"' + (br && br.condition === 'variable' ? ' selected' : '') + '>on variable threshold</option>' +
           '</select>');
 
-        h += _settingRow('Delay', 'jsPsych trial_duration (ms)',
-          '<input type="number" min="0" style="' + _SET_INPUT_CSS + '" value="' + (dly ? dly.duration : '') +
-          '" placeholder="e.g. 200" onchange="' + setter('delay', 'duration') + '">');
+        // A real jsPsych parameter, not a stand-in for one. It applies to the
+        // node as a whole; a response component with its own trial_duration
+        // takes precedence (they are the same jsPsych parameter).
+        h += _settingRow('Trial Duration', 'jsPsych trial_duration (ms)',
+          '<input type="number" min="0" style="' + _SET_INPUT_CSS + '" value="' + (t.trial_duration || '') +
+          '" placeholder="e.g. 1200" onchange="_setTrialField(\'' + t.id + '\',\'trial_duration\',this.value)">');
 
         h += _settingRow('Counter', 'plain JS variable',
           '<input type="text" style="' + _SET_INPUT_CSS + '" value="' + (v ? (v.name || '') : '') +
@@ -1272,6 +1552,44 @@ function _applyI18n() {
       }
 
       // Create / update / remove the logic component backing a trial setting.
+      // `choices` is a real array in the data model (that is what jsPsych's
+      // html-button-response takes); the inspector edits it as comma-separated
+      // text, so convert on the way in.
+      function _setChoices(trialId, compId, value) {
+        var t = findTrial(trialId);
+        if (!t) return;
+        var c = t.components.find(function (x) { return x.id === compId; });
+        if (!c) return;
+        var raw = String(value);
+        if (c.type === 'keyboard') {
+          // For a keyboard trial an EMPTY list is jsPsych's ALL_KEYS ("any key"),
+          // and a blank entry inside a list is the spacebar.
+          c.choices = raw === '' ? []
+            : raw.split(',').map(function (s) { return s.trim() || ' '; });
+        } else {
+          c.choices = raw.split(',').map(function (s) { return s.trim(); })
+            .filter(function (s) { return s; });
+        }
+        saveState();
+        renderAll();
+      }
+
+      // Trial-level parameters (as opposed to component-level ones). These live
+      // on the trial object itself — they are node parameters in jsPsych, and
+      // faking them with a hidden component is what the old `delay` did.
+      function _setTrialField(trialId, field, value) {
+        var t = findTrial(trialId);
+        if (!t) return;
+        if (value === '' || value == null) {
+          delete t[field];
+        } else {
+          t[field] = Number(value);
+        }
+        editor.selComp = null; // stay in trial-settings mode
+        saveState();
+        renderAll();
+      }
+
       function _setTrialLogic(trialId, type, field, value) {
         var t = findTrial(trialId);
         if (!t) return;
@@ -1313,18 +1631,21 @@ function _applyI18n() {
           var compDesc = {
             text: 'Click a text node in the flow, then edit content, font size, color, weight, and position in this panel. Multi-line text supported — line breaks become &lt;br&gt;.',
             shape: 'Select shape type (circle/square/triangle/diamond/star), size, and color. Use with 🎲 randomize pick-one mode to show one random shape per trial.',
-            image: 'Click upload to select a local image (≤4MB), stored as base64. Displayed directly in fullscreen preview.',
+            image: 'Upload a local image (≤4MB), stored as base64. When this is the only thing on screen the trial runs on the official jsPsych image plugin for its response type (as the jsPsych RT-task demo does); mixed with other components it is inlined as <img> instead.',
+            stimulus_width: 'Image width in px. When the trial shows this image alone it becomes the image plugin\'s stimulus_width.',
+            stimulus_height: 'Image height in px. 0 = work it out from the width.',
+            maintain_aspect_ratio: 'true = scale by width without distorting. Only used by the image plugins.',
+            render_on_canvas: 'true = draw the image to a canvas. Only used by the image plugins.',
+            animation: 'Runs on the jsPsych animation plugin — a flipbook of frames played at a fixed rate. The trial ends on its own after sequence_reps, and every key pressed during playback is recorded. It takes over the whole screen, so it cannot share a trial with other components.',
             audio: 'Upload MP3/WAV audio (≤16MB). Playable in fullscreen preview. Ideal for auditory stimulus experiments.',
             video: 'Upload MP4/WebM video (≤64MB). Playable in fullscreen preview.',
             fixation: 'Cross fixation point. duration(ms) controls display time. In fullscreen preview, the fixation appears first then auto-disappears after duration.',
-            keyboard: 'Set allowed keys (comma-separated) and prompt text. In fullscreen preview, pressing any allowed key advances to the next stage. Set timeout>0 for auto-advance.',
-            button: 'Set button labels (comma-separated). Clicking a button in fullscreen preview auto-advances. Ideal for "Start Experiment" buttons in instructions.',
-            slider: 'Set min, max, and step values. In fullscreen preview, drag the slider then click confirm to submit. Suitable for continuous-value experiments like trust games.',
-            click: 'Defines a clickable area on the canvas. Clicking/tapping within this area in fullscreen preview auto-advances.',
-            textInput: 'Set placeholder text. Optional: correctAnswer (comma-separated acceptable answers) and validation rule (contains/exact/none). Free text input with confirm button.',
+            keyboard: 'Runs on the jsPsych html-keyboard-response plugin. choices is the list of allowed keys — leave it empty for any key. correctKey scores the trial. Data records response as the key character, plus rt.',
+            button: 'Runs on the jsPsych html-button-response plugin — every field here maps to a parameter of the same name in the official docs. choices is the list of button labels. Data records response as the button\'s 0-based INDEX (0 = first choice), not its label.',
+            slider: 'Runs on the jsPsych html-slider-response plugin — every field here maps to a parameter of the same name in the official docs. Data records response as a number, plus rt and slider_start.',
+            textInput: 'Runs on the jsPsych survey-text plugin — a free-text question with its own submit button. There is no right answer and no trial_duration; the trial ends when the participant submits. Data records response as an object keyed by Data Name, e.g. {Q0: "..."}, plus rt.',
             loop: 'Set count (repetitions). Place as the last component in a trial. In fullscreen preview, remaining count is shown in the navigation bar.',
             branch: 'Select condition type. targetFail = target trial ID on error (dropdown lists same-phase trials). Leave empty = retry current trial without consuming loop count.',
-            delay: 'Set duration(ms). Splits trial rendering: components before delay appear first, then after delay the rest appear. Multiple delays can create multi-stage trials.',
             randomize: 'Select mode. pick-one = randomly selects 1 variant per loop (for Simon/Stroop). shuffle = shows all variants in random order (for memory tests).',
             variable: '📊 Score counter. Place at trial start (init) and/or end (update). correct mode: +1 on correct answer. always mode: +1 on any response. manual mode: manual control. Current value shown in navigation bar.',
           };
@@ -1341,16 +1662,40 @@ function _applyI18n() {
               : '') +
             '</div>';
           var hints = {
-            keys: 'Comma-separated keys, e.g. a,l',
+            choices: 'Comma-separated keys, e.g. a,l. Leave EMPTY for any key (jsPsych ALL_KEYS).',
+            wait_for_key_release: 'Measure rt to the key RELEASE instead of the press (also records rt_key_duration).',
             correctKey: 'Participant must press this key for a correct response. Supports comma-separated values (e.g. a,l). Leave empty if using 🎲 randomize pick-one.',
-            timeout: 'Timeout (ms). 0=no limit. If >0, auto-judges as timeout and records RT when exceeded.',
-            labels: 'Comma-separated button labels, e.g. Yes,No',
+            trial_duration: 'Trial Duration (ms). 0=no limit. If >0, auto-judges as timeout and records RT when exceeded.',
+            choices: 'Comma-separated button labels, e.g. Yes,No. Exported as the jsPsych `choices` array.',
+            frames: 'Upload the frames in playback order. They are played as a flipbook, one image at a time.',
+            frame_time: 'How long each frame is shown, in ms. jsPsych default is 250.',
+            frame_isi: 'Blank gap between frames, in ms. 0 = frames run back to back.',
+            sequence_reps: 'How many times the whole sequence plays. The trial ends by itself after the last rep.',
+            render_on_canvas: 'true = draw to a canvas (avoids a white flash between frames in some browsers). false = swap <img> elements.',
+            prompt: 'HTML shown below the buttons — a reminder of the required action.',
+            button_layout: 'grid=display:grid (wraps, honours rows/columns) | flex=display:flex (single row)',
+            grid_rows: 'Rows in the button grid. jsPsych default is 1.',
+            grid_columns: 'Columns in the button grid. 0 = let jsPsych work it out from the row count.',
+            stimulus_duration: 'Hide the stimulus after this many ms; the buttons stay and the trial continues. 0 = keep it visible.',
+            response_ends_trial: 'false = the trial runs for the full trial_duration even if the participant responds early (fixed viewing time).',
+            enable_button_after: 'Delay before the buttons become clickable (ms). Guards against accidental early clicks.',
             targetFail: '',
-            correctAnswer: 'Comma-separated acceptable answers (e.g. apple,banana)',
-            validation: 'contains=substring match | exact=full match | none=no validation',
-            labelMin: 'Left slider label (e.g. Strongly Disagree)',
-            labelMax: 'Right slider label (e.g. Strongly Agree)',
-            showValue: 'Show current value above the slider',
+            name: 'Key this answer is stored under in the data, e.g. Q0. Defaults to Q0.',
+            durationMin: 'Set this and Jitter Max (Max > Min) to randomise the duration trial by trial. 0 = no jitter.',
+            durationMax: 'Upper end of the jitter range. Must be greater than Jitter Min for the jitter to apply.',
+            durationStep: 'Spacing of the values between Min and Max, e.g. 250 gives 500/750/1000. Only used when jitter is on.',
+            newStep: 'true = this component gets its own screen, shown for Step Duration before the next step begins. false = it shares the screen with the components around it.',
+            step_duration: 'How long this step stays on screen before the next one starts, in ms. Only used when Start A New Step is on. The last step waits for the response instead.',
+            required: 'true = the browser refuses to submit an empty box.',
+            rows: '1 = a single-line box. 2 or more = a multi-line textarea.',
+            columns: 'Width of the box in characters. jsPsych default is 40.',
+            button_label: 'Text on the button that submits the answer.',
+            autocomplete: 'true = let the browser offer autofill for these boxes.',
+            labels: 'Comma-separated labels placed at equal spacing, e.g. Strongly Disagree, Strongly Agree. Use 0 or 2+ — a single label breaks the plugin\'s layout maths.',
+            slider_start: 'Value the slider starts at. jsPsych default is 50.',
+            button_label: 'Text on the button that submits the response.',
+            slider_width: 'Slider width in px. 0 = match the widest element on screen.',
+            require_movement: 'true = the slider must be moved before the button can be clicked.',
             mode: 'pick-one=randomly select 1 variant per loop | shuffle=show all in random order',
             映射按键: '🎲 When randomize pick-one selects this element, its key mapping becomes the correct keyboard key. Just type the letter (e.g. a/l/k).',
           };
@@ -1361,9 +1706,9 @@ function _applyI18n() {
             });
           });
           Object.keys(c).forEach(function (k) {
-            if (k === 'id' || k === 'cat' || k === 'type' || k === 'fileData' || k === 'fileName') return;
+            if (k === 'id' || k === 'cat' || k === 'type' || k === 'fileData' ||
+                k === 'fileName' || k === 'frames') return; // frames have their own uploader below
             if (k === 'correctKey' || k === '颜色按键映射' || k === '按键映射' || k === 'correctKeyHint') return;
-            if (c.cat === 'l' && (k === 'posX' || k === 'posY')) return;
             if (c.type === 'variable' && k === 'mode') return;
             // Ensure variable always shows mode (even if property missing in older data)
             if (c.type === 'variable' && k === 'initial') {
@@ -1378,6 +1723,10 @@ function _applyI18n() {
             if (k === 'targetFail' && c.condition === 'variable') displayLabel = '🎯 Jump Target';
             if (k === 'matchValue' && c.condition === 'variable') displayLabel = '📊 Variable Name';
             if (k === 'matchValue' && c.condition === 'response') displayLabel = '🎯 Match Value';
+            // textInput reuses `name` (variable name) and `prompt` (key prompt) for
+            // different things, so its labels are resolved here instead.
+            if (k === 'name' && c.type === 'textInput') displayLabel = '📝 Data Name';
+            if (k === 'prompt' && c.type === 'textInput') displayLabel = '📝 Question';
             if (k === 'matchValue' && c.condition === 'correct') return;
             if (k === 'operator' && c.condition !== 'variable') return;
             if (k === 'compareValue' && c.condition !== 'variable') return;
@@ -1410,8 +1759,30 @@ function _applyI18n() {
                 '>pick-one — 1 random variant</option><option value="shuffle"' +
                 (v === 'shuffle' ? ' selected' : '') +
                 '>shuffle — all, random order</option></select>';
-            else if (k === 'showValue') h += '<select onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'showValue\',this.value)"><option value="true"' + (v !== false && v !== 'false' ? ' selected' : '') + '>Show</option><option value="false"' + (v === false || v === 'false' ? ' selected' : '') + '>Hide</option></select>';
-            else if (k === 'validation') h += sel(k, ['contains', 'exact', 'none'], v || 'contains', t.id, c.id);
+            else if (k === 'response_ends_trial' || k === 'require_movement' ||
+                     k === 'wait_for_key_release' || k === 'maintain_aspect_ratio' ||
+                     k === 'render_on_canvas' || k === 'newStep') {
+              // Every boolean plugin parameter gets the same true/false control;
+              // only the wording of the options differs.
+              var _boolLabels = {
+                response_ends_trial: ['true — response ends the trial', 'false — hold for trial_duration'],
+                require_movement: ['true — must move the slider first', 'false — may submit as-is'],
+                wait_for_key_release: ['true — time to the key release', 'false — time to the key press'],
+                maintain_aspect_ratio: ['true — keep the aspect ratio', 'false — stretch to fit'],
+                newStep: ['true — own screen, for Step Duration', 'false — shared screen with its neighbours'],
+                render_on_canvas: ['true — draw to a canvas', 'false — use an <img> element'],
+              }[k];
+              var _isOn = !(v === false || v === 'false');
+              h += '<select onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'' + k + '\',this.value)">' +
+                '<option value="true"' + (_isOn ? ' selected' : '') + '>' + _boolLabels[0] + '</option>' +
+                '<option value="false"' + (_isOn ? '' : ' selected') + '>' + _boolLabels[1] + '</option></select>';
+            }
+            else if (k === 'choices')
+              h += '<input value="' + (Array.isArray(v) ? v.join(', ') : (v || '')).replace(/"/g, '&quot;') +
+                '" onchange="_setChoices(\'' + t.id + '\',\'' + c.id + '\',this.value)"' +
+                ' placeholder="' + (c.type === 'keyboard' ? 'a, l — leave empty for any key' : 'Yes, No') + '">';
+            else if (k === 'button_layout')
+              h += sel(k, ['grid', 'flex'], v || 'grid', t.id, c.id);
             else if (k === 'matchValue') {
               if (c.condition === 'variable') { h += '<input value="' + (v || '') + '" onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'matchValue\',this.value)" placeholder="Variable name (e.g. score)">'; }
               else { h += '<input value="' + (v || '') + '" onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'matchValue\',this.value)" placeholder="Match value, comma-separated">'; }
@@ -1480,10 +1851,20 @@ function _applyI18n() {
                 "','" +
                 k +
                 '\',this.value)">';
-            if (hints[k])
+            var hintText = hints[k];
+            if (k === 'prompt' && c.type === 'textInput') {
+              hintText = 'The question text. It is always rendered, so leaving it empty shows a blank line.';
+            }
+            if (k === 'name' && c.type === 'textInput') {
+              hintText = 'Key this answer is stored under in the data, e.g. Q0.';
+            }
+            if (k === 'trial_duration' && c.type === 'fixation') {
+              hintText = 'How long the cross stays on screen, in ms. Becomes a jsPsych dynamic parameter when jitter is on.';
+            }
+            if (hintText)
               h +=
                 '<div style="font-size:0.6rem;color:var(--text2);flex-basis:100%;margin-top:-2px">' +
-                hints[k] +
+                hintText +
                 '</div>';
             h += '</div>';
           });
@@ -1494,14 +1875,6 @@ function _applyI18n() {
           if (c.type === 'variable') {
             h +=
               '<p style="font-size:0.7rem;color:var(--text2);line-height:1.5;margin:4px 0">Defines a variable readable by branch conditions or modifiable by other components.</p>';
-          }
-          if (c.type === 'click') {
-            h +=
-              '<p style="font-size:0.7rem;color:var(--text2);line-height:1.5;margin:4px 0">Records mouse click or touch input. No additional configuration needed.</p>';
-          }
-          if (c.type === 'delay') {
-            h +=
-              '<p style="font-size:0.7rem;color:var(--text2);line-height:1.5;margin:4px 0">Inserts a wait period. Participant sees a blank screen for the specified duration.</p>';
           }
           if (c.type === 'randomize') {
             h +=
@@ -1547,6 +1920,29 @@ function _applyI18n() {
               '" style="display:none"><span id="vid-file-name" style="font-size:0.7rem;color:var(--text2);margin-left:8px">' +
               (c.fileName || 'No file selected') +
               '</span></div><p style="font-size:0.6rem;color:var(--text2);margin:0 0 4px">MP4/WebM/OGG/MOV, max 64MB</p>';
+          }
+          if (c.type === 'animation') {
+            var frList = (Array.isArray(c.frames) ? c.frames : []).filter(function (f) { return f && f.fileData; });
+            h +=
+              '<div class="prop-row"><label>Frames</label><label id="anim-upload-label" style="padding:6px 12px;background:#f97316;color:#ffffff;border-radius:6px;cursor:pointer;font-size:0.75rem;display:inline-block">🎞️ Add frames</label><input type="file" id="anim-file-input" accept="image/*" multiple data-tid="' +
+              t.id + '" data-cid="' + c.id +
+              '" style="display:none"><span id="anim-file-name" style="font-size:0.7rem;color:var(--text2);margin-left:8px">' +
+              frList.length + ' frame' + (frList.length === 1 ? '' : 's') +
+              '</span></div><p style="font-size:0.6rem;color:var(--text2);margin:0 0 6px">Played in order, one image at a time. JPG/PNG/WebP, max 4MB each. Select several at once to append.</p>';
+            if (frList.length) {
+              h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">';
+              frList.forEach(function (f, fi) {
+                h += '<div style="position:relative;width:48px;height:48px">' +
+                  '<img src="' + f.fileData + '" title="' + (f.fileName || '') +
+                  '" style="width:48px;height:48px;object-fit:cover;border-radius:5px;border:1px solid var(--border)">' +
+                  '<span style="position:absolute;left:2px;top:1px;font-size:0.55rem;background:rgba(0,0,0,0.6);color:#fff;border-radius:3px;padding:0 3px">' +
+                  (fi + 1) + '</span>' +
+                  '<span onclick="_removeFrame(\'' + t.id + '\',\'' + c.id + '\',' + fi +
+                  ')" title="Remove frame" style="position:absolute;right:-5px;top:-5px;width:15px;height:15px;line-height:14px;text-align:center;border-radius:50%;background:var(--red);color:#fff;font-size:0.62rem;cursor:pointer">×</span>' +
+                  '</div>';
+              });
+              h += '</div>';
+            }
           }
           h +=
             '<button onclick="removeComponent(\'' +
@@ -1635,8 +2031,67 @@ function _applyI18n() {
             ['video/mp4', 'video/webm', 'video/ogg', '.mp4', '.webm', '.ogg', '.mov'],
             64,
           );
+          // Animation frames are uploaded many at a time and are appended, so
+          // they get their own handler rather than the single-file bindUpload.
+          var afi = document.getElementById('anim-file-input');
+          if (afi) {
+            afi.onchange = function () {
+              var files = Array.prototype.slice.call(afi.files || []);
+              if (!files.length) return;
+              var t1 = findTrial(afi.getAttribute('data-tid'));
+              if (!t1) return;
+              var c1 = t1.components.find(function (x) { return x.id === afi.getAttribute('data-cid'); });
+              if (!c1) return;
+              var imgOk = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+                '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+              var pending = files.length, accepted = [];
+              files.forEach(function (file) {
+                var ext = '.' + file.name.split('.').pop().toLowerCase();
+                if (imgOk.indexOf(file.type) === -1 && imgOk.indexOf(ext) === -1) {
+                  alert('Unsupported file format: ' + file.name);
+                  if (--pending === 0) finishFrames();
+                  return;
+                }
+                if (file.size > 4 * 1024 * 1024) {
+                  alert('File size cannot exceed 4MB: ' + file.name);
+                  if (--pending === 0) finishFrames();
+                  return;
+                }
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                  accepted.push({fileData: e.target.result, fileName: file.name});
+                  if (--pending === 0) finishFrames();
+                };
+                reader.readAsDataURL(file);
+              });
+              function finishFrames() {
+                if (!accepted.length) return;
+                saveState();
+                if (!Array.isArray(c1.frames)) c1.frames = [];
+                // Reading is async, so restore the order the user picked.
+                accepted.sort(function (a, b) {
+                  return files.map(function (f) { return f.name; }).indexOf(a.fileName) -
+                         files.map(function (f) { return f.name; }).indexOf(b.fileName);
+                });
+                c1.frames = c1.frames.concat(accepted);
+                renderAll();
+              }
+            };
+            var alf = document.getElementById('anim-upload-label');
+            if (alf) alf.onclick = function () { afi.click(); };
+          }
         }, 0);
       }
+      function _removeFrame(trialId, compId, idx) {
+        var t = findTrial(trialId);
+        if (!t) return;
+        var c = t.components.find(function (x) { return x.id === compId; });
+        if (!c || !Array.isArray(c.frames)) return;
+        saveState();
+        c.frames.splice(idx, 1);
+        renderAll();
+      }
+
       function sel(field, opts, v, tid, cid) {
         var s = '<select onchange="updateComponent(\'' + tid + "','" + cid + "','" + field + '\',this.value)">';
         opts.forEach(function (o) {
@@ -1646,12 +2101,125 @@ function _applyI18n() {
         return s;
       }
 
+      // The button group exactly as jsPsychHtmlButtonResponse builds it, so the
+      // preview and the exported experiment agree by construction. The grid
+      // maths is copied from the plugin's own source:
+      //   n_cols = grid_columns === null ? ceil(n / grid_rows) : grid_columns
+      //   n_rows = grid_rows    === null ? ceil(n / grid_columns) : grid_rows
+      // `.jspsych-btn-group-grid` (jspsych.css) uses max-content columns, which
+      // is also what stops many buttons from overflowing the way a plain flex
+      // row did.
+      function _previewButtonGroup(c) {
+        var choices = Array.isArray(c.choices) ? c.choices : [];
+        var n = choices.length || 1;
+        var isFlex = (c.button_layout || 'grid') === 'flex';
+        var cls = isFlex ? 'jspsych-btn-group-flex' : 'jspsych-btn-group-grid';
+        var groupStyle = '';
+        if (!isFlex) {
+          var rows = Number(c.grid_rows) || 1;        // jsPsych default: 1
+          var cols = Number(c.grid_columns) || null;  // jsPsych default: null
+          var nCols = cols === null ? Math.ceil(n / rows) : cols;
+          var nRows = cols === null ? rows : Math.ceil(n / cols);
+          groupStyle = 'grid-template-columns:repeat(' + nCols + ',1fr);' +
+                       'grid-template-rows:repeat(' + nRows + ',1fr);';
+        }
+        // The default button_html inserts the choice as markup, unescaped — match it.
+        var html = '<div data-cid="' + c.id + '" class="' + cls + '" style="' + groupStyle + '">' +
+          choices.map(function (label, i) {
+            return '<button type="button" class="jspsych-btn" data-choice="' + i + '">' +
+              label + '</button>';
+          }).join('') + '</div>';
+        if (c.prompt) html += '<div style="text-align:center">' + c.prompt + '</div>';
+        return html;
+      }
+
+      // The slider widget exactly as jsPsychHtmlSliderResponse builds it. The
+      // label positioning maths (including the half-thumb-width correction) is
+      // copied from the plugin's dist/index.js so the preview matches the output.
+      function _previewSlider(c) {
+        var min = c.min == null ? 0 : c.min;
+        var max = c.max == null ? 100 : c.max;
+        var step = c.step || 1;
+        var start = c.slider_start == null ? 50 : c.slider_start;
+        var labels = (Array.isArray(c.labels) ? c.labels : [])
+          .filter(function (x) { return x !== ''; });
+        var width = Number(c.slider_width) || 0;
+        var html = '<div data-cid="' + c.id + '" class="jspsych-html-slider-response-container" ' +
+          'style="position:relative;margin:0 auto 3em auto;' +
+          (width ? 'width:' + width + 'px;' : 'width:auto;') + '">' +
+          '<input type="range" class="jspsych-slider" id="jspsych-html-slider-response-response" ' +
+          'value="' + start + '" min="' + min + '" max="' + max + '" step="' + step + '">' +
+          '<div>';
+        for (var j = 0; j < labels.length; j++) {
+          var per = 100 / (labels.length - 1);
+          var at = j * per;
+          var off = ((at - 50) / 50) * 100 * 7.5 / 100;
+          html += '<div style="border:1px solid transparent;display:inline-block;position:absolute;' +
+            'left:calc(' + at + '% - (' + per + '% / 2) - ' + off + 'px);' +
+            'text-align:center;width:' + per + '%;">' +
+            '<span style="text-align:center;font-size:80%;">' + labels[j] + '</span></div>';
+        }
+        html += '</div></div>';
+        if (c.prompt) html += '<div style="text-align:center">' + c.prompt + '</div>';
+        var reqMove = (c.require_movement === true || c.require_movement === 'true');
+        html += '<button type="button" id="jspsych-html-slider-response-next" class="jspsych-btn"' +
+          (reqMove ? ' disabled' : '') + '>' + (c.button_label || 'Continue') + '</button>';
+        return html;
+      }
+
+      // The animation preview shows the first frame plus what the sequence will
+      // do — the plugin plays one frame at a time over the whole display, so
+      // there is no static "rendered" state to show.
+      function _previewAnimation(c) {
+        var frames = (Array.isArray(c.frames) ? c.frames : [])
+          .filter(function (f) { return f && f.fileData; });
+        var ft = Number(c.frame_time) || 250;
+        var reps = Number(c.sequence_reps) || 1;
+        var isi = Number(c.frame_isi) || 0;
+        var html = '<div data-cid="' + c.id + '" style="display:flex;flex-direction:column;' +
+          'align-items:center;gap:6px">';
+        html += frames.length
+          ? '<img src="' + frames[0].fileData + '" style="max-width:240px;max-height:180px;border-radius:8px">'
+          : '<div style="width:200px;height:140px;border:2px dashed var(--border);border-radius:8px;' +
+            'display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.75rem">' +
+            'No frames uploaded</div>';
+        html += '<span style="font-size:0.68rem;color:#f97316;font-weight:700">🎞 ' +
+          frames.length + ' frame' + (frames.length === 1 ? '' : 's') + ' · ' + ft + 'ms' +
+          (isi ? ' + ' + isi + 'ms ISI' : '') + ' × ' + reps + '</span>';
+        if (c.prompt) html += '<span style="font-size:0.72rem;color:#888">' + c.prompt + '</span>';
+        html += '</div>';
+        return html;
+      }
+
+      // Mirrors the DOM jsPsychSurveyText builds for a single question: a <p> with
+      // the question text, the input box, and the plugin's own submit button.
+      function _previewSurveyText(c) {
+        var rows = Number(c.rows) || 1;
+        var cols = Number(c.columns) || 40;
+        var req = (c.required === true || c.required === 'true');
+        var field = rows > 1
+          ? '<textarea class="jspsych-survey-text" cols="' + cols + '" rows="' + rows + '"' +
+            (req ? ' required' : '') + ' placeholder="' + _escAttr(c.placeholder) + '"></textarea>'
+          : '<input type="text" class="jspsych-survey-text" size="' + cols + '"' +
+            (req ? ' required' : '') + ' placeholder="' + _escAttr(c.placeholder) + '">';
+        return '<div data-cid="' + c.id + '" class="jspsych-survey-text-question" style="margin:2em 0">' +
+          '<p class="jspsych-survey-text">' + (c.prompt || '') + '</p>' + field + '</div>' +
+          '<input type="submit" class="jspsych-btn jspsych-survey-text" value="' +
+          _escAttr(c.button_label || 'Continue') + '">';
+      }
+
+      // Attribute-safe escaping for values that go inside a quoted HTML attribute.
+      function _escAttr(v) {
+        return String(v == null ? '' : v)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
       // Unified trial content renderer — used by all previews
       function renderTrialHTML(t, opts) {
         opts = opts || {};
         var s = opts.scale || 1;
         var h = '';
-        var usePixel = opts.usePixel || false;
         // With randomize(pick-one) only ONE variant is shown per trial, so the
         // preview must render a single variant too — otherwise every variant stacks
         // up in the flow layout and the preview misrepresents the experiment.
@@ -1670,22 +2238,21 @@ function _applyI18n() {
           }
         }
         var _compIdx = -1;
+        // jsPsychAnimation clears the display element on every frame, so when a
+        // trial contains one, the animation is all the participant will see.
+        var _animTrial = t.components.some(function (c) { return c.type === 'animation'; });
         t.components.forEach(function (c) {
           _compIdx++;
+          if (_animTrial && c.type !== 'animation') return;
           // in pick-one, skip every variant but the first
           if (_variantStart >= 0 && _compIdx > _variantStart &&
               c.cat === 's' && ['text','shape','image','audio','video','fixation'].indexOf(c.type) >= 0) {
             return;
           }
-          var hasPixel = usePixel && typeof c.posX === 'number' && typeof c.posY === 'number';
           var al = c.position === 'left' ? 'flex-start' : c.position === 'right' ? 'flex-end' : 'center';
           var ta = c.position === 'left' ? 'left' : c.position === 'right' ? 'right' : 'center';
-          // posX semantics: 'center'→visual center, 'left'→left edge, 'right'→right edge
-          var tx = '';
-          if (hasPixel && (!c.position || c.position === 'center')) tx = 'transform:translateX(-50%);';
-          else if (hasPixel && c.position === 'right') tx = 'transform:translateX(-100%);';
-          var px = hasPixel ? 'position:absolute;left:' + (c.posX || 0) + 'px;top:' + (c.posY || 0) + 'px;' + tx : '';
-          var wrapperW = usePixel || hasPixel ? '' : 'width:100%;';
+          var px = '';
+          var wrapperW = 'width:100%;';
           if (c.type === 'text') {
             var fs = Math.round(c.fontSize * s);
             h +=
@@ -1753,8 +2320,9 @@ function _applyI18n() {
                 wrapperW +
                 '"><img src="' +
                 c.fileData +
+                // show it at the width the trial will actually use
                 '" style="max-width:' +
-                Math.round(260 * s) +
+                Math.round((c.stimulus_width || 200) * s) +
                 'px;max-height:' +
                 Math.round(300 * s) +
                 'px;border-radius:8px;object-fit:contain"></div>';
@@ -1790,84 +2358,25 @@ function _applyI18n() {
             h += '<div data-cid="' + c.id + '" style="' + px + 'display:flex;flex-direction:column;align-items:center;gap:' + Math.round(6 * s) + 'px">';
             if (c.prompt) h += '<span style="font-size:' + Math.round(13 * s) + 'px;color:#888">' + c.prompt + '</span>';
             h += '<div style="display:flex;gap:' + Math.round(8 * s) + 'px;justify-content:center">';
-            c.keys.split(',').forEach(function (k) {
-              var displayKey = k.trim() || 'space';
+            var keyList = Array.isArray(c.choices) ? c.choices : [];
+            // An empty list is ALL_KEYS, so say so rather than drawing nothing.
+            if (!keyList.length) keyList = ['any key'];
+            keyList.forEach(function (k) {
+              var displayKey = String(k).trim() || 'space';
               h += '<span style="padding:' + Math.round(10 * s) + 'px ' + Math.round(22 * s) + 'px;border-radius:' + Math.round(10 * s) + 'px;background:#fff7ed;border:2px solid rgba(245,158,11,0.15);color:#f97316;font-weight:700;font-size:' + Math.round(15 * s) + 'px;box-shadow:0 2px 6px rgba(0,0,0,0.05)">' + displayKey + '</span>';
             });
             h += '</div></div>';
           } else if (c.type === 'button')
-            h +=
-              '<div data-cid="' +
-              c.id +
-              '" style="' +
-              px +
-              'display:inline-flex;gap:' +
-              Math.round(10 * s) +
-              'px;flex-wrap:wrap;justify-content:center;width:auto">' +
-              c.labels
-                .split(',')
-                .map(function (l) {
-                  return (
-                    '<span style="padding:' +
-                    Math.round(10 * s) +
-                    'px ' +
-                    Math.round(24 * s) +
-                    'px;border-radius:' +
-                    Math.round(10 * s) +
-                    'px;background:' + (c.color || '#6366f1') + ';color:#ffffff;font-weight:600;font-size:' +
-                    Math.round(14 * s) +
-                    'px;box-shadow:0 2px 8px rgba(99,102,241,0.25);white-space:nowrap" data-btn="">' +
-                    l.trim() +
-                    '</span>'
-                  );
-                })
-                .join('') +
-              '</div>';
-          else if (c.type === 'slider') {
-      var sv = Math.round((c.min + c.max) / 2);
-      h += '<div data-cid="' + c.id + '" style="' + px + 'display:flex;flex-direction:column;align-items:center;gap:' + Math.round(4 * s) + 'px">';
-      if (c.showValue !== false && c.showValue !== 'false') h += '<span id="sv-' + c.id + '" style="font-size:' + Math.round(14 * s) + 'px;font-weight:700;color:var(--accent)">' + sv + '</span>';
-      h += '<div style="display:flex;align-items:center;gap:' + Math.round(8 * s) + 'px;font-size:' + Math.round(11 * s) + 'px;color:#888">';
-      if (c.labelMin) h += '<span>' + c.labelMin + '</span>';
-      h += '<input type="range" min="' + c.min + '" max="' + c.max + '" step="' + (c.step || 1) + '" value="' + sv + '" style="width:' + Math.round(200 * s) + 'px;accent-color:var(--accent)" oninput="this.parentElement.previousElementSibling.textContent=this.value">';
-      if (c.labelMax) h += '<span>' + c.labelMax + '</span>';
-      h += '</div></div>';
-    }else if (c.type === 'textInput')
-            h +=
-              '<div data-cid="' +
-              c.id +
-              '" style="' +
-              px +
-              'display:flex;flex-direction:column;align-items:center;gap:' +
-              Math.round(8 * s) +
-              'px"><input placeholder="' +
-              c.placeholder +
-              '" style="padding:' +
-              Math.round(10 * s) +
-              'px ' +
-              Math.round(16 * s) +
-              'px;border:2px solid #e0e0e8;border-radius:' +
-              Math.round(10 * s) +
-              'px;font-size:' +
-              Math.round(14 * s) +
-              'px;width:' +
-              Math.round(240 * s) +
-              'px;text-align:center;outline:none"></div>';
-          else if (c.type === 'click')
-            h +=
-              '<div data-cid="' +
-              c.id +
-              '" style="' +
-              px +
-              'width:' +
-              Math.round(280 * s) +
-              'px;height:' +
-              Math.round(180 * s) +
-              'px;border:2px dashed #d0d0d8;border-radius:' +
-              Math.round(16 * s) +
-              'px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:' +
-              Math.round(15 * s) +
-              'px;transition:all 0.15s">👆 Click anywhere</div>';
+            // Mirrors the DOM jsPsychHtmlButtonResponse builds, so what the
+            // preview shows is what the exported experiment renders. The grid
+            // row/column maths is copied from the plugin's own source.
+            h += _previewButtonGroup(c);
+          else if (c.type === 'slider')
+            // Mirrors the DOM jsPsychHtmlSliderResponse builds, so the preview and
+            // the exported experiment agree — including the plugin's label maths.
+            h += _previewSlider(c);
+          else if (c.type === 'animation') h += _previewAnimation(c);
+          else if (c.type === 'textInput') h += _previewSurveyText(c);
           // NB: delay has no branch here on purpose. It generates its own jsPsych
           // trial (trial_duration), so it is not part of the stimulus the
           // participant sees and must not appear in the preview either.
@@ -2013,15 +2522,20 @@ function _applyI18n() {
         h += '<span style="font-weight:800;font-size:0.9rem">Layout Preview</span>';
         if (ph) h += '<span style="font-size:0.7rem;color:var(--text2)">' + _phaseLabel(ph) + '</span>';
         h += '<span style="font-size:0.62rem;color:var(--text2);margin-left:auto">' +
-             'Flow layout \u00b7 same HTML the jsPsych stimulus uses</span>';
+             _deviceLabel(dev) + ' \u00b7 flow layout \u00b7 same HTML the jsPsych stimulus uses</span>';
         h += '<button id="exp-prev-close" style="background:none;border:1px solid var(--border);' +
              'border-radius:6px;color:var(--text2);cursor:pointer;font-size:0.8rem;padding:3px 10px;' +
              'font-family:inherit">\u2715</button>';
         h += '</div>';
-        h += '<div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;' +
-             'background:#f4f4f8;padding:24px">';
-        h += '<div id="exp-prev-stage" style="width:100%;max-width:' + dev.w + 'px;background:#fff;' +
-             'border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.12)"></div>';
+        h += '<div style="flex:1;overflow:auto;background:#f4f4f8;padding:24px">';
+        // Same stage the exported experiment builds: device width, device height,
+        // content centred inside it. The product gets the centring from jsPsych's
+        // own display area; here there is no jsPsych, so it is done inline.
+        h += '<div id="exp-prev-stage" style="margin:0 auto;background:#fff;' +
+             'border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.12);' +
+             'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+             'gap:1.5em;padding:2em;box-sizing:border-box;' +
+             'width:' + dev.w + 'px;min-height:' + dev.h + 'px"></div>';
         h += '</div>';
 
         box.innerHTML = h;
@@ -2033,688 +2547,33 @@ function _applyI18n() {
         overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
       }
 
+      // The preview runs the experiment itself: the same HTML the code export and
+      // the publish button produce, opened in its own tab. Nothing is re-implemented
+      // here, so the preview cannot drift from what a participant actually gets.
       function previewExperiment() {
         if (editor.phases.length === 0) {
           alert('Please add phases and trials first');
           return;
         }
-        var overlay = document.createElement('div');
-        overlay.style.cssText =
-          "position:fixed;inset:0;z-index:2000;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;overflow-y:auto;padding:20px;font-family:'Inter','Noto Sans SC',sans-serif";
-        overlay.id = 'exp-preview';
-        document.body.appendChild(overlay);
-        var dev = editor.device;
-        // Bars overhead: phase label ~30px + progress dots ~26px + nav ~50px + gaps ~20px ≈ 130px
-        var barsH = 130;
-        var cardW = dev ? dev.w : null,
-          cardH = dev ? dev.h : null;
-        if (dev) {
-          var maxW = window.innerWidth - 60,
-            maxH = window.innerHeight - 60 - barsH;
-          var s = Math.min(1, maxW / dev.w, maxH / dev.h);
-          cardW = Math.round(dev.w * s);
-          cardH = Math.round(dev.h * s);
-        }
-        var devRef = editor.device || {w: 1280, h: 720};
-        var textScale = dev
-          ? Math.min(1, cardW / devRef.w, cardH / devRef.h)
-          : Math.min(1, (window.innerWidth - 100) / devRef.w, (window.innerHeight - 140) / devRef.h);
-        var cardInner = dev ? 'width:100%;height:100%;overflow:hidden;' : 'min-width:380px;max-width:90vw;';
-        var pi = 0,
-          ti = 0,
-          count = 0;
-        var responses = []; // collected response data
-        var variables = {}; // variable store
-        var advanceTimer = null; // for auto-advance
-        var _branchJumped = false; // tracks branch→target jumps
-        var loopRemaining = 0;
-        var _lastTrialId = null;
-        function cleanupInteraction() {
-          if (advanceTimer) {
-            clearTimeout(advanceTimer);
-            advanceTimer = null;
-          }
-          overlay._keydown && overlay.removeEventListener('keydown', overlay._keydown);
-          overlay._keydown = null;
-        }
-
-        function showCurrent() {
-          cleanupInteraction();
-          console.log("showCurrent pi="+pi+" ti="+ti);
-          if (pi >= editor.phases.length) {
-            // Done — show summary
-            var summary = '';
-            var correctCount = responses.filter(function (r) {
-              return r.correct;
-            }).length;
-            if (responses.length > 0) {
-              var avgRT = Math.round(
-                responses.reduce(function (s, r) {
-                  return s + r.rt;
-                }, 0) / responses.length,
-              );
-              summary =
-                '<div style="margin-top:16px;font-size:0.85rem;color:#888">✅ Correct: ' +
-                correctCount +
-                '/' +
-                responses.length +
-                ' | ⏱ Avg RT: ' +
-                avgRT +
-                'ms</div>';
-            }
-            overlay.innerHTML =
-              '<div style="background:#fff;border-radius:20px;padding:56px 64px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4)"><div style="font-size:3rem;margin-bottom:16px">🎉</div><h2 style="color:#1a1a2e;margin-bottom:8px;font-size:1.4rem">Preview Complete</h2><p style="color:#888;font-size:0.9rem;margin-bottom:4px">' +
-              count +
-              ' trials, ' +
-              editor.phases.length +
-              ' phases</p>' +
-              summary +
-              '<button onclick="document.getElementById(\'exp-preview\').remove()" style="margin-top:20px;padding:12px 32px;border-radius:10px;border:none;background:#6366f1;color:#ffffff;cursor:pointer;font-size:0.95rem;font-weight:600;box-shadow:0 4px 16px rgba(99,102,241,0.3)">Close Preview</button></div>';
-            return;
-          }
-          var ph = editor.phases[pi];
-          if (ti >= ph.trials.length) {
-            pi++;
-            ti = 0;
-            showCurrent();
-            return;
-          }
-          // Auto-skip: if this trial is a branch target but we arrived via normal flow (not branch jump), skip it
-          if (!_branchJumped) {
-            var isTarget = editor.phases.some(function (p2) {
-              return p2.trials.some(function (t2) {
-                var bc = t2.components.find(function (c) {
-                  return c.type === 'branch' && c.targetFail && c.targetFail === ph.trials[ti].id;
-                });
-                return !!bc;
-              });
-            });
-            if (isTarget) {
-              ti++;
-              showCurrent();
-              return;
-            }
-          }
-          // Auto-skip: trials with only logic components (no visual elements) — skip silently
-          var visualTypes = [
-            'text',
-            'shape',
-            'image',
-            'fixation',
-            'audio',
-            'video',
-            'keyboard',
-            'button',
-            'slider',
-            'click',
-            'textInput',
-          ];
-          var curTrial = ph.trials[ti];
-          if (!curTrial) return;
-          var hasVisual = curTrial.components.some(function (c) {
-            return visualTypes.indexOf(c.type) >= 0;
-          });
-          if (!hasVisual) {
-            ti++;
-            showCurrent();
-            return;
-          }
-          _branchJumped = false;
-          var t = ph.trials[ti];
-          count++;
-          var phaseLabel = _stripEmoji(ph.name);
-          var phaseColor = ph.color === 'i' ? '#818cf8' : ph.color === 'f' ? '#22c55e' : '#f97316';
-
-          // Analyze trial for interaction
-          var hasKeyboard = false,
-            hasButton = false,
-            hasSlider = false,
-            hasClick = false,
-            hasTextInput = false,
-            hasBranch = false,
-            branchTargetFail = '',
-            branchMatchValue = '',
-            branchCondition = 'correct',
-            branchOperator = '>=',
-            branchCompValue = '',
-            branchMatchValue = '',
-            branchCondition = 'correct',
-            branchOperator = '>=',
-            branchCompValue = '',
-            hasVariable = false,
-            varName = '',
-            varInit = 0,
-            varMode = 'correct';
-          var kbKeys = '',
-            autoAdvance = 0;
-          // Reset loop counter when switching to a different trial
-          if (t.id !== _lastTrialId) {
-            loopRemaining = 0;
-            _lastTrialId = t.id;
-          }
-          t.components.forEach(function (c) {
-            if (c.type === 'keyboard') {
-              hasKeyboard = true;
-              kbKeys = c.keys || '';
-              kbCorrect = c.correctKey || '';
-              kbTimeout = c.timeout || 0;
-            }
-            if (c.type === 'button') hasButton = true;
-            if (c.type === 'slider') hasSlider = true;
-            if (c.type === 'click') hasClick = true;
-            if (c.type === 'textInput') hasTextInput = true;
-            if (c.type === 'fixation' && c.duration) autoAdvance = c.duration;
-            if (c.type === 'delay' && c.duration) autoAdvance = Math.max(autoAdvance, c.duration);
-            if (c.type === 'loop' && loopRemaining === 0) loopRemaining = c.count || 0;
-            if (c.type === 'branch') {
-              hasBranch = true;
-              branchTargetFail = c.targetFail || '';
-              branchMatchValue = c.matchValue || '';
-              branchCondition = c.condition || 'correct';
-              branchOperator = c.operator || '>=';
-              branchCompValue = c.compareValue || '';
-              branchMatchValue = c.matchValue || '';
-              branchCondition = c.condition || 'correct';
-              branchOperator = c.operator || '>=';
-              branchCompValue = c.compareValue || '';
-            }
-            if (c.type === 'variable') {
-              hasVariable = true;
-              varName = c.name || '';
-              varInit = c.initial || 0;
-              varMode = c.mode || 'correct';
-            }
-          });
-          var isInteractive = hasKeyboard || hasButton || hasSlider || hasClick || hasTextInput;
-          // Initialize variable if not yet set
-          if (hasVariable && !(varName in variables)) variables[varName] = varInit;
-
-          function cardHTML(comps) {
-            if (comps.length === 0) return '<span style="color:#bbb;font-size:1.1rem">+</span>';
-            var tmp = {id: t.id, components: comps};
-            var iw = devRef.w,
-              ih = devRef.h,
-              isc = textScale;
-            return (
-              '<div style="width:' +
-              Math.round(iw * isc) +
-              'px;height:' +
-              Math.round(ih * isc) +
-              'px;overflow:hidden;position:relative;margin:0 auto">' +
-              '<div style="width:' +
-              iw +
-              'px;height:' +
-              ih +
-              'px;transform:scale(' +
-              isc +
-              ');transform-origin:0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:' +
-              Math.round(20 * isc) +
-              'px">' +
-              renderTrialHTML(tmp, {scale: 1}) +
-              '</div></div>'
-            );
-          }
-          var isPractice = ph.type === 'instructions' || ph.type === 'feedback';
-
-          var h = '';
-          // Top bar
-          h += '<div style="width:100%;max-width:520px;display:flex;align-items:center;gap:12px;margin-bottom:4px">';
-          h +=
-            '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' +
-            phaseColor +
-            '"></span>';
-          h += '<span style="color:rgba(255,255,255,0.7);font-size:0.78rem;font-weight:600">' + phaseLabel + '</span>';
-          h +=
-            '<span style="color:rgba(255,255,255,0.35);font-size:0.7rem;margin-left:auto">' +
-            (ti + 1) +
-            ' / ' +
-            ph.trials.length +
-            '</span>';
-          h +=
-            '<button id="preview-exit-btn" style="background:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.4);padding:3px 12px;border-radius:6px;cursor:pointer;font-size:0.72rem;margin-left:8px">✕ Exit</button>';
-          h += '</div>';
-          // Progress dots
-          h += '<div style="display:flex;gap:4px;margin-bottom:20px">';
-          for (var d = 0; d < ph.trials.length; d++) {
-            h +=
-              '<div style="width:' +
-              (d === ti ? '20' : '6') +
-              'px;height:6px;border-radius:3px;background:' +
-              (d === ti ? phaseColor : d < ti ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)') +
-              ';transition:all 0.3s"></div>';
-          }
-          h += '</div>';
-          // Card
-          h +=
-            '<div id="preview-card" style="background:#fff;border-radius:' +
-            (dev ? '24px' : '16px') +
-            ';padding:' +
-            (dev ? '0' : '40px 56px') +
-            ';box-shadow:0 20px 60px rgba(0,0,0,0.35);display:flex;flex-direction:column;align-items:center;justify-content:' +
-            (dev ? 'flex-start' : 'center') +
-            ';gap:20px;position:relative;overflow:hidden;' +
-            cardInner +
-            (dev ? 'width:' + cardW + 'px;height:' + cardH + 'px;' : '') +
-            '">';
-          if (t.components.length === 0) {
-            h += '<span style="color:#bbb;font-size:1.1rem">Empty Trial</span>';
-          } else {
-            // Phased rendering: pre-delay first, then all non-delay after timeout
-            var allNonDelay = t.components.filter(function (c) {
-              return c.type !== 'delay';
-            });
-            // Randomize: deep-clone + shuffle stimulus components after the randomize marker
-            var hasRandomize = t.components.some(function (c) {
-              return c.type === 'randomize';
-            });
-            var renderComps = t.components.map(function (c) {
-              return Object.assign({}, c);
-            }); // shallow clone
-            if (hasRandomize) {
-              var ri = renderComps.findIndex(function (c) {
-                return c.type === 'randomize';
-              });
-              var stimTypes = ['text', 'shape', 'image'];
-              var before = [],
-                stims = [],
-                after = [];
-              renderComps.forEach(function (c, i) {
-                if (i <= ri) {
-                  before.push(c);
-                } else if (stimTypes.indexOf(c.type) >= 0) {
-                  stims.push(c);
-                } else {
-                  after.push(c);
-                }
-              });
-              // Randomly pick ONE stimulus (N-choose-1 mode for Simon/Stroop) or shuffle all (memory test mode)
-              // If stims all share same category (text/shape), pick 1; if mixed types, shuffle all
-              var randComp = renderComps.find(function (c) {
-                return c.type === 'randomize';
-              });
-              var randMode = randComp ? randComp.mode || 'pick-one' : 'pick-one';
-              if (randMode === 'pick-one' && stims.length > 0) {
-                var picked = stims[Math.floor(Math.random() * stims.length)];
-                stims = [picked];
-                // Sync correctKey from keyboard's 颜色按键映射 based on picked shape's color
-                var kbComp = renderComps.find(function (rc) {
-                  return rc.type === 'keyboard';
-                });
-                // Sync correctKey from picked component's 映射按键
-                if (picked && picked.映射按键) {
-                  var kbComp2 = renderComps.find(function (rc) { return rc.type === 'keyboard'; });
-                  if (kbComp2) {
-                    kbComp2.correctKey = picked.映射按键;
-                    var origKb2 = t.components.find(function (oc) { return oc.type === 'keyboard'; });
-                    if (origKb2) origKb2.correctKey = picked.映射按键;
-                    kbCorrect = picked.映射按键;
-                  }
-                }
-                // Fallback: legacy correctKeyHint on shape
-                if (!picked.映射按键 && picked.correctKeyHint) {
-                  renderComps.forEach(function (rc) {
-                    if (rc.type === 'keyboard') rc.correctKey = picked.correctKeyHint;
-                  });
-                  t.components.forEach(function (oc) {
-                    if (oc.type === 'keyboard') oc.correctKey = picked.correctKeyHint;
-                  });
-                  kbCorrect = picked.correctKeyHint;
-                }
-              } else {
-                var origPos = stims.map(function (c) {
-                  return {cx: c.posX, cy: c.posY};
-                });
-                for (var si = stims.length - 1; si > 0; si--) {
-                  var sj = Math.floor(Math.random() * (si + 1));
-                  var tmp = stims[si];
-                  stims[si] = stims[sj];
-                  stims[sj] = tmp;
-                }
-                stims.forEach(function (c, i) {
-                  c.posX = origPos[i].cx;
-                  c.posY = origPos[i].cy;
-                });
-              }
-              renderComps = before.concat(stims).concat(after);
-            }
-            // --- Generalized multi-phase rendering: split by delay markers ---
-            var phases = [[]]; // phases[0]=before 1st delay, phases[1]=after 1st, etc.
-            var delays = []; // delays[i] = ms between phase i and phase i+1
-            renderComps.forEach(function (c) {
-              if (c.type === 'delay' && c.duration > 0) {
-                delays.push(c.duration);
-                phases.push([]);
-              } else {
-                phases[phases.length - 1].push(c);
-              }
-            });
-            h += cardHTML(phases[0]); // render first phase immediately
-
-            // Chain setTimeout for subsequent phases; activate interaction only after last
-            function runPhase(idx) {
-              if (idx >= phases.length) {
-                setupInteraction();
-                return;
-              }
-              advanceTimer = setTimeout(
-                function () {
-                  var card = document.getElementById('preview-card');
-                  if (card) card.innerHTML = cardHTML(phases[idx]);
-                  if (idx === phases.length - 1) {
-                    trialStart = Date.now();
-                    setupInteraction();
-                  } else {
-                    runPhase(idx + 1);
-                  }
-                },
-                delays[idx - 1],
-              );
-            }
-            if (phases.length > 1) runPhase(1);
-            else setupInteraction();
-          }
-          h += '</div>';
-          // RT feedback area
-          h +=
-            '<div id="preview-rt" style="height:24px;font-size:0.75rem;color:rgba(255,255,255,0.5);text-align:center;margin-top:6px"></div>';
-          // Nav
-          var navLabel = isPractice
-            ? ''
-            : isInteractive
-              ? loopRemaining
-                ? 'Respond (' + loopRemaining + ' remaining)'
-                : 'Respond'
-              : '';
-          // Show variables if any
-          var varDisplay = '';
-          Object.keys(variables).forEach(function (vk) {
-            varDisplay += ' ' + vk + ':' + variables[vk];
-          });
-          if (varDisplay) navLabel += varDisplay;
-          h += '<div style="display:flex;align-items:center;gap:16px;margin-top:14px">';
-          h +=
-            '<button id="preview-prev-btn" style="padding:10px 18px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);cursor:pointer;font-size:0.85rem;font-family:inherit;font-weight:500;transition:all 0.15s" onmouseover="this.style.background=\'rgba(255,255,255,0.12)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.06)\'">← Prev Trial</button>';
-          h +=
-            '<span style="color:rgba(255,255,255,0.35);font-size:0.75rem;flex:1;text-align:center">' +
-            navLabel +
-            '</span>';
-          h +=
-            '<button id="preview-skip-btn" style="padding:10px 18px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.5);cursor:pointer;font-size:0.8rem;font-family:inherit">Skip →</button>';
-          h += '</div>';
-          if (dev)
-            h +=
-              '<div style="font-size:0.65rem;color:rgba(255,255,255,0.2);text-align:center;margin-top:8px">' +
-              dev.w +
-              '×' +
-              dev.h +
-              '</div>';
-          overlay.innerHTML = h;
-
-          // Exit button — JS handler
-          var exitBtn = document.getElementById('preview-exit-btn');
-          if (exitBtn)
-            exitBtn.onclick = function () {
-              cleanupInteraction();
-              overlay.remove();
-            };
-
-          // Skip / prev buttons
-          document.getElementById('preview-skip-btn').onclick = function () {
-            loopRemaining = 0;
-            ti++;
-            showCurrent();
-          };
-          var prevBtn = document.getElementById('preview-prev-btn');
-          if (prevBtn) {
-            prevBtn.onclick = function () {
-              if (ti > 0) ti--;
-              else if (pi > 0) {
-                pi--;
-                ti = editor.phases[pi].trials.length - 1;
-              }
-              showCurrent();
-            };
-            if (ti === 0 && pi === 0) prevBtn.style.opacity = '0.3';
-          }
-
-          var trialStart = Date.now(),
-            responded = false;
-          function advance(skipDecrement) {
-            cleanupInteraction();
-            if (skipDecrement) {
-              showCurrent();
-            } else if (loopRemaining > 1) {
-              loopRemaining--;
-              showCurrent();
-            } else {
-              loopRemaining = 0;
-              ti++;
-              showCurrent();
-            }
-          }
-          function recordAndAdvance(rt, resp, correct) {
-            if (responded) return; // guard against duplicate responses
-            // Auto-increment score variable on correct response
-            // For textInput: validate against component's correctAnswer if set
-            if (hasTextInput) {
-              var inputComp = t.components.find(function (c) {
-                return c.type === 'textInput';
-              });
-              if (inputComp && inputComp.correctAnswer && inputComp.validation !== 'none') {
-                var answers = inputComp.correctAnswer.split(',').map(function (s) {
-                  return s.trim().toLowerCase();
-                });
-                var inputVal = (resp || '').toLowerCase();
-                if (inputComp.validation === 'exact') {
-                  correct = answers.indexOf(inputVal) >= 0;
-                } else {
-                  correct = answers.some(function (a) {
-                    return inputVal.indexOf(a) >= 0;
-                  });
-                }
-              }
-            }
-            responded = true;
-            // Don't record responses for instructions/feedback (practice) phases
-            if (!isPractice) {
-              if (hasVariable && variables[varName] !== undefined) {
-              if (varMode === 'correct' && correct) variables[varName]++;
-              else if (varMode === 'always') variables[varName]++;
-            }
-              responses.push({phase: _stripEmoji(ph.name), trial: ti + 1, rt: rt, response: resp, correct: correct});
-              var rtEl = document.getElementById('preview-rt');
-              if (rtEl)
-                rtEl.innerHTML =
-                  '\u23f1 ' +
-                  rt +
-                  'ms ' +
-                  (correct ? '\u2705' : '\u274c') +
-                  ' <span style="font-size:0.6rem">(' +
-                  resp +
-                  ')</span>';
-            }
-            var shouldBranch = false, branchJumpTarget = '';
-            if (hasBranch) {
-              if (branchCondition === 'correct') { shouldBranch = !correct; branchJumpTarget = branchTargetFail; }
-              else if (branchCondition === 'variable') {
-                var varVal = variables[branchMatchValue] || 0;
-                var cmpVal = parseFloat(branchCompValue) || 0;
-                var op = branchOperator || '>=';
-                if (op === '>=') shouldBranch = varVal >= cmpVal;
-                else if (op === '<=') shouldBranch = varVal <= cmpVal;
-                else if (op === '>') shouldBranch = varVal > cmpVal;
-                else if (op === '<') shouldBranch = varVal < cmpVal;
-                else if (op === '==') shouldBranch = varVal == cmpVal;
-                else if (op === '!=') shouldBranch = varVal != cmpVal;
-                if (shouldBranch) branchJumpTarget = branchTargetFail;
-              }
-              else if (branchCondition === 'response') {
-                var matchValues = (branchMatchValue || '').split(',').map(function(m) { return m.trim(); });
-                var matchIdx = matchValues.indexOf(resp);
-                if (matchIdx >= 0) {
-                  shouldBranch = true;
-                  var targets = (branchTargetFail || '').split(',').map(function(t) { return t.trim(); });
-                  branchJumpTarget = targets[Math.min(matchIdx, targets.length - 1)] || branchTargetFail;
-                }
-              }
-            }
-            if (shouldBranch) {
-              // Branch triggered: jump to target or retry
-              var card = document.getElementById('preview-card');
-              if (card) {
-                card.style.boxShadow = '0 0 0 4px #ef4444';
-                setTimeout(function () { card.style.boxShadow = ''; }, 500);
-              }
-              if (branchJumpTarget) {
-                // Find target trial and jump (search all phases)
-                setTimeout(function () {
-                  var found = false;
-                  editor.phases.forEach(function (p2) {
-                    p2.trials.forEach(function (tr, tri) {
-                      if (tr.id === branchJumpTarget && !found) {
-                        pi = editor.phases.indexOf(p2);
-                        ti = tri;
-                        _branchJumped = true;
-                        found = true;
-                      }
-                    });
-                  });
-                  advance(true);
-                }, 800);
-              } else {
-                setTimeout(function () {
-                  advance(true);
-                }, 800);
-              }
-            } else {
-              setTimeout(
-                function () {
-                  advance();
-                },
-                isInteractive ? 250 : 50,
-              );
-            }
-          }
-
-          // --- Set up interactions (wrapped for phased delay) ---
-          function setupInteraction() {
-            if (autoAdvance && !isInteractive) {
-              advanceTimer = setTimeout(function () {
-                advance();
-              }, autoAdvance);
-            }
-
-            // Helper: bind button clicks
-            function bindButtons() {
-              setTimeout(function () {
-                var card = document.getElementById('preview-card');
-                if (!card) return;
-                var btns = card.querySelectorAll('[data-btn]');
-                btns.forEach(function (btn) {
-                  var txt = (btn.textContent || '').trim();
-                  if (!txt) return;
-                  btn.style.cursor = 'pointer';
-                  btn.onclick = function (e) {
-                    e.stopPropagation();
-                    var rt = Date.now() - trialStart;
-                    recordAndAdvance(rt, txt, true);
-                  };
-                });
-              }, 150);
-            }
-
-            if (hasKeyboard) {
-              var validKeys = kbKeys.split(',').map(function (k) {
-                var t = k.trim();
-                return t || ' ';
-              });
-              overlay._keydown = function (e) {
-                var k = e.key.toLowerCase();
-                if (validKeys.indexOf(k) >= 0) {
-                  var rt = Date.now() - trialStart;
-                  var correctKeys = kbCorrect ? kbCorrect.split(',').map(function (x) { var t = x.trim(); return t ? t.toLowerCase() : ' '; }) : [];
-                  var correct = !kbCorrect || correctKeys.indexOf(k) >= 0;
-                  recordAndAdvance(rt, k, correct);
-                }
-              };
-              overlay.addEventListener('keydown', overlay._keydown);
-              if (kbTimeout)
-                advanceTimer = setTimeout(function () {
-                  recordAndAdvance(kbTimeout, 'timeout', false);
-                }, kbTimeout);
-            } else if (hasButton) {
-              bindButtons();
-            } else if (hasSlider) {
-              setTimeout(function () {
-                var card = document.getElementById('preview-card');
-                if (!card) return;
-                var slider = card.querySelector('input[type=range]');
-                if (!slider) return;
-                var confirmBtn = document.createElement('button');
-                confirmBtn.textContent = 'Confirm';
-                confirmBtn.style.cssText =
-                  'margin-top:8px;padding:8px 24px;border-radius:8px;border:none;background:#6366f1;color:#ffffff;cursor:pointer;font-size:0.85rem;font-weight:600';
-                confirmBtn.onclick = function () {
-                  var rt = Date.now() - trialStart;
-                  recordAndAdvance(rt, slider.value, true);
-                };
-                slider.parentNode.appendChild(confirmBtn);
-              }, 100);
-            } else if (hasTextInput) {
-              // Text input: user types freely, clicks confirm to submit
-              setTimeout(function () {
-                var card = document.getElementById('preview-card');
-                if (!card) return;
-                var input = card.querySelector('input[type=text],input:not([type])');
-                if (!input) return;
-                input.focus();
-                input.addEventListener('keydown', function (e) {
-                  e.stopPropagation();
-                }); // don't bubble to overlay
-                var confirmBtn = document.createElement('button');
-                confirmBtn.textContent = 'Confirm';
-                confirmBtn.style.cssText =
-                  'margin-top:8px;padding:8px 24px;border-radius:8px;border:none;background:#6366f1;color:#ffffff;cursor:pointer;font-size:0.85rem;font-weight:600';
-                confirmBtn.onclick = function (e) {
-                  e.stopPropagation();
-                  var rt = Date.now() - trialStart;
-                  recordAndAdvance(rt, input.value || '(empty)', true);
-                };
-                input.parentNode.appendChild(confirmBtn);
-                // Also allow Enter key to submit
-                input.addEventListener('keypress', function (e) {
-                  if (e.key === 'Enter') {
-                    confirmBtn.click();
-                  }
-                });
-              }, 100);
-            } else if (hasClick) {
-              overlay._keydown = function (e) {
-                recordAndAdvance(Date.now() - trialStart, e.key, true);
-              };
-              overlay.addEventListener('keydown', overlay._keydown);
-            }
-          } // end setupInteraction
-
-          overlay.setAttribute('tabindex', '0');
-          overlay.focus();
-        }
+        var html;
         try {
-          showCurrent();
+          html = generateCode();
         } catch (e) {
-          overlay.innerHTML =
-            '<div style="background:#fff;border-radius:16px;padding:40px;text-align:center;color:#ef4444"><h2>Preview failed to load</h2><p>' +
-            e.message +
-            '</p><p style="font-size:0.72rem;color:#888;margin-top:8px">phases length: ' +
-            editor.phases.length +
-            ' | pi: ' +
-            pi +
-            ' | ti: ' +
-            ti +
-            '</p><p style="font-size:0.72rem;color:#888">phases[pi]: ' +
-            (editor.phases[pi] ? JSON.stringify(editor.phases[pi]).slice(0, 80) : 'undefined') +
-            '</p><button onclick="document.getElementById(\'exp-preview\').remove()" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:#6366f1;color:#ffffff;cursor:pointer">关闭</button></div>';
+          alert('Could not generate the experiment:\n' + e.message);
+          return;
         }
+        // A blob URL keeps the page self-contained: the jsPsych CDN tags load from
+        // it exactly as they would from a saved file. The run ends with
+        // jsPsych.data.displayData(), so the tab shows the collected data too.
+        var url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+        var tab = window.open(url, '_blank');
+        if (!tab) {
+          URL.revokeObjectURL(url);
+          alert('The preview tab was blocked. Allow pop-ups for this page, then try again.');
+          return;
+        }
+        // Keep the URL alive until the new tab has loaded it.
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
       }
       function saveState() {
         editor.hi++;
@@ -2735,15 +2594,179 @@ function _applyI18n() {
         var b = document.getElementById('undo-btn');
         if (b) b.disabled = false;
       }
+      // Bring experiments saved before the jsPsych alignment pass forward. Old
+      // data lives in localStorage, so it cannot simply be assumed away.
       function migratePos() {
+        var droppedDelays = 0;
+        var droppedClicks = 0;
         editor.phases.forEach(function (p) {
           p.trials.forEach(function (t) {
-            t.components.forEach(function (c) {
-              if (!('posX' in c)) c.posX = 0;
-              if (!('posY' in c)) c.posY = 0;
+            // `click` is gone — it had no official counterpart.
+            var clicks = t.components.filter(function (c) { return c.type === 'click'; });
+            if (clicks.length) {
+              droppedClicks += clicks.length;
+              t.components = t.components.filter(function (c) { return c.type !== 'click'; });
+            }
+            // `delay` is gone. A timed node is now the trial-level
+            // trial_duration — the jsPsych parameter it was standing in for —
+            // so carry the old duration across before dropping the component.
+            var delays = t.components.filter(function (c) { return c.type === 'delay'; });
+            if (delays.length) {
+              droppedDelays += delays.length;
+              if (!t.trial_duration) {
+                var d = delays.filter(function (c) { return c.duration; })[0];
+                if (d) t.trial_duration = Number(d.duration) || undefined;
+              }
+              t.components = t.components.filter(function (c) { return c.type !== 'delay'; });
+            }
+            t.components.forEach(function (c, ci) {
+              if (c.type === 'button') {
+                // labels: 'Yes,No'  →  choices: ['Yes','No'] — the plugin's own
+                // parameter, spelled the way jsPsych spells it.
+                var src = Array.isArray(c.choices) ? c.choices
+                        : Array.isArray(c.labels) ? c.labels
+                        : String(c.labels == null ? 'Yes,No' : c.labels).split(',');
+                var choices = src.map(function (x) { return String(x).trim(); })
+                  .filter(function (x) { return x; });
+                // Rebuild in the canonical field order so the inspector lists the
+                // parameters the same way for migrated and newly-added buttons.
+                var rebuilt = {
+                  type: 'button',
+                  choices: choices,
+                  prompt: c.prompt || '',
+                  button_layout: c.button_layout || 'grid',
+                  grid_rows: c.grid_rows == null ? 1 : c.grid_rows,
+                  grid_columns: c.grid_columns == null ? 0 : c.grid_columns,
+                  trial_duration: c.trial_duration == null ? 0 : c.trial_duration,
+                  stimulus_duration: c.stimulus_duration == null ? 0 : c.stimulus_duration,
+                  response_ends_trial: c.response_ends_trial == null ? true : c.response_ends_trial,
+                  enable_button_after: c.enable_button_after == null ? 0 : c.enable_button_after,
+                };
+                rebuilt.id = c.id;
+                rebuilt.cat = c.cat;
+                t.components[ci] = rebuilt;
+                return;
+              }
+              if (c.type === 'textInput') {
+                // correctAnswer/validation were an ExpVis-only scoring extension;
+                // survey-text has no notion of a right answer, so they go.
+                delete c.correctAnswer;
+                delete c.validation;
+                var rebuiltTi = {
+                  type: 'textInput',
+                  prompt: c.prompt || '',
+                  placeholder: c.placeholder == null ? 'Enter text' : c.placeholder,
+                  name: c.name || 'Q0',
+                  required: c.required == null ? false : c.required,
+                  rows: c.rows == null ? 1 : c.rows,
+                  columns: c.columns == null ? 40 : c.columns,
+                  button_label: c.button_label || 'Continue',
+                  autocomplete: c.autocomplete == null ? false : c.autocomplete,
+                };
+                rebuiltTi.id = c.id;
+                rebuiltTi.cat = c.cat;
+                t.components[ci] = rebuiltTi;
+                return;
+              }
+              if (['text', 'shape', 'image', 'audio', 'video'].indexOf(c.type) >= 0) {
+                // Defaults to off, which reproduces the behaviour these
+                // experiments already had: one shared screen per trial.
+                if (c.newStep == null) c.newStep = false;
+                if (c.step_duration == null) c.step_duration = 500;
+              }
+              if (c.type === 'fixation') {
+                // `duration` was the old name; the emitted parameter is
+                // trial_duration. durationStep was read at emit time but never
+                // stored, so it is seeded with the value that was being assumed.
+                if (c.trial_duration == null) c.trial_duration = c.duration == null ? 500 : c.duration;
+                delete c.duration;
+                if (c.durationMin == null) c.durationMin = 0;
+                if (c.durationMax == null) c.durationMax = 0;
+                if (c.durationStep == null) c.durationStep = 250;
+                return;
+              }
+              if (c.type === 'image') {
+                // `width` was the old name; the image plugins call it
+                // stimulus_width, and it doubles as max-width in the HTML path.
+                if (c.stimulus_width == null) c.stimulus_width = c.width == null ? 200 : c.width;
+                delete c.width;
+                if (c.stimulus_height == null) c.stimulus_height = 0;
+                if (c.maintain_aspect_ratio == null) c.maintain_aspect_ratio = true;
+                if (c.render_on_canvas == null) c.render_on_canvas = true;
+                delete c.posX; // this branch returns, so the shared cleanup below
+                delete c.posY; // would not otherwise reach it
+                return;
+              }
+              if (c.type === 'slider') {
+                // labelMin/labelMax were two separate fields; the plugin takes one
+                // `labels` array placed at equal spacing.
+                var slabs = Array.isArray(c.labels) ? c.labels
+                  : [c.labelMin, c.labelMax].filter(function (x) { return x != null && x !== ''; });
+                var lo = c.min == null ? 0 : c.min, hi = c.max == null ? 100 : c.max;
+                var rebuiltSl = {
+                  type: 'slider',
+                  min: lo,
+                  max: hi,
+                  step: c.step == null ? 1 : c.step,
+                  // The old widget always started at the midpoint, and was drawn
+                  // 320px wide; carry both across so the experiment looks the same.
+                  slider_start: c.slider_start == null ? Math.round((lo + hi) / 2) : c.slider_start,
+                  labels: slabs.map(function (x) { return String(x); }),
+                  button_label: c.button_label || 'Continue',
+                  slider_width: c.slider_width == null ? 320 : c.slider_width,
+                  require_movement: c.require_movement == null ? false : c.require_movement,
+                  prompt: c.prompt || '',
+                  trial_duration: c.trial_duration == null ? 0 : c.trial_duration,
+                  stimulus_duration: c.stimulus_duration == null ? 0 : c.stimulus_duration,
+                  response_ends_trial: c.response_ends_trial == null ? true : c.response_ends_trial,
+                };
+                rebuiltSl.id = c.id;
+                rebuiltSl.cat = c.cat;
+                t.components[ci] = rebuiltSl;
+                return;
+              }
+              if (c.type === 'keyboard') {
+                // keys: 'a,l'  →  choices: ['a','l'] — the plugin's own
+                // parameter. A blank entry was how the spacebar used to be
+                // written; it migrates to ' ', the value jsPsych matches on.
+                var ksrc;
+                if (Array.isArray(c.choices)) ksrc = c.choices;
+                else if (Array.isArray(c.keys)) ksrc = c.keys;
+                else if (c.keys == null) ksrc = ['a', 'l'];
+                else ksrc = String(c.keys).split(',').map(function (x) { return x.trim() || ' '; });
+                var rebuiltKb = {
+                  type: 'keyboard',
+                  choices: ksrc.map(function (x) { return String(x); }),
+                  correctKey: c.correctKey || '',
+                  prompt: c.prompt == null ? 'Press a key' : c.prompt,
+                  // `timeout` was the pre-alignment spelling of trial_duration
+                  trial_duration: c.trial_duration != null ? c.trial_duration
+                    : (Number(c.timeout) || 0),
+                  stimulus_duration: c.stimulus_duration == null ? 0 : c.stimulus_duration,
+                  response_ends_trial: c.response_ends_trial == null ? true : c.response_ends_trial,
+                  wait_for_key_release: c.wait_for_key_release == null ? false : c.wait_for_key_release,
+                };
+                rebuiltKb.id = c.id;
+                rebuiltKb.cat = c.cat;
+                t.components[ci] = rebuiltKb;
+                return;
+              }
+              // posX/posY dated from the absolute-positioning era and were never
+              // read once layout became flow-based. They are not jsPsych
+              // parameters, so they are dropped rather than re-seeded.
+              delete c.posX;
+              delete c.posY;
             });
           });
         });
+        if (droppedClicks) {
+          console.info('[ExpVis] Removed ' + droppedClicks + ' "click" component(s): it had no ' +
+            'official jsPsych counterpart. A button, or a keyboard trial set to any key, covers the same ground.');
+        }
+        if (droppedDelays) {
+          console.info('[ExpVis] Removed ' + droppedDelays + ' old "delay" component(s). ' +
+            'Use the trial-level "Trial Duration" (jsPsych trial_duration) instead.');
+        }
       }
       function undo() {
         if (editor.hi < 0) return;
@@ -2777,6 +2800,11 @@ function _applyI18n() {
         renderAll();
       }
 
+      // Under flow layout the order of the components array IS the order they
+      // appear on screen, so "quick layout" means moving the response components
+      // below the display ones. Logic components keep their position relative to
+      // the display components — `randomize` in particular has to stay above the
+      // stimuli it picks from.
       function quickLayout() {
         if (!editor.selectedTrial) {
           alert('Please select a trial first');
@@ -2787,89 +2815,18 @@ function _applyI18n() {
           alert('Trial is empty');
           return;
         }
-        var dev = editor.device || {w: 1280, h: 720};
-        var visuals = [],
-          logics = [];
-        t.components.forEach(function (c) {
-          if (['loop', 'branch', 'delay', 'randomize', 'variable'].indexOf(c.type) >= 0) logics.push(c);
-          else visuals.push(c);
-        });
-        if (visuals.length === 0) {
+        if (!t.components.some(function (c) { return c.cat !== 'r'; })) {
           alert('No visual elements to arrange');
           return;
         }
-
-        function estH(c) {
-          switch (c.type) {
-            case 'text':
-              var lines = (c.content || '').split('\n').length;
-              return (c.fontSize || 32) * 1.6 * Math.max(1, lines);
-            case 'shape':
-              return c.size || 80;
-            case 'image':
-              return c.width ? Math.round(c.width * 0.7) : 180;
-            case 'fixation':
-              return 48;
-            case 'keyboard':
-              return 56;
-            case 'button':
-              return 48;
-            case 'slider':
-              return 80;
-            case 'click':
-              return 180;
-            case 'textInput':
-              return 56;
-            case 'audio':
-              return 40;
-            case 'video':
-              return c.width ? Math.round(c.width * 0.6) : 200;
-            default:
-              return 60;
-          }
-        }
-
         saveState();
-        // Split: stimulus types → upper area, response types → lower area
-        var stim = [],
-          resp = [];
-        visuals.forEach(function (c) {
-          if (['text', 'shape', 'image', 'fixation', 'audio', 'video'].indexOf(c.type) >= 0) stim.push(c);
-          else resp.push(c);
-        });
-
-        // Ensure visual components are content-centered
-        visuals.forEach(function (c) {
+        t.components = t.components
+          .filter(function (c) { return c.cat !== 'r'; })
+          .concat(t.components.filter(function (c) { return c.cat === 'r'; }));
+        // Alignment is the only positional control left.
+        t.components.forEach(function (c) {
           if (['text', 'shape', 'image'].indexOf(c.type) >= 0) c.position = 'center';
         });
-
-        var centerX = Math.round(dev.w / 2);
-        var gap = Math.round(dev.h * 0.04);
-
-        // Calculate total block height for vertical centering
-        var allComps = stim.concat(resp);
-        var totalH = allComps.reduce(function (s, c) {
-          return s + estH(c);
-        }, 0);
-        var totalGaps = (allComps.length - 1) * gap;
-        if (stim.length > 0 && resp.length > 0) totalGaps += Math.round(dev.h * 0.04); // extra stim-resp gap
-        var startY = Math.round((dev.h - totalH - totalGaps) / 2);
-        var y = startY;
-
-        // Layout stimuli from centered start
-        stim.forEach(function (c) {
-          c.posX = centerX;
-          c.posY = y;
-          y += estH(c) + gap;
-        });
-        // Extra gap before responses
-        if (resp.length > 0 && stim.length > 0) y += Math.round(dev.h * 0.04);
-        resp.forEach(function (c) {
-          c.posX = centerX;
-          c.posY = y;
-          y += estH(c) + gap;
-        });
-
         autoSave();
         renderAll();
       }
@@ -2884,11 +2841,6 @@ function _applyI18n() {
             c[k] = props[k];
           });
         }
-        // Position helper: proportion of device dimensions → pixel coords
-        var dev = editor.device || {w: 1280, h: 720};
-        function px(rx, ry) {
-          return {posX: Math.round(dev.w * rx), posY: Math.round(dev.h * ry)};
-        }
 
         if (name === 'stroop') {
           // Phase 1: Instructions
@@ -2898,24 +2850,22 @@ function _applyI18n() {
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'button', 'r');
           var t1 = findTrial(editor.selectedTrial);
-          sc(t1, 0, Object.assign({content: 'Welcome to the Stroop experiment!\n\nYou will see color words (RED, BLUE, GREEN) displayed in different font colors.\nYour task is to respond to the FONT COLOR, ignoring the word meaning.\n\nRed font → Press A\nBlue font → Press L\nGreen font → Press K\n\nRespond as quickly and accurately as possible!', fontSize: 20, position: 'center'}, px(0.5, 0.12)));
-          sc(t1, 1, Object.assign({labels: 'Start Experiment'}, px(0.5, 0.76)));
+          sc(t1, 0, {content: 'Welcome to the Stroop experiment!\n\nYou will see color words (RED, BLUE, GREEN) displayed in different font colors.\nYour task is to respond to the FONT COLOR, ignoring the word meaning.\n\nRed font → Press A\nBlue font → Press L\nGreen font → Press K\n\nRespond as quickly and accurately as possible!', fontSize: 20, position: 'center'});
+          sc(t1, 1, {choices: ['Start Experiment']});
           // Phase 2: Stroop trials — 9 variants (3 colors × 3 characters)
           addPhase('trials');
           var p2 = editor.phases[1].id;
           // Main trial: fixation → delay → randomize(9 texts) → keyboard → branch → loop
           addTrial(p2);
           addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           addComponent(editor.selectedTrial, 'randomize', 'l');
           for (var si = 0; si < 9; si++) addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'keyboard', 'r');
           addComponent(editor.selectedTrial, 'branch', 'l');
           addComponent(editor.selectedTrial, 'loop', 'l');
           var t2 = findTrial(editor.selectedTrial);
-          sc(t2, 0, Object.assign({duration: 500}, px(0.5, 0.45)));
-          sc(t2, 1, {duration: 200});
-          sc(t2, 2, {mode: 'pick-one'});
+          sc(t2, 0, {trial_duration: 700});
+          sc(t2, 1, {mode: 'pick-one'});
           // 9 text variants: 3 colors × 3 characters
           var stroopVariants = [
             {content: 'RED', color: '#ff0000', key: 'a'},
@@ -2929,19 +2879,18 @@ function _applyI18n() {
             {content: 'GREEN', color: '#00aa00', key: 'k'},
           ];
           stroopVariants.forEach(function (v, vi) {
-            sc(t2, 3 + vi, Object.assign({content: v.content, color: v.color, fontSize: 36, position: 'center', fontWeight: 'bold', 映射按键: v.key}, px(0.5, 0.38)));
+            sc(t2, 2 + vi, {content: v.content, color: v.color, fontSize: 36, position: 'center', fontWeight: 'bold', 映射按键: v.key});
           });
-          sc(t2, 12, Object.assign({keys: 'a,l,k', prompt: 'Red→A  Blue→L  Green→K'}, px(0.5, 0.62)));
-          sc(t2, 13, {condition: 'correct'});
-          sc(t2, 14, {count: 48});
+          sc(t2, 11, Object.assign({choices: ['a', 'l', 'k'], prompt: 'Red→A  Blue→L  Green→K'}));
+          sc(t2, 12, {condition: 'correct'});
+          sc(t2, 13, {count: 48});
           // Error feedback trial
           addTrial(p2);
           addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           var t3 = findTrial(editor.selectedTrial);
-          sc(t3, 0, Object.assign({content: 'Press the key for the FONT COLOR!\nRed=A  Blue=L  Green=K', fontSize: 22, color: '#ef4444', position: 'center'}, px(0.5, 0.4)));
-          sc(t3, 1, {duration: 1200});
-          sc(t2, 13, {condition: 'correct', targetFail: t3.id});
+          sc(t3, 0, {content: 'Press the key for the FONT COLOR!\nRed=A  Blue=L  Green=K', fontSize: 22, color: '#ef4444', position: 'center'});
+          t3.trial_duration = 1200;
+          sc(t2, 12, {condition: 'correct', targetFail: t3.id});
           // Phase 3: Feedback
           addPhase('feedback');
           var p3 = editor.phases[2].id;
@@ -2951,10 +2900,7 @@ function _applyI18n() {
           sc(
             t3,
             0,
-            Object.assign(
-              {content: 'Experiment complete!\n\nThank you for your participation.\nYour response data has been recorded.', fontSize: 22, position: 'center'},
-              px(0.5, 0.4),
-            ),
+            Object.assign({content: 'Experiment complete!\n\nThank you for your participation.\nYour response data has been recorded.', fontSize: 22, position: 'center'}, ),
           );
         } else if (name === 'simon') {
           // Phase 1: Instructions
@@ -2967,24 +2913,20 @@ function _applyI18n() {
           sc(
             t1,
             0,
-            Object.assign(
-              {
+            Object.assign({
                 content:
                   'Welcome to the Simon effect experiment!\n\nColored circles will appear on the left or right side of the screen.\nIgnore the position and respond based on COLOR:\n\nRed → Press A\nGreen → Press L\n\nRespond as quickly and accurately as possible!',
                 fontSize: 20,
                 position: 'center',
-              },
-              px(0.5, 0.14),
-            ),
+              }, ),
           );
-          sc(t1, 1, Object.assign({labels: 'Start Experiment'}, px(0.5, 0.74)));
+          sc(t1, 1, {choices: ['Start Experiment']});
           // Phase 2: Simon trials — pick-one from 4 variants (red/green × left/right)
           addPhase('trials');
           var p2 = editor.phases[1].id;
           // Main trial: fixation → delay → randomize(4 shapes) → keyboard → branch → loop
           addTrial(p2);
           addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           addComponent(editor.selectedTrial, 'randomize', 'l');
           addComponent(editor.selectedTrial, 'shape', 's');
           addComponent(editor.selectedTrial, 'shape', 's');
@@ -2994,32 +2936,27 @@ function _applyI18n() {
           addComponent(editor.selectedTrial, 'branch', 'l');
           addComponent(editor.selectedTrial, 'loop', 'l');
           var t2 = findTrial(editor.selectedTrial);
-          sc(t2, 0, Object.assign({duration: 500}, px(0.5, 0.45))); // fixation
-          sc(t2, 1, {duration: 200}); // delay 200ms
-          sc(t2, 2, {mode: 'pick-one'}); // randomize: pick one each loop
-          sc(t2, 3, Object.assign({shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}, px(0.25, 0.38))); // 左→A
-          sc(t2, 4, Object.assign({shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}, px(0.75, 0.38))); // 右→A
-          sc(t2, 5, Object.assign({shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}, px(0.25, 0.38))); // 左→L
-          sc(t2, 6, Object.assign({shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}, px(0.75, 0.38))); // 右→L
-          sc(t2, 7, Object.assign({keys: 'a,l', prompt: 'Red→A  Green→L'}, px(0.5, 0.62))); // keyboard
-          sc(t2, 8, {condition: 'correct'}); // branch placeholder (targetFail set below)
-          sc(t2, 9, {count: 60}); // 60 trials
+          sc(t2, 0, {trial_duration: 700}); // fixation
+          sc(t2, 1, {mode: 'pick-one'}); // randomize: pick one each loop
+          sc(t2, 2, {shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}); // 左→A
+          sc(t2, 3, {shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}); // 右→A
+          sc(t2, 4, {shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}); // 左→L
+          sc(t2, 5, {shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}); // 右→L
+          sc(t2, 6, Object.assign({choices: ['a', 'l'], prompt: 'Red→A  Green→L'})); // keyboard
+          sc(t2, 7, {condition: 'correct'}); // branch placeholder (targetFail set below)
+          sc(t2, 8, {count: 60}); // 60 trials
           // Error feedback trial (branch target)
           addTrial(p2);
           addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           var t3 = findTrial(editor.selectedTrial);
           sc(
             t3,
             0,
-            Object.assign(
-              {content: 'Press the key for the COLOR!\nRed=A  Green=L', fontSize: 22, color: '#ef4444', position: 'center'},
-              px(0.5, 0.4),
-            ),
+            Object.assign({content: 'Press the key for the COLOR!\nRed=A  Green=L', fontSize: 22, color: '#ef4444', position: 'center'}, ),
           );
-          sc(t3, 1, {duration: 1200});
+          t3.trial_duration = 1200;
           // Set branch target to error trial
-          sc(t2, 8, {condition: 'correct', targetFail: t3.id});
+          sc(t2, 7, {condition: 'correct', targetFail: t3.id});
           // Phase 3: Feedback
           addPhase('feedback');
           var p3 = editor.phases[2].id;
@@ -3029,14 +2966,11 @@ function _applyI18n() {
           sc(
             tf,
             0,
-            Object.assign(
-              {
+            Object.assign({
                 content: 'Experiment complete!\n\nThank you for your participation.\nYour reaction time and accuracy have been recorded.',
                 fontSize: 24,
                 position: 'center',
-              },
-              px(0.5, 0.4),
-            ),
+              }, ),
           );
         } else if (name === 'flanker') {
           // Phase 1: Instructions
@@ -3047,30 +2981,28 @@ function _applyI18n() {
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'button', 'r');
           var t1 = findTrial(editor.selectedTrial);
-          sc(t1, 0, Object.assign({
+          sc(t1, 0, {
             content: 'Welcome to the Flanker task!', fontSize: 20, color: '#1e293b', position: 'center'
-          }, px(0.5, 0.15)));
-          sc(t1, 1, Object.assign({
+          });
+          sc(t1, 1, {
             content: 'A row of arrows will appear in the center. Judge the direction of the MIDDLE arrow.\nIf the middle arrow points LEFT (←), press F.\nIf the middle arrow points RIGHT (→), press J.\nIgnore the flanking arrows. Respond quickly and accurately.',
             fontSize: 16, color: '#333333', position: 'center'
-          }, px(0.5, 0.30)));
-          sc(t1, 2, Object.assign({labels: 'Start Experiment'}, px(0.5, 0.76)));
+          });
+          sc(t1, 2, {choices: ['Start Experiment']});
           // Phase 2: Flanker trials
           addPhase('trials');
           var p2 = editor.phases[1].id;
           // Main trial: fixation → delay → randomize(5 texts) → keyboard → branch → loop
           addTrial(p2);
           addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           addComponent(editor.selectedTrial, 'randomize', 'l');
           for (var fi = 0; fi < 5; fi++) addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'keyboard', 'r');
           addComponent(editor.selectedTrial, 'branch', 'l');
           addComponent(editor.selectedTrial, 'loop', 'l');
           var t2 = findTrial(editor.selectedTrial);
-          sc(t2, 0, Object.assign({duration: 500}, px(0.5, 0.45)));
-          sc(t2, 1, {duration: 200});
-          sc(t2, 2, {mode: 'pick-one'});
+          sc(t2, 0, {trial_duration: 700});
+          sc(t2, 1, {mode: 'pick-one'});
           // 5 Flanker arrow variants
           var flankerVariants = [
             {content: '<<<<<', color: '#1a1a2e', 映射按键: 'f'},
@@ -3081,30 +3013,29 @@ function _applyI18n() {
           ];
           for (var fi2 = 0; fi2 < flankerVariants.length; fi2++) {
             var fv = flankerVariants[fi2];
-            sc(t2, 3 + fi2, Object.assign({content: fv.content, fontSize: 28, color: fv.color, position: 'center', 映射按键: fv.映射按键}, px(0.5, 0.38)));
+            sc(t2, 2 + fi2, {content: fv.content, fontSize: 28, color: fv.color, position: 'center', 映射按键: fv.映射按键});
           }
-          sc(t2, 8, Object.assign({keys: 'f,j', prompt: '← Press F  → Press J', timeout: 1500}, px(0.5, 0.62)));
-          sc(t2, 9, {condition: 'correct', targetFail: ''});
-          sc(t2, 10, {count: 80});
+          sc(t2, 7, Object.assign({choices: ['f', 'j'], prompt: '← Press F  → Press J', trial_duration: 1500}));
+          sc(t2, 8, {condition: 'correct', targetFail: ''});
+          sc(t2, 9, {count: 80});
           // Error feedback trial (branch target)
           addTrial(p2);
           addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           var tErr = findTrial(editor.selectedTrial);
-          sc(tErr, 0, Object.assign({
+          sc(tErr, 0, {
             content: 'Press the key according to the rules!', fontSize: 20, color: '#ef4444', position: 'center'
-          }, px(0.5, 0.42)));
-          sc(tErr, 1, {duration: 1500});
-          sc(t2, 9, {condition: 'correct', targetFail: tErr.id});
+          });
+          tErr.trial_duration = 1500;
+          sc(t2, 8, {condition: 'correct', targetFail: tErr.id});
           // Error message trial (shown after main experiment)
           addTrial(p2);
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'keyboard', 'r');
           var t3 = findTrial(editor.selectedTrial);
-          sc(t3, 0, Object.assign({
+          sc(t3, 0, {
             content: 'Incorrect answer. Please focus.', fontSize: 22, color: '#dc2626', position: 'center'
-          }, px(0.5, 0.38)));
-          sc(t3, 1, Object.assign({keys: ' ', prompt: 'Press space to continue'}, px(0.5, 0.62)));
+          });
+          sc(t3, 1, Object.assign({choices: ['space'], prompt: 'Press space to continue'}));
           // Phase 3: Feedback
           addPhase('feedback');
           var p3 = editor.phases[2].id;
@@ -3112,10 +3043,10 @@ function _applyI18n() {
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'keyboard', 'r');
           var tf = findTrial(editor.selectedTrial);
-          sc(tf, 0, Object.assign({
+          sc(tf, 0, {
             content: 'Experiment complete. Thank you for your participation!', fontSize: 22, color: '#1e293b', position: 'center'
-          }, px(0.5, 0.38)));
-          sc(tf, 1, Object.assign({keys: ' '}, px(0.5, 0.62)));
+          });
+          sc(tf, 1, Object.assign({choices: ['space']}));
         } else if (name === 'branch-demo') {
           // Phase 1: explain the branch concept
           addPhase('instructions');
@@ -3127,81 +3058,66 @@ function _applyI18n() {
           sc(
             t1,
             0,
-            Object.assign(
-              {
+            Object.assign({
                 content:
                   'Branch Demo\n\nThis experiment demonstrates the branch component:\n• Red text → Press A\n• Blue text → Press L\n• Wrong answer → jumps to error feedback\n• Correct answer → proceeds normally\n\n2 sets of 3 trials each.',
                 fontSize: 18,
                 position: 'center',
-              },
-              px(0.5, 0.14),
-            ),
+              }, ),
           );
-          sc(t1, 1, Object.assign({labels: 'Start Demo'}, px(0.5, 0.74)));
+          sc(t1, 1, {choices: ['Start Demo']});
           // Phase 2: branch demo trials
           addPhase('trials');
           var p2 = editor.phases[1].id;
           // -- Trial 2: red text, A key (correctKey: a), branch→t3 on error
           addTrial(p2);
           addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'keyboard', 'r');
           addComponent(editor.selectedTrial, 'branch', 'l');
           addComponent(editor.selectedTrial, 'loop', 'l');
           var t2 = findTrial(editor.selectedTrial);
-          sc(t2, 0, Object.assign({duration: 500}, px(0.5, 0.45)));
-          sc(t2, 1, {duration: 200});
-          sc(t2, 2, Object.assign({content: 'RED', color: '#ef4444', fontSize: 36, position: 'center'}, px(0.5, 0.38)));
-          sc(t2, 3, Object.assign({keys: 'a,l', correctKey: 'a'}, px(0.5, 0.62)));
-          sc(t2, 4, {condition: 'correct'}); // targetFail set below after trial IDs known
-          sc(t2, 5, {count: 3});
+          sc(t2, 0, {trial_duration: 700});
+          sc(t2, 1, {content: 'RED', color: '#ef4444', fontSize: 36, position: 'center'});
+          sc(t2, 2, Object.assign({choices: ['a', 'l'], correctKey: 'a'}));
+          sc(t2, 3, {condition: 'correct'}); // targetFail set below after trial IDs known
+          sc(t2, 4, {count: 3});
           // -- Trial 3: error feedback (target of branch from trial 2)
           addTrial(p2);
           addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           var t3 = findTrial(editor.selectedTrial);
           sc(
             t3,
             0,
-            Object.assign(
-              {content: 'Wrong key!\n\nPress A for RED text', fontSize: 22, color: '#ef4444', position: 'center'},
-              px(0.5, 0.4),
-            ),
+            Object.assign({content: 'Wrong key!\n\nPress A for RED text', fontSize: 22, color: '#ef4444', position: 'center'}, ),
           );
-          sc(t3, 1, {duration: 1500});
+          t3.trial_duration = 1500;
           // -- Trial 4: blue text, L key (correctKey: l), branch→t5 on error
           addTrial(p2);
           addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'keyboard', 'r');
           addComponent(editor.selectedTrial, 'branch', 'l');
           addComponent(editor.selectedTrial, 'loop', 'l');
           var t4 = findTrial(editor.selectedTrial);
-          sc(t4, 0, Object.assign({duration: 500}, px(0.5, 0.45)));
-          sc(t4, 1, {duration: 200});
-          sc(t4, 2, Object.assign({content: 'BLUE', color: '#3b82f6', fontSize: 36, position: 'center'}, px(0.5, 0.38)));
-          sc(t4, 3, Object.assign({keys: 'a,l', correctKey: 'l'}, px(0.5, 0.62)));
-          sc(t4, 4, {condition: 'correct'});
-          sc(t4, 5, {count: 3});
+          sc(t4, 0, {trial_duration: 700});
+          sc(t4, 1, {content: 'BLUE', color: '#3b82f6', fontSize: 36, position: 'center'});
+          sc(t4, 2, Object.assign({choices: ['a', 'l'], correctKey: 'l'}));
+          sc(t4, 3, {condition: 'correct'});
+          sc(t4, 4, {count: 3});
           // -- Trial 5: error feedback (target of branch from trial 4)
           addTrial(p2);
           addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           var t5 = findTrial(editor.selectedTrial);
           sc(
             t5,
             0,
-            Object.assign(
-              {content: 'Wrong key!\n\nPress L for BLUE text', fontSize: 22, color: '#ef4444', position: 'center'},
-              px(0.5, 0.4),
-            ),
+            Object.assign({content: 'Wrong key!\n\nPress L for BLUE text', fontSize: 22, color: '#ef4444', position: 'center'}, ),
           );
-          sc(t5, 1, {duration: 1500});
+          t5.trial_duration = 1500;
           // Now set targetFail references (trial IDs are known)
-          sc(t2, 4, {condition: 'correct', targetFail: t3.id});
-          sc(t4, 4, {condition: 'correct', targetFail: t5.id});
+          sc(t2, 3, {condition: 'correct', targetFail: t3.id});
+          sc(t4, 3, {condition: 'correct', targetFail: t5.id});
           // Phase 3: feedback
           addPhase('feedback');
           var p3 = editor.phases[2].id;
@@ -3211,15 +3127,12 @@ function _applyI18n() {
           sc(
             tf,
             0,
-            Object.assign(
-              {
+            Object.assign({
                 content:
                   'Demo complete!\n\nKey branch features:\n• targetFail property specifies error jump target\n• Correct answer: continues main flow\n• Wrong answer: flashes red → jumps to error page\n• Error page ends → returns to main flow\n• Target trials auto-skipped when reached via normal flow',
                 fontSize: 20,
                 position: 'center',
-              },
-              px(0.5, 0.3),
-            ),
+              }, ),
           );
         } else if (name === 'randomize-demo') {
           // Phase 1: Instructions
@@ -3232,17 +3145,14 @@ function _applyI18n() {
           sc(
             t1,
             0,
-            Object.assign(
-              {
+            Object.assign({
                 content:
                   'Randomize + Variable Demo\n\nThis experiment demonstrates two logic components:\n\nVariable: stores experiment data (e.g. score)\n  • Creates variable score=0 at trial start\n  • +1 on each correct answer\n\nRandomize: shuffles component display order\n  • 4 fruit names in random order\n  • Different order each loop\n\nMemorize the fruit names, then type them in.\n5 rounds total.',
                 fontSize: 17,
                 position: 'center',
-              },
-              px(0.5, 0.12),
-            ),
+              }, ),
           );
-          sc(t1, 1, Object.assign({labels: 'Start Demo'}, px(0.5, 0.76)));
+          sc(t1, 1, {choices: ['Start Demo']});
           // Phase 2: Trials
           addPhase('trials');
           var p2 = editor.phases[1].id;
@@ -3254,51 +3164,46 @@ function _applyI18n() {
           // Trial 3: memory test with randomize — 4 fruits + response
           addTrial(p2);
           addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           addComponent(editor.selectedTrial, 'randomize', 'l');
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'text', 's');
           addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'delay', 'l');
           addComponent(editor.selectedTrial, 'textInput', 'r');
           addComponent(editor.selectedTrial, 'variable', 'l');
           addComponent(editor.selectedTrial, 'loop', 'l');
           var t3 = findTrial(editor.selectedTrial);
-          sc(t3, 0, Object.assign({duration: 500}, px(0.5, 0.45)));
-          sc(t3, 1, {duration: 200});
-          sc(t3, 2, {mode: 'shuffle'});
+          sc(t3, 0, {trial_duration: 700});
+          sc(t3, 1, {mode: 'shuffle'});
+          sc(
+            t3,
+            2,
+            {content: 'Apple', fontSize: 30, color: '#ef4444', position: 'center'},
+          );
           sc(
             t3,
             3,
-            Object.assign({content: 'Apple', fontSize: 30, color: '#ef4444', position: 'center'}, px(0.5, 0.2)),
+            {content: 'Banana', fontSize: 30, color: '#f59e0b', position: 'center'},
           );
           sc(
             t3,
             4,
-            Object.assign({content: 'Banana', fontSize: 30, color: '#f59e0b', position: 'center'}, px(0.5, 0.3)),
+            {content: 'Orange', fontSize: 30, color: '#f97316', position: 'center'},
           );
           sc(
             t3,
             5,
-            Object.assign({content: 'Orange', fontSize: 30, color: '#f97316', position: 'center'}, px(0.5, 0.4)),
+            {content: 'Grape', fontSize: 30, color: '#a855f7', position: 'center'},
           );
+          // No trial_duration here: survey-text has none, so the recall question
+          // waits for the participant to submit.
           sc(
             t3,
             6,
-            Object.assign({content: 'Grape', fontSize: 30, color: '#a855f7', position: 'center'}, px(0.5, 0.5)),
+            {prompt: 'Which fruits do you remember?', placeholder: 'Apple, Banana, …', name: 'Fruits'},
           );
-          sc(t3, 7, {duration: 2000});
-          sc(
-            t3,
-            8,
-            Object.assign(
-              {placeholder: 'Enter the fruits you remember', correctAnswer: 'Apple,Banana,Orange,Grape', validation: 'contains'},
-              px(0.5, 0.7),
-            ),
-          );
-          sc(t3, 9, {name: 'score', initial: 0});
-          sc(t3, 10, {count: 5});
+          sc(t3, 7, {name: 'score', initial: 0});
+          sc(t3, 8, {count: 5});
           // Phase 3: Feedback
           addPhase('feedback');
           var p3 = editor.phases[2].id;
@@ -3308,15 +3213,12 @@ function _applyI18n() {
           sc(
             tf,
             0,
-            Object.assign(
-              {
+            Object.assign({
                 content:
                   'Demo complete!\n\nVariable component:\n• Stores and updates experiment data\n• e.g. scores, cumulative RT\n• Converted to data fields in jsPsych\n\nRandomize component:\n• Shuffles component order within a trial\n• Controls order effects\n• Converted to timeline_variables in jsPsych',
                 fontSize: 20,
                 position: 'center',
-              },
-              px(0.5, 0.28),
-            ),
+              }, ),
           );
         }
         if (editor.selectedTrial) {
@@ -3327,12 +3229,13 @@ function _applyI18n() {
       }
 
       function setDevice(idx) {
-        if (idx === '') {
-          editor.device = null;
-        } else {
-          editor.device = devicePresets[parseInt(idx)];
+        if (idx === '' || idx === 'custom') {
+          // "Custom" keeps whatever size is already in the fields.
+          syncDeviceControls();
+          return;
         }
-        renderAll();
+        var p = devicePresets[parseInt(idx)];
+        if (p) setDeviceSize(p.w, p.h);
       }
 
       // Compile the experiment into jsPsych code (no HTML shell).
@@ -3354,14 +3257,29 @@ function _applyI18n() {
         // carry base64 data URIs, so inlining them twice would double file size.
         var _mediaVars = {};
         var _mediaDecls = [];
-        function _mediaRef(c) {
-          if (!c.fileData) return null;
-          if (_mediaVars[c.fileData]) return _mediaVars[c.fileData];
+        function _mediaRefData(data, type) {
+          if (!data) return null;
+          if (_mediaVars[data]) return _mediaVars[data];
           var name = 'EXP_MEDIA_' + _mediaDecls.length;
-          _mediaVars[c.fileData] = name;
-          _mediaDecls.push({name: name, type: c.type, data: c.fileData});
+          _mediaVars[data] = name;
+          _mediaDecls.push({name: name, type: type || 'image', data: data});
           return name;
         }
+        function _mediaRef(c) {
+          return _mediaRefData(c.fileData, c.type);
+        }
+        // The stage every stimulus is laid out on. jsPsych's own
+        // `.jspsych-content-wrapper { margin:auto }` centres this block, so it
+        // needs no justify-content of its own. The width is the device the
+        // experiment was designed for; the height lives on the display element
+        // (see _deviceStyle) because the plugins append their own controls AFTER
+        // the stimulus, and a stage as tall as the device would push them off it.
+        function _stage(innerHTML) {
+          return '<div style="display:flex;flex-direction:column;align-items:center;' +
+            'gap:1.5em;padding:2em;box-sizing:border-box;width:' + dev.w + 'px">' +
+            innerHTML + '</div>';
+        }
+
         // Turn stimulus HTML into a single-quoted JS string. Placeholders left by
         // compHTML() become variable concatenations AFTER quote-escaping, so the
         // escaped HTML and the live expression don't interfere.
@@ -3384,11 +3302,31 @@ function _applyI18n() {
 
         // Map internal response type → jsPsych plugin name
         // Everything runs on jsPsychHtmlKeyboardResponse. For keyboard trials it is
-        // used as intended; for button/slider/textInput/click it serves as the trial
+        // used as intended; every response component now runs on its own plugin.
         // container with choices: "NO_KEYS" — the controls are drawn into the
         // stimulus and the trial ends via jsPsych.finishTrial().
-        function pluginName(rt) {
-          var name = 'jsPsychHtmlKeyboardResponse';
+        // Which plugin runs an image-only trial. The dedicated image plugins take
+        // the picture as `stimulus` and nothing else, so this only applies when
+        // the image is the whole visual content — the same shape as the official
+        // jsPsych RT-task demo.
+        var _imagePlugins = {
+          keyboard: 'jsPsychImageKeyboardResponse',
+          button: 'jsPsychImageButtonResponse',
+          slider: 'jsPsychImageSliderResponse',
+        };
+
+        function pluginName(rt, forImage) {
+          if (forImage && _imagePlugins[rt]) {
+            _usedPlugins[_imagePlugins[rt]] = true;
+            return _imagePlugins[rt];
+          }
+          // This is now only the fallback: instructions, feedback and timed
+          // nodes that carry no response component of their own.
+          var name = rt === 'button' ? 'jsPsychHtmlButtonResponse'
+                   : rt === 'slider' ? 'jsPsychHtmlSliderResponse'
+                   : rt === 'animation' ? 'jsPsychAnimation'
+                   : rt === 'textInput' ? 'jsPsychSurveyText'
+                   : 'jsPsychHtmlKeyboardResponse';
           _usedPlugins[name] = true;
           return name;
         }
@@ -3396,56 +3334,23 @@ function _applyI18n() {
         // Build styled stimulus HTML for a component (mirrors renderTrialHTML style)
         // ---- Self-rendered response controls -------------------------------
         // jsPsych's *-button / *-slider / survey-text plugins render their controls
-        // *below* the stimulus, which is why a control dragged to posY ended up
+        // *below* the stimulus, which is why a positioned control ended up
         // outside the canvas. We draw the controls into the stimulus HTML at their
         // real coordinates and end the trial ourselves with jsPsych.finishTrial().
-        function _esc(s) {
-          return String(s == null ? '' : s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-        }
-        var _CTL_CSS =
-          'font:inherit;font-size:16px;padding:11px 24px;border-radius:10px;' +
-          'border:1px solid #c9c9d2;background:#ffffff;color:#17171c;cursor:pointer;';
-        function _ctlButton(label, kind, idx, val, extra) {
-          return '<button type="button" class="expvis-ctl" data-kind="' + kind + '"' +
-            (idx == null ? '' : ' data-index="' + idx + '"') +
-            ' data-value="' + _esc(val) + '" style="' + _CTL_CSS + (extra || '') + '">' +
-            _esc(label) + '</button>';
-        }
-        function _ctlHTML(c, px) {
-          if (c.type === 'button') {
-            var labels = String(c.labels || '').split(',').map(function (x) { return x.trim(); })
-              .filter(function (x) { return x; });
-            return '<div style="' + px + 'display:flex;gap:14px;justify-content:center">' +
-              labels.map(function (l, i) { return _ctlButton(l, 'button', i, l); }).join('') +
-              '</div>';
-          }
-          if (c.type === 'slider') {
-            var lo = c.min == null ? 0 : c.min, hi = c.max == null ? 100 : c.max;
-            var st = c.step || 1, mid = Math.round((lo + hi) / 2);
-            return '<div style="' + px + 'text-align:center">' +
-              '<input type="range" class="expvis-range" min="' + lo + '" max="' + hi +
-              '" step="' + st + '" value="' + mid + '" style="width:320px;accent-color:#6366f1">' +
-              '<div class="expvis-range-val" style="font-size:1.3em;font-weight:700;margin:6px 0 10px">' + mid + '</div>' +
-              _ctlButton('Continue', 'slider', null, mid) +
-              '</div>';
-          }
-          if (c.type === 'textInput') {
-            return '<div style="' + px + 'text-align:center">' +
-              '<input type="text" class="expvis-text" placeholder="' + _esc(c.placeholder || '') +
-              '" style="font:inherit;font-size:16px;padding:10px 14px;border:1px solid #c9c9d2;' +
-              'border-radius:8px;width:280px"> ' +
-              _ctlButton('Continue', 'textInput', null, 'submit') +
-              '</div>';
-          }
-          if (c.type === 'click') {
-            return '<div class="expvis-ctl expvis-clickzone" data-kind="click" data-value="click" ' +
-              'style="position:absolute;left:0;top:0;right:0;bottom:0;cursor:pointer"></div>';
-          }
-          return '';
+        // jsPsych's ParameterType.KEYS takes an ARRAY of key strings, or one of
+        // the sentinel strings "ALL_KEYS" / "NO_KEYS". (A comma-separated string
+        // is not one of the accepted forms — it falls through to
+        // String.prototype.includes() and matches as a substring.)
+        // An empty list means "any key"; `space` is the readable spelling of the
+        // spacebar, since a bare space would not survive trimming.
+        function _keys(c) {
+          var list = (Array.isArray(c.choices) ? c.choices : [])
+            .map(function (k) {
+              var t = String(k).trim();
+              return t.toLowerCase() === 'space' ? ' ' : t;
+            })
+            .filter(function (k) { return k; });
+          return list.length ? list : 'ALL_KEYS';
         }
 
         function compHTML(c) {
@@ -3453,10 +3358,13 @@ function _applyI18n() {
           // not absolutely positioned pixels. `position` becomes the alignment.
           // This is what makes the stimulus responsive and matches how hand-written
           // jsPsych lays out stimuli.
+          // Alignment is emitted only when it differs from the default: centred
+          // components inherit it from the flex container (`align-items:center`)
+          // and from `.jspsych-content { text-align:center }`.
           var pos = c.position || 'center';
-          var _al = pos === 'left' ? 'flex-start' : pos === 'right' ? 'flex-end' : 'center';
-          var _ta = pos === 'left' ? 'left' : pos === 'right' ? 'right' : 'center';
-          var px = 'align-self:' + _al + ';text-align:' + _ta + ';';
+          var px = pos === 'left' ? 'align-self:flex-start;text-align:left;'
+                 : pos === 'right' ? 'align-self:flex-end;text-align:right;'
+                 : '';
           switch (c.type) {
             case 'text':
               return (
@@ -3468,8 +3376,6 @@ function _applyI18n() {
                 (c.color || '#333') +
                 ';font-weight:' +
                 (c.fontWeight || 'bold') +
-                ';text-align:' +
-                (c.position === 'left' ? 'left' : c.position === 'right' ? 'right' : 'center') +
                 '">' +
                 (c.content || '')
                   .replace(/&/g, '&amp;')
@@ -3494,14 +3400,10 @@ function _applyI18n() {
               );
             case 'fixation':
               return '<div style="' + px + 'font-size:60px;color:#ccc">+</div>';
-            case 'button':
-            case 'slider':
-            case 'textInput':
-            case 'click':
-              return _ctlHTML(c, px);
             case 'image':
               return c.fileData
-                ? '<img src="@@' + _mediaRef(c) + '@@" style="' + px + 'max-width:' + (c.width || 200) + 'px">'
+                ? '<img src="@@' + _mediaRef(c) + '@@" style="' + px + 'max-width:' +
+                  (c.stimulus_width || 200) + 'px">'
                 : '';
             case 'audio':
               return c.fileData
@@ -3529,19 +3431,17 @@ function _applyI18n() {
       var stims = [],
         respType = null,
         respInfo = {},
-        logic = { loop: null, hints: [], randomizeMode: null, randomizeStims: [], timeout: 0, hasBranch: false, branchCond: 'correct', branchTarget: '', branchMatch: '', branchOp: '>=', branchCmp: '', hasVariable: false, varName: '', varInit: 0, varMode: 'correct' };
+        logic = { loop: null, hints: [], randomizeMode: null, randomizeStims: [], trial_duration: 0, hasBranch: false, branchCond: 'correct', branchTarget: '', branchMatch: '', branchOp: '>=', branchCmp: '', hasVariable: false, varName: '', varInit: 0, varMode: 'correct' };
       var preStims = [], postStims = [], foundRandomize = false;
-      // fixation / delay are *timed segments*: each becomes its own jsPsych trial
-      // inside the node's timeline, so their durations actually take effect.
-      // (Previously they were folded into the stimulus HTML and the duration was
-      // recorded but never emitted.)
+      // fixation is a *timed segment*: it becomes its own jsPsych trial inside
+      // the node's timeline, so its duration actually takes effect. (Previously
+      // it was folded into the stimulus HTML and the duration was recorded but
+      // never emitted.)
       var preTiming = [], postTiming = [], seenVisual = false;
-      // response components drawn into the stimulus at their own coordinates
-      var respControls = [];
       t.components.forEach(function (c) {
-        if (c.type === 'fixation' || c.type === 'delay') {
+        if (c.type === 'fixation') {
           // Keep the component itself: its own renderer supplies the look
-          // (e.g. the fixation cross is 40px #ccc), so a trimmed {kind,duration}
+          // (e.g. the fixation cross is 60px #ccc), so a trimmed {kind,duration}
           // would silently lose that styling.
           if (seenVisual) { postTiming.push(c); } else { preTiming.push(c); }
           return;
@@ -3557,26 +3457,83 @@ function _applyI18n() {
         if (c.type === 'keyboard') {
           respType = 'keyboard';
           respInfo = respInfo || {};
-          respInfo.choices = c.keys.split(',').map(function (k) { var t = k.trim(); return t || ' '; });
+          respInfo.choices = _keys(c);
           respInfo.correctKey = c.correctKey || '';
-          if (c.timeout) logic.timeout = Math.max(logic.timeout || 0, c.timeout);
-        } else if (c.type === 'button' || c.type === 'slider' ||
-                   c.type === 'textInput' || c.type === 'click') {
-          // Self-rendered: drawn into the stimulus, so posX/posY are honoured.
-          if (!respType) respType = c.type;
+          respInfo.prompt = c.prompt || '';
+          respInfo.stimulusDuration = c.stimulus_duration;
+          respInfo.responseEndsTrial = !(c.response_ends_trial === false ||
+            c.response_ends_trial === 'false');
+          respInfo.waitForKeyRelease = (c.wait_for_key_release === true ||
+            c.wait_for_key_release === 'true');
+          if (c.trial_duration) logic.trial_duration = Math.max(logic.trial_duration || 0, c.trial_duration);
+        } else if (c.type === 'button') {
+          // Runs on jsPsychHtmlButtonResponse — every field below is emitted
+          // verbatim as the plugin parameter of the same name.
+          if (!respType) respType = 'button';
           respInfo = respInfo || {};
-          if (c.type === 'button') {
-            respInfo.choices = String(c.labels || '').split(',').map(function (l) { return l.trim(); });
-          } else if (c.type === 'slider') {
-            respInfo.min = c.min; respInfo.max = c.max; respInfo.step = c.step;
-            respInfo.labelMin = c.labelMin || '';
-            respInfo.labelMax = c.labelMax || '';
-          } else if (c.type === 'textInput') {
-            respInfo.placeholder = c.placeholder || '';
-            respInfo.correctAnswer = c.correctAnswer || '';
-            respInfo.validation = c.validation || 'none';
-          }
-          respControls.push(c);
+          respInfo.choices = (Array.isArray(c.choices) ? c.choices : [])
+            .map(function (x) { return String(x).trim(); })
+            .filter(function (x) { return x; });
+          respInfo.prompt = c.prompt || '';
+          respInfo.buttonLayout = c.button_layout || 'grid';
+          respInfo.gridRows = c.grid_rows;
+          respInfo.gridColumns = c.grid_columns;
+          respInfo.trialDuration = c.trial_duration;
+          respInfo.stimulusDuration = c.stimulus_duration;
+          // The inspector stores select values as strings, so accept both forms.
+          respInfo.responseEndsTrial = !(c.response_ends_trial === false ||
+            c.response_ends_trial === 'false');
+          respInfo.enableButtonAfter = c.enable_button_after;
+        } else if (c.type === 'animation') {
+          // Runs on jsPsychAnimation. It takes over the display element, so it
+          // is emitted as the whole trial rather than as a parameter of one.
+          if (!respType) respType = 'animation';
+          respInfo = respInfo || {};
+          respInfo.frames = (Array.isArray(c.frames) ? c.frames : [])
+            .filter(function (f) { return f && f.fileData; });
+          respInfo.frameTime = c.frame_time;
+          respInfo.frameIsi = c.frame_isi;
+          respInfo.sequenceReps = c.sequence_reps;
+          respInfo.animChoices = _keys(c);
+          respInfo.renderOnCanvas = !(c.render_on_canvas === false ||
+            c.render_on_canvas === 'false');
+          respInfo.prompt = c.prompt || '';
+        } else if (c.type === 'slider') {
+          // Runs on jsPsychHtmlSliderResponse — every field below is emitted
+          // verbatim as the plugin parameter of the same name.
+          if (!respType) respType = 'slider';
+          respInfo = respInfo || {};
+          respInfo.min = c.min;
+          respInfo.max = c.max;
+          respInfo.step = c.step;
+          respInfo.sliderStart = c.slider_start;
+          respInfo.labels = (Array.isArray(c.labels) ? c.labels : [])
+            .map(function (x) { return String(x); })
+            .filter(function (x) { return x !== ''; });
+          respInfo.buttonLabel = c.button_label || '';
+          respInfo.sliderWidth = c.slider_width;
+          respInfo.requireMovement = (c.require_movement === true ||
+            c.require_movement === 'true');
+          respInfo.prompt = c.prompt || '';
+          respInfo.stimulusDuration = c.stimulus_duration;
+          respInfo.responseEndsTrial = !(c.response_ends_trial === false ||
+            c.response_ends_trial === 'false');
+        } else if (c.type === 'textInput') {
+          // Runs on jsPsychSurveyText. The question text lives here rather than
+          // in the stimulus, and the plugin brings its own submit button.
+          if (!respType) respType = 'textInput';
+          respInfo = respInfo || {};
+          respInfo.question = {
+            // Always a string: the plugin prints <p>prompt</p> unconditionally.
+            prompt: c.prompt == null ? '' : String(c.prompt),
+            placeholder: c.placeholder == null ? '' : String(c.placeholder),
+            name: c.name ? String(c.name) : 'Q0',
+            required: (c.required === true || c.required === 'true'),
+            rows: Number(c.rows) || 1,
+            columns: Number(c.columns) || 40,
+          };
+          respInfo.buttonLabel = c.button_label || '';
+          respInfo.autocomplete = (c.autocomplete === true || c.autocomplete === 'true');
         } else if (c.type === 'loop') {
           logic.loop = c.count;
         } else if (c.type === 'randomize') {
@@ -3596,17 +3553,21 @@ function _applyI18n() {
           logic.varMode = c.mode || 'correct';
         }
       });
-// Default: any-key to continue (for instructions / feedback / stimulus-only)
+// Default: any-key to continue (for instructions / feedback / stimulus-only).
+            // This used to emit `choices: [' ']` — space only — while the prompt
+            // said "press any key". ALL_KEYS is the jsPsych way to say what was
+            // meant.
             if (!respType) {
               respType = 'keyboard';
-              if (stims.length > 0) respInfo = {choices: [' ']};
+              // No explicit choices: the plugin's default is already "any key".
+              if (stims.length > 0) respInfo = {};
             }
 
             // A jsPsych trial runs exactly one response plugin, so a trial carrying
             // several response components can only emit one of them. Say so loudly
             // instead of dropping the rest silently.
             var respComps = t.components.filter(function (c) {
-              return ['keyboard', 'button', 'slider', 'textInput', 'click'].indexOf(c.type) >= 0;
+              return ['keyboard', 'button', 'slider', 'textInput'].indexOf(c.type) >= 0;
             });
             if (respComps.length > 1) {
               logic.hints.push('// !! This trial has ' + respComps.length +
@@ -3616,12 +3577,90 @@ function _applyI18n() {
                 'their own trials if you need to capture all responses.');
             }
 
+            // jsPsychAnimation clears the display element every frame, so nothing
+            // else can share its trial — say so rather than dropping silently.
+            if (t.components.some(function (c) { return c.type === 'animation'; })) {
+              var _animOthers = t.components.filter(function (c) {
+                return ['loop', 'variable', 'branch', 'randomize'].indexOf(c.type) < 0 &&
+                       c.type !== 'animation';
+              });
+              if (_animOthers.length) {
+                logic.hints.push('// !! This trial mixes an animation with ' + _animOthers.length +
+                  ' other component(s) (' + _animOthers.map(function (c) { return c.type; }).join(', ') +
+                  '). The animation plugin clears the display each frame, so those will not appear.');
+              }
+            }
+
+            // survey-text has no trial_duration at all (no setTimeout anywhere in
+            // the plugin), so a timed free-text question cannot auto-advance.
+            // Checked here, before the hints are written out above the trial.
+            if (respType === 'textInput') {
+              var _wantedDuration = logic.trial_duration || t.trial_duration;
+              if (_wantedDuration) {
+                logic.hints.push('// !! This trial sets a ' + _wantedDuration + 'ms Trial Duration, but ' +
+                  'survey-text has no trial_duration parameter — the question waits for the ' +
+                  'participant to submit.');
+              }
+            }
+
+            // An image-only trial runs on the dedicated image plugin, the way the
+            // official RT-task demo does. One other visual component — a caption,
+            // a shape — and the trial falls back to the HTML path, because the
+            // image plugins take the picture as `stimulus` and nothing else.
+            var imageOnlyComp = (stims.length === 1 && stims[0].type === 'image' &&
+              _mediaRef(stims[0])) ? stims[0] : null;
+            var useImagePlugin = !!imageOnlyComp && !!_imagePlugins[respType];
+
             // Semantic, stable names in the generated code: the phase type plus
             // the trial's index within that phase.
             var _slug = ph.type === 'instructions' ? 'instructions'
                       : ph.type === 'feedback' ? 'feedback' : 'trials';
             var trialName = _slug + '_trial_' + (ti + 1);
-            var pname = pluginName(respType);
+            var pname = pluginName(respType, useImagePlugin);
+
+            // ---- jsPsychAnimation owns the display element, so it is emitted as
+            // the whole trial rather than as one parameter among others. ----
+            if (respType === 'animation') {
+              var _fr = respInfo.frames || [];
+              if (!_fr.length) {
+                logic.hints.push('// !! This animation has no frames uploaded — nothing to play.');
+              }
+              logic.hints.forEach(function (h) { code += h + '\n'; });
+              if (logic.hasVariable && logic.varName) {
+                code += 'var ' + logic.varName + ' = ' + (logic.varInit || 0) + ';\n';
+              }
+              // Same rule as everywhere else: repetitions make it a real node;
+              // without them it is one trial and is emitted flat. Provenance data
+              // and the ALL_KEYS default are left out.
+              var _aLoop = !!logic.loop;
+              var _a = _aLoop ? '    ' : '  ';
+              code += 'var ' + trialName + ' = {\n';
+              if (_aLoop) code += '  repetitions: ' + logic.loop + ',\n';
+              if (_aLoop) code += '  timeline: [{\n';
+              code += _a + 'type: jsPsychAnimation,\n';
+              code += _a + 'stimuli: [' + _fr.map(function (f) {
+                return _mediaRefData(f.fileData, 'image');
+              }).join(', ') + '],\n';
+              code += _a + 'frame_time: ' + (respInfo.frameTime || 250) + ',\n';
+              if (respInfo.frameIsi) code += _a + 'frame_isi: ' + respInfo.frameIsi + ',\n';
+              if (respInfo.sequenceReps && respInfo.sequenceReps !== 1) {
+                code += _a + 'sequence_reps: ' + respInfo.sequenceReps + ',\n';
+              }
+              // "ALL_KEYS" is the plugin default, so only a named key list is written.
+              if (respInfo.animChoices !== 'ALL_KEYS') {
+                code += _a + 'choices: [' + respInfo.animChoices.map(function (k) {
+                  return '"' + String(k).replace(/"/g, '\\"') + '"';
+                }).join(', ') + '],\n';
+              }
+              if (respInfo.prompt) code += _a + "prompt: '" + _jsStr(String(respInfo.prompt)) + "',\n";
+              if (!respInfo.renderOnCanvas) code += _a + 'render_on_canvas: false,\n';
+              // strip the trailing comma off the last property
+              code = code.replace(/,\n$/, '\n');
+              if (_aLoop) code += '  }]\n};\n';
+              else code += '};\n';
+              code += 'timeline.push(' + trialName + ');\n\n';
+              return; // this trial is complete
+            }
 
             // --- Build stimulus HTML ---
             // For randomize pick-one: generate timeline_variables per stimulus variant
@@ -3630,34 +3669,60 @@ function _applyI18n() {
             // Both modes drive the trial from timeline_variables; they differ only in
             // how many variants run per repetition (see the `sample` / `randomize_order` below).
             var hasVariantTimeline = hasRandomizePickOne || hasRandomizeShuffle;
+            // Presentation steps. Components dropped on the trial's shared screen
+            // collect into one step; a component marked `newStep` opens a new one,
+            // shown on its own for its Step Duration. Only the LAST step shares the
+            // trial with the response component — the earlier ones become their own
+            // NO_KEYS trials inside the node.
+            // `newStep` is a SEPARATOR, matching the canvas: it ends the screen
+            // that is open and starts the next one. The components after it join
+            // that new screen until another separator appears.
+            var _stepGroups = [];
+            stims.forEach(function (c) {
+              if (!_stepGroups.length || c.newStep) _stepGroups.push([c]);
+              else _stepGroups[_stepGroups.length - 1].push(c);
+            });
+            // Steps and randomize variants are not combinable yet: a variant is
+            // already one screen per trial, so the split is skipped and explained.
+            // The final screen is the response screen: it stays up until the
+            // participant answers (or, with no response component, until any key),
+            // which is exactly what a trial with no trial_duration does in
+            // hand-written jsPsych. The canvas marks that step as "until response"
+            // rather than showing a Step Duration that would not be used.
+            var _splitSteps = !hasVariantTimeline && _stepGroups.length > 1;
+            var _leadGroups = _splitSteps ? _stepGroups.slice(0, -1) : [];
+            if (hasVariantTimeline && _stepGroups.length > 1) {
+              logic.hints.push('// !! This trial mixes randomize variants with presentation steps; ' +
+                'the steps were ignored. Split them into separate trials.');
+            }
             // Build HTML for pre-randomize components (fixation etc.)
             var preHTML = preStims.map(function (c) { return compHTML(c); }).join('');
             // Individual stimulus variants for timeline_variables
             var stimVariants = logic.randomizeStims.map(function (c) {
-              return { html: compHTML(c), correctKey: c.映射按键 || '' };
+              return {
+                html: compHTML(c),
+                correctKey: c.映射按键 || '',
+                // The image plugins take the picture itself as `stimulus`, so the
+                // variant holds the media variable rather than the <img> markup.
+                mediaVar: c.type === 'image' ? _mediaRef(c) : null,
+              };
             });
-            // Self-rendered controls join the stimulus at their own coordinates.
-            // A click-anywhere zone goes first so it sits *under* the other controls
-            // (otherwise it would swallow their clicks).
-            var _clickZones = respControls.filter(function (c) { return c.type === 'click'; });
-            var _otherCtls = respControls.filter(function (c) { return c.type !== 'click'; });
-            var ctlHTML = _clickZones.map(function (c) {
-                            // click-anywhere spans the viewport, independent of the flow
-                            return _ctlHTML(c, 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:1;');
-                          }).join('') +
-                          _otherCtls.map(function (c) {
-                            var cp = c.position || 'center';
-                            var cal = cp === 'left' ? 'flex-start' : cp === 'right' ? 'flex-end' : 'center';
-                            return _ctlHTML(c, 'align-self:' + cal + ';');
-                          }).join('');
-            // Flow container: no fixed canvas, no absolute positioning — content
-            // stacks in a centred flex column and adapts to any viewport.
-            var fullStimHTML = '<div style="display:flex;flex-direction:column;align-items:center;' +
-              'justify-content:center;min-height:60vh;gap:1.5em;padding:2em;box-sizing:border-box">' +
-              preHTML + ctlHTML +
-              (hasVariantTimeline ? '__VARIANT__' : postStims.map(function(c){return compHTML(c);}).join('')) +
-              '</div>';
-            fullStimHTML = _jsStr(fullStimHTML);
+            // Flow container: components stack in a flex column. jsPsych's own
+            // `.jspsych-content-wrapper { margin:auto }` already centres this block,
+            // so no justify-content is needed here — and `min-height` actively hurt,
+            // because the plugin's buttons are appended AFTER this block and got
+            // pushed away from their stimulus. gap + align-items do the real work:
+            // gap spaces the components, align-items centres fixed-width ones.
+            // The stage is pinned to the device width, so what the researcher laid
+            // out is the box the participant gets. The HEIGHT is not set here: the
+            // plugins append their own controls *after* the stimulus, so a stage as
+            // tall as the device would push buttons and sliders off the bottom of
+            // the screen. The design height is applied to jsPsych's display area
+            // instead — see _deviceStyle().
+            var _bodyHTML = _splitSteps
+              ? _stepGroups[_stepGroups.length - 1].map(function (c) { return compHTML(c); }).join('')
+              : preHTML + (hasVariantTimeline ? '__VARIANT__' : postStims.map(function(c){return compHTML(c);}).join(''));
+            var fullStimHTML = _jsStr(_stage(_bodyHTML));
 
             // Where the correct answer comes from. Recorded into the trial's `data`
             // so the export is directly analysable, and used to score the trial.
@@ -3683,6 +3748,15 @@ function _applyI18n() {
               code += h + '\n';
             });
 
+            // A node holding exactly one trial and carrying no node-level
+            // parameters IS just a trial, so it is emitted flat — the shape
+            // hand-written jsPsych uses. Anything with repetitions / sample /
+            // randomize_order / a conditional entry / extra timed segments has to
+            // keep the wrapper, because those belong to the node, not the trial.
+            var _hasBranchEntry = !!(logic.hasBranch && logic.branchTarget);
+            var _plainNode = !hasVariantTimeline && !logic.loop && !_hasBranchEntry &&
+              preTiming.length === 0 && postTiming.length === 0 && _leadGroups.length === 0;
+
             L(0, 'var ' + trialName + ' = {');
 
             if (hasVariantTimeline && stimVariants.length > 1) {
@@ -3691,8 +3765,11 @@ function _applyI18n() {
               code += '// Stimulus variants for ' + trialName + '\n';
               code += 'var ' + trialName + '_variants = [\n';
               stimVariants.forEach(function (v) {
-                code += '  {stimulus: \'' + _jsStr(preHTML + v.html) +
-                        '\', correct_response: "' + (v.correctKey || '') + '"},\n';
+                var _stimExpr = (useImagePlugin && v.mediaVar)
+                  ? v.mediaVar
+                  : "'" + _jsStr(preHTML + v.html) + "'";
+                code += '  {stimulus: ' + _stimExpr +
+                        ', correct_response: "' + (v.correctKey || '') + '"},\n';
               });
               code += '];\n\n';
               L(1, 'timeline_variables: ' + trialName + '_variants,');
@@ -3712,20 +3789,20 @@ function _applyI18n() {
             }
 
             // --- node timeline: timed segments around the stimulus trial ---
-            L(1, 'timeline: [');
-            var ei = 2;
+            if (!_plainNode) L(1, 'timeline: [');
+            var ei = _plainNode ? 1 : 2;
             // A fixed-duration trial that waits for nothing.
             function emitTimingTrial(c) {
               _usedPlugins['jsPsychHtmlKeyboardResponse'] = true;
               // fixation renders its cross through the normal component renderer
               // (so font size / colour are preserved); delay is a blank wait.
-              var stim = c.type === 'fixation' ? compHTML(c) : '';
+              var stim = compHTML(c);
               L(ei, '{');
               L(ei + 1, 'type: jsPsychHtmlKeyboardResponse,');
-              L(ei + 1, "stimulus: '" + _jsStr(stim) + "',");
+              L(ei + 1, "stimulus: '" + _jsStr(_stage(stim)) + "',");
               L(ei + 1, "choices: 'NO_KEYS',");
-              // A min<max range turns the duration into a dynamic parameter, the
-              // same idiom the jsPsych tutorial uses for a jittered fixation.
+              // A Max > Min range turns the duration into a dynamic parameter, the
+              // same idiom the jsPsych rt-task demo uses for its jittered fixation.
               var _lo = Number(c.durationMin) || 0, _hi = Number(c.durationMax) || 0;
               if (_hi > _lo) {
                 var _step = Number(c.durationStep) || 250;
@@ -3737,94 +3814,124 @@ function _applyI18n() {
                           JSON.stringify(_vals) + ', 1)[0];');
                 L(ei + 1, '},');
               } else {
-                L(ei + 1, 'trial_duration: ' + (c.duration || 0) + ',');
+                L(ei + 1, 'trial_duration: ' + (c.trial_duration || 0) + ',');
               }
-              L(ei + 1, "data: {task: '" + c.type + "'}");
               L(ei, '},');
             }
             preTiming.forEach(emitTimingTrial);
 
-            L(ei, '{');
-            var indent = ei + 1;
+            // Each leading step is its own timed trial: the participant sees it
+            // for Step Duration, then the next one replaces it.
+            _leadGroups.forEach(function (grp) {
+              _usedPlugins['jsPsychHtmlKeyboardResponse'] = true;
+              var html = grp.map(function (c) { return compHTML(c); }).join('');
+              var dur = Number(grp[0].step_duration) || 500;
+              L(ei, '{');
+              L(ei + 1, 'type: jsPsychHtmlKeyboardResponse,');
+              L(ei + 1, "stimulus: '" + _jsStr(_stage(html)) + "',");
+              L(ei + 1, "choices: 'NO_KEYS',");
+              L(ei + 1, 'trial_duration: ' + dur);
+              L(ei, '},');
+            });
+
+            if (!_plainNode) L(ei, '{');
+            var indent = _plainNode ? 1 : ei + 1;
             L(indent, 'type: ' + pname + ',');
-            if (respType === 'textInput') {
-              L(indent, 'questions: ' + JSON.stringify(respInfo.questions) + ',');
-            } else {
+            // survey-text has no `stimulus` — its equivalent is `preamble`, the
+            // HTML shown above the questions.
+            var _stimKey = respType === 'textInput' ? 'preamble' : 'stimulus';
+            {
               if (hasVariantTimeline && stimVariants.length > 1) {
-                L(indent, "stimulus: jsPsych.timelineVariable('stimulus'),");
+                L(indent, _stimKey + ": jsPsych.timelineVariable('stimulus'),");
+              } else if (useImagePlugin) {
+                // The picture itself, as the image plugins expect.
+                L(indent, 'stimulus: ' + _mediaRef(imageOnlyComp) + ',');
               } else if (preHTML || postStims.length > 0) {
-                L(indent, "stimulus: '" + fullStimHTML + "',");
+                L(indent, _stimKey + ": '" + fullStimHTML + "',");
+              } else if (respType === 'button' || respType === 'slider') {
+                // The button and slider plugins both expect `stimulus`; omitting
+                // it makes them render the literal string "undefined".
+                L(indent, "stimulus: '',");
               }
-              if (respControls.length > 0 && respType !== 'keyboard') {
-                // controls are self-rendered; the plugin must not listen for anything
-                L(indent, "choices: 'NO_KEYS',");
-              } else if (respInfo.choices) {
+              if (respInfo.choices === 'ALL_KEYS') {
+                // "ALL_KEYS" is the plugin's own default, so it is left out — the
+                // trial behaves identically and the code reads like hand-written
+                // jsPsych. A named key list still has to be written out.
+              } else if (respInfo.choices && respInfo.choices.length) {
                 L(indent,'choices: [' + respInfo.choices.map(function (x) { return '"' + x + '"'; }).join(',') + '],');
               }
             }
-            if (respInfo.min != null) L(indent, 'min: ' + respInfo.min + ',');
-            if (respInfo.max != null) L(indent, 'max: ' + respInfo.max + ',');
-            if (respInfo.step != null) L(indent, 'step: ' + respInfo.step + ',');
-            if (respType === 'slider' && (respInfo.labelMin || respInfo.labelMax))
-              L(indent, 'labels: ["' + respInfo.labelMin + '", "' + respInfo.labelMax + '"],');
-            // ---- self-rendered controls: wire up their events ----
-            var _selfRendered = respControls.length > 0 && respType !== 'keyboard';
-            if (_selfRendered) {
-              var _scored = respType === 'textInput' && !!respInfo.correctAnswer && respInfo.validation !== 'none';
-              var _acc = _scored
-                ? String(respInfo.correctAnswer).split(',').map(function (a) { return a.trim().toLowerCase(); })
-                    .filter(function (a) { return a; })
-                : [];
-              L(indent, 'on_load: function () {');
-              L(indent + 1, 'var _t0 = performance.now();');
-              L(indent + 1, 'function _done(p) {');
-              L(indent + 2, 'p.rt = Math.round(performance.now() - _t0);');
-              L(indent + 2, 'jsPsych.finishTrial(p);');
-              L(indent + 1, '}');
-              if (respType === 'button') {
-                L(indent + 1, "Array.prototype.forEach.call(document.querySelectorAll('.expvis-ctl[data-kind=\"button\"]'), function (b) {");
-                L(indent + 2, "b.addEventListener('click', function () {");
-                L(indent + 3, "_done({response: b.getAttribute('data-value'), button_index: Number(b.getAttribute('data-index'))});");
-                L(indent + 2, '});');
-                L(indent + 1, '});');
-              } else if (respType === 'slider') {
-                L(indent + 1, "var _r = document.querySelector('.expvis-range');");
-                L(indent + 1, "var _v = document.querySelector('.expvis-range-val');");
-                L(indent + 1, "if (_r && _v) { _r.addEventListener('input', function () { _v.textContent = _r.value; }); }");
-                L(indent + 1, "var _sb = document.querySelector('.expvis-ctl[data-kind=\"slider\"]');");
-                L(indent + 1, "if (_sb) { _sb.addEventListener('click', function () { _done({response: _r ? Number(_r.value) : null}); }); }");
-              } else if (respType === 'textInput') {
-                L(indent + 1, "var _inp = document.querySelector('.expvis-text');");
-                L(indent + 1, "var _tb = document.querySelector('.expvis-ctl[data-kind=\"textInput\"]');");
-                L(indent + 1, 'function _submit() {');
-                L(indent + 2, "var _ans = _inp ? _inp.value : '';");
-                if (_scored) {
-                  L(indent + 2, 'var _acc = ' + JSON.stringify(_acc) + ';');
-                  L(indent + 2, 'var _low = _ans.trim().toLowerCase();');
-                  L(indent + 2, respInfo.validation === 'exact'
-                    ? 'var _ok = _acc.indexOf(_low) >= 0;'
-                    : 'var _ok = _acc.some(function (a) { return _low.indexOf(a) >= 0; });');
-                  L(indent + 2, '_done({response: _ans, correct: _ok});');
-                } else {
-                  L(indent + 2, '_done({response: _ans});');
-                }
-                L(indent + 1, '}');
-                L(indent + 1, "if (_tb) { _tb.addEventListener('click', _submit); }");
-                L(indent + 1, "if (_inp) { _inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') _submit(); }); }");
-              } else if (respType === 'click') {
-                L(indent + 1, "var _z = document.querySelector('.expvis-clickzone');");
-                L(indent + 1, "if (_z) { _z.addEventListener('click', function () { _done({response: 'click'}); }); }");
-              }
-              L(indent, '},');
+            // ---- jsPsychHtmlButtonResponse parameters, emitted under their own
+            // names. Anything left at 0 / default is omitted, so jsPsych applies
+            // its documented default instead of an ExpVis invention.
+            if (respType === 'button') {
+              if (respInfo.prompt) L(indent, "prompt: '" + _jsStr(String(respInfo.prompt)) + "',");
+              if (respInfo.buttonLayout) L(indent, "button_layout: '" + respInfo.buttonLayout + "',");
+              if (respInfo.gridRows) L(indent, 'grid_rows: ' + respInfo.gridRows + ',');
+              if (respInfo.gridColumns) L(indent, 'grid_columns: ' + respInfo.gridColumns + ',');
+              if (respInfo.stimulusDuration) L(indent, 'stimulus_duration: ' + respInfo.stimulusDuration + ',');
+              if (respInfo.enableButtonAfter) L(indent, 'enable_button_after: ' + respInfo.enableButtonAfter + ',');
+              // `=== false`, not `!x`: a trial with no response component gets a
+              // fresh respInfo, and `!undefined` would wrongly emit a false here.
+              if (respInfo.responseEndsTrial === false) L(indent, 'response_ends_trial: false,');
             }
-            if (logic.timeout) L(indent, 'trial_duration: ' + logic.timeout + ',');
-            if (stims.length === 0 && respType === 'keyboard') L(indent, "prompt: '<p>Press any key to continue</p>',");
+            if (respType === 'textInput') {
+              var _q = respInfo.question;
+              L(indent, 'questions: [{');
+              L(indent + 1, "prompt: '" + _jsStr(_q.prompt) + "',");
+              if (_q.placeholder) L(indent + 1, "placeholder: '" + _jsStr(_q.placeholder) + "',");
+              L(indent + 1, "name: '" + _q.name.replace(/'/g, "\\'") + "',");
+              if (_q.required) L(indent + 1, 'required: true,');
+              if (_q.rows > 1) L(indent + 1, 'rows: ' + _q.rows + ',');
+              if (_q.columns !== 40) L(indent + 1, 'columns: ' + _q.columns + ',');
+              L(indent, '}],');
+              if (respInfo.buttonLabel)
+                L(indent, "button_label: '" + _jsStr(String(respInfo.buttonLabel)) + "',");
+              if (respInfo.autocomplete) L(indent, 'autocomplete: true,');
+            }
+            if (useImagePlugin) {
+              var _imc = imageOnlyComp;
+              if (_imc.stimulus_width) L(indent, 'stimulus_width: ' + _imc.stimulus_width + ',');
+              if (_imc.stimulus_height) L(indent, 'stimulus_height: ' + _imc.stimulus_height + ',');
+              if (_imc.maintain_aspect_ratio === false || _imc.maintain_aspect_ratio === 'false')
+                L(indent, 'maintain_aspect_ratio: false,');
+              if (_imc.render_on_canvas === false || _imc.render_on_canvas === 'false')
+                L(indent, 'render_on_canvas: false,');
+            }
+            if (respType === 'keyboard') {
+              if (respInfo.stimulusDuration) L(indent, 'stimulus_duration: ' + respInfo.stimulusDuration + ',');
+              if (respInfo.responseEndsTrial === false) L(indent, 'response_ends_trial: false,');
+              if (respInfo.waitForKeyRelease) L(indent, 'wait_for_key_release: true,');
+            }
+            if (respType === 'slider') {
+              if (respInfo.min != null) L(indent, 'min: ' + respInfo.min + ',');
+              if (respInfo.max != null) L(indent, 'max: ' + respInfo.max + ',');
+              if (respInfo.step != null) L(indent, 'step: ' + respInfo.step + ',');
+              if (respInfo.sliderStart) L(indent, 'slider_start: ' + respInfo.sliderStart + ',');
+              if (respInfo.labels && respInfo.labels.length)
+                L(indent, 'labels: [' + respInfo.labels.map(function (x) {
+                  return '"' + String(x).replace(/"/g, '\\"') + '"';
+                }).join(', ') + '],');
+              if (respInfo.buttonLabel) L(indent, "button_label: '" + _jsStr(String(respInfo.buttonLabel)) + "',");
+              if (respInfo.sliderWidth) L(indent, 'slider_width: ' + respInfo.sliderWidth + ',');
+              if (respInfo.requireMovement) L(indent, 'require_movement: true,');
+              if (respInfo.prompt) L(indent, "prompt: '" + _jsStr(String(respInfo.prompt)) + "',");
+              if (respInfo.stimulusDuration) L(indent, 'stimulus_duration: ' + respInfo.stimulusDuration + ',');
+              if (respInfo.responseEndsTrial === false) L(indent, 'response_ends_trial: false,');
+            }
+            // trial_duration is the same jsPsych parameter for either plugin; a
+            // button trial reads it off the button component, everything else off
+            // the keyboard component.
+            var _trialDuration = (respType === 'button' ? respInfo.trialDuration : logic.trial_duration) ||
+              t.trial_duration;
+            if (_trialDuration && respType !== 'textInput') {
+              L(indent, 'trial_duration: ' + _trialDuration + ',');
+            }
+            if (respType === 'keyboard' && (respInfo.prompt || stims.length === 0))
+              L(indent, "prompt: '" + _jsStr(respInfo.prompt || '<p>Press any key to continue</p>') + "',");
 
             // --- what runs after the response: scoring, counter, branch jump ---
             var hasScore = !!correctResponseExpr;
-            // free-text answers are scored here (survey-text returns an object)
-            var hasTextScore = respType === 'textInput' && !!respInfo.correctAnswer &&
-              respInfo.validation !== 'none';
             var hasVarUpdate = !!(logic.hasVariable && logic.varName && logic.varMode !== 'manual');
             var branchCondCode = null;
             if (logic.hasBranch && logic.branchTarget) {
@@ -3844,37 +3951,31 @@ function _applyI18n() {
                   (logic.branchCmp === '' ? '0' : logic.branchCmp);
               }
             }
-            var needsOnFinish = hasScore || hasTextScore || hasVarUpdate || !!branchCondCode;
+            var needsOnFinish = hasScore || hasVarUpdate || !!branchCondCode;
 
             // Variable tracking in data.
             // NB: `trial_index` is a jsPsych reserved key — a custom value would be
             // silently ignored, so use a non-conflicting name for the in-phase index.
-            var dataStr = "data: {phase:'" + _stripEmoji(ph.name) + "',trial_in_phase:" + (ti + 1);
+            // `data` is written only when it carries something the analysis needs —
+            // the correct answer for scoring, or a counter. Provenance fields are
+            // not added automatically: jsPsych records trial_index and trial_type
+            // on its own, and an experiment that needs more can add it in the GUI.
+            var _dataParts = [];
             if (logic.hasVariable && logic.varName) {
-              dataStr += ',' + logic.varName + ':' + logic.varName;
+              _dataParts.push(logic.varName + ':' + logic.varName);
             }
             if (correctResponseExpr) {
-              dataStr += ',correct_response: ' + correctResponseExpr;
+              _dataParts.push('correct_response: ' + correctResponseExpr);
             }
-            if (hasTextScore) {
-              dataStr += ',correct_answer: "' + String(respInfo.correctAnswer).replace(/"/g, '\\"') + '"';
+            if (_dataParts.length) {
+              var dataStr = 'data: {' + _dataParts.join(',') + '}';
+              if (needsOnFinish) dataStr += ',';
+              L(indent, dataStr);
             }
-            dataStr += '}';
-            if (needsOnFinish) dataStr += ',';
-            L(indent, dataStr);
 
             if (needsOnFinish) {
               L(indent, 'on_finish: function(data) {');
-              if (hasTextScore) {
-                var accepted = String(respInfo.correctAnswer).split(',').map(function (a) {
-                  return a.trim().toLowerCase();
-                }).filter(function (a) { return a; });
-                L(indent + 1, "var ans = String((data.response && data.response.response) || '').trim().toLowerCase();");
-                L(indent + 1, 'var accepted = ' + JSON.stringify(accepted) + ';');
-                L(indent + 1, respInfo.validation === 'exact'
-                  ? 'data.correct = accepted.indexOf(ans) >= 0;'
-                  : 'data.correct = accepted.some(function (a) { return ans.indexOf(a) >= 0; });');
-              } else if (hasScore) {
+              if (hasScore) {
                 L(indent + 1, 'data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);');
               }
               if (hasVarUpdate) {
@@ -3888,7 +3989,7 @@ function _applyI18n() {
             // strip the trial's trailing property comma, then close the entry
             var last = lines[lines.length - 1];
             if (last.slice(-1) === ',') lines[lines.length - 1] = last.slice(0, -1);
-            L(ei, '},');
+            if (!_plainNode) L(ei, '},');
 
             // timed segments after the stimulus
             // Branch jump as a conditional timeline entry — the jsPsych idiom
@@ -3902,18 +4003,21 @@ function _applyI18n() {
               var failDuration = 1500;
               if (failTrialObj && failTrialObj.components.length) {
                 failHTML = failTrialObj.components
-                  .filter(function (fc) { return fc.type !== 'delay'; })
                   .map(function (fc) { return compHTML(fc); }).join('');
-                failTrialObj.components.forEach(function (fc) {
-                  if (fc.type === 'delay' && fc.duration) failDuration = fc.duration;
-                });
+                // The error page holds for as long as the target trial says.
+                if (failTrialObj.trial_duration) failDuration = failTrialObj.trial_duration;
               }
               var prevRef = "jsPsych.data.get().last(1).values()[0]";
               var condExpr;
               if (logic.branchCond === 'correct') {
                 condExpr = '!' + prevRef + '.correct';
               } else if (logic.branchCond === 'response') {
-                condExpr = prevRef + '.response === "' + String(logic.branchMatch).replace(/"/g, '\\"') + '"';
+                // survey-text records response as an object keyed by question name
+                var _respRef = prevRef + '.response';
+                if (respType === 'textInput' && respInfo.question) {
+                  _respRef += "['" + String(respInfo.question.name).replace(/'/g, "\\'") + "']";
+                }
+                condExpr = _respRef + ' === "' + String(logic.branchMatch).replace(/"/g, '\\"') + '"';
               } else {
                 condExpr = logic.branchMatch + ' ' + logic.branchOp + ' ' + (logic.branchCmp === '' ? '0' : logic.branchCmp);
               }
@@ -3938,7 +4042,7 @@ function _applyI18n() {
             var tlLast = lines[lines.length - 1];
             if (tlLast.slice(-1) === ',') lines[lines.length - 1] = tlLast.slice(0, -1);
 
-            L(1, ']');
+            if (!_plainNode) L(1, ']');
             L(0, '};');
 
             code += lines.join('\n') + '\n';
@@ -3987,7 +4091,22 @@ function _applyI18n() {
         jsPsychHtmlSliderResponse: {pkg: '@jspsych/plugin-html-slider-response', ver: '2.1.0'},
         jsPsychSurveyText: {pkg: '@jspsych/plugin-survey-text', ver: '2.1.1'},
         jsPsychPreload: {pkg: '@jspsych/plugin-preload', ver: '2.1.0'},
+        jsPsychAnimation: {pkg: '@jspsych/plugin-animation', ver: '2.1.0'},
+        jsPsychImageKeyboardResponse: {pkg: '@jspsych/plugin-image-keyboard-response', ver: '2.2.0'},
+        jsPsychImageButtonResponse: {pkg: '@jspsych/plugin-image-button-response', ver: '2.2.0'},
+        jsPsychImageSliderResponse: {pkg: '@jspsych/plugin-image-slider-response', ver: '2.1.0'},
       };
+
+      // The device height is a property of the *viewport* the experiment was
+      // designed for, not of the stimulus box: jsPsych appends each plugin's own
+      // controls (buttons, slider submit) after the content, so pinning the
+      // stimulus to the full height would push those controls off-screen. Sizing
+      // the display area instead keeps the content centred inside the designed
+      // height with the controls still beside it.
+      function _deviceStyle() {
+        var d = editor.device || {w: 1280, h: 720};
+        return '.jspsych-display-element { min-height: ' + d.h + 'px; }\n';
+      }
 
       // CDN script tags for the core plus every plugin this experiment actually uses.
       function _cdnTags(usedPlugins) {
@@ -4023,7 +4142,7 @@ function _applyI18n() {
         _cdnTags(usedPlugins).forEach(function (t) { h += '  ' + t + '\n'; });
         h += '  <link href="https://unpkg.com/jspsych@' + _JSPsychVersion +
              '/css/jspsych.css" rel="stylesheet" type="text/css">\n';
-        if (extraStyle) h += '  <style>\n' + extraStyle + '  </style>\n';
+        h += '  <style>\n' + _deviceStyle() + (extraStyle || '') + '  </style>\n';
         h += '</head>\n';
         return h;
       }
@@ -4205,9 +4324,9 @@ function _applyI18n() {
 
         // Template quick-fill
         var templates = {
-          stroop:'Design a classic Stroop color-word interference experiment. Use randomize to shuffle text variants (different colors and word meanings). Red mapped to key:a, Blue to key:l. Include:\n1. Instructions phase: explain task rules (red→A, blue→L, green→K), click to start\n2. Trials phase: 48 trials, each: fixation→delay→randomize→texts(different colors/meanings, each with color-key mapping)→keyboard(keys:a,l,k)→loop. Add branch for error feedback if needed\n3. Feedback phase: thank participant',
-          simon:'Design a Simon effect experiment. Each trial uses randomize(pick-one) to select 1 shape variant. Red circle→key:a, Green circle→key:l. Include:\n1. Instructions: task rules (red→A, green→L, ignore position), click to start\n2. Trials: 60 trials, fixation→delay→randomize→shapes(red/green × left/right = 4 variants, each with key mapping)→keyboard(keys:a,l)→loop. Add branch for error feedback\n3. Feedback: thank participant',
-          flanker:'Design a Flanker task. Each trial uses randomize(pick-one) to select 1 arrow variant. Left arrow→key:f, Right arrow→key:j. Include:\n1. Instructions: title + rules (press F for left middle arrow, J for right, ignore flankers), click to start\n2. Trials: 80 trials, fixation→delay→randomize→texts(5 arrow types: congruent <<<<<, incongruent >><>> red, congruent >>>>>, incongruent <><<< red, incongruent >>><> green, each with key mapping)→keyboard(keys:f,j,timeout:1500)→branch(correct)→error feedback→loop\n3. Feedback: thank participant',
+          stroop:'Design a classic Stroop color-word interference experiment. Use randomize to shuffle text variants (different colors and word meanings). Red mapped to key:a, Blue to key:l. Include:\n1. Instructions phase: explain task rules (red→A, blue→L, green→K), click to start\n2. Trials phase: 48 trials, each: fixation→delay→randomize→texts(different colors/meanings, each with color-key mapping)→keyboard(choices:["a","l","k"])→loop. Add branch for error feedback if needed\n3. Feedback phase: thank participant',
+          simon:'Design a Simon effect experiment. Each trial uses randomize(pick-one) to select 1 shape variant. Red circle→key:a, Green circle→key:l. Include:\n1. Instructions: task rules (red→A, green→L, ignore position), click to start\n2. Trials: 60 trials, fixation→delay→randomize→shapes(red/green × left/right = 4 variants, each with key mapping)→keyboard(choices:["a","l"])→loop. Add branch for error feedback\n3. Feedback: thank participant',
+          flanker:'Design a Flanker task. Each trial uses randomize(pick-one) to select 1 arrow variant. Left arrow→key:f, Right arrow→key:j. Include:\n1. Instructions: title + rules (press F for left middle arrow, J for right, ignore flankers), click to start\n2. Trials: 80 trials, fixation→delay→randomize→texts(5 arrow types: congruent <<<<<, incongruent >><>> red, congruent >>>>>, incongruent <><<< red, incongruent >>><> green, each with key mapping)→keyboard(choices:["f","j"],trial_duration:1500)→branch(correct)→error feedback→loop\n3. Feedback: thank participant',
           custom:'Design a [experiment name]. [Purpose and background]. Include:\n1. Instructions phase: [content]\n2. Trials phase: [N] trials, [stimuli and response details]\n3. Feedback phase: [content]'
         };
         Object.keys(templates).forEach(function (key) {
@@ -4286,41 +4405,43 @@ function _applyI18n() {
             '【Output Format】Strict JSON only - no markdown code blocks, no comments. Must contain 3 phases:\n' +
             '{"phases":[\n' +
             '  {"type":"instructions","color":"i","trials":[{"id":"t1","components":[text(instructions)+button(start)]}]},\n' +
-            '  {"type":"trials","color":"t","trials":[{"id":"t2","components":[fixation+delay+randomize(if needed)+stimulus×N+response+branch(if needed)+loop]}]},\n' +
+            '  {"type":"trials","color":"t","trials":[{"id":"t2","components":[fixation+randomize(if needed)+stimulus×N+response+branch(if needed)+loop]}]},\n' +
             '  {"type":"feedback","color":"f","trials":[{"id":"tN","components":[text(thanks)]}]}\n' +
             ']}\n\n' +
             '【Full Component Schema】(cat: s=stimulus r=response l=logic)\n\n' +
-            'text:       {type:"text",content:"text",fontSize:32,color:"#333333",position:"center",fontWeight:"bold","映射按键":"a",posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"s"}\n' +
-            'shape:      {type:"shape",shape:"circle|square|triangle|diamond|star",size:80,color:"#6366f1",position:"center","映射按键":"a",posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"s"}\n' +
-            'fixation:   {type:"fixation",duration:500,posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"s"}\n' +
-            'image:      {type:"image",fileData:"",fileName:"",width:200,posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"s"}\n' +
-            'audio:      {type:"audio",fileData:"",fileName:"",posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"s"}\n' +
-            'video:      {type:"video",fileData:"",fileName:"",width:320,posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"s"}\n' +
-            'keyboard:   {type:"keyboard",keys:"a,l",prompt:"Press a key",timeout:0,posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"r"}\n' +
-            'button:     {type:"button",labels:"Yes,No",color:"#6366f1",posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"r"}\n' +
-            'slider:     {type:"slider",min:0,max:100,step:1,labelMin:"",labelMax:"",showValue:true,posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"r"}\n' +
-            'textInput:  {type:"textInput",placeholder:"Type here",correctAnswer:"",validation:"contains",posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"r"}\n' +
-            'click:      {type:"click",posX:' + Math.round(dev.w / 2) + ',posY:number,cat:"r"}\n' +
-            'loop:       {type:"loop",count:48,posX:0,posY:0,cat:"l"}\n' +
-            'delay:      {type:"delay",duration:200,posX:0,posY:0,cat:"l"}\n' +
-            'branch:     {type:"branch",condition:"correct",matchValue:"",targetFail:"",operator:">=",compareValue:"",posX:0,posY:0,cat:"l"}\n' +
-            'randomize:  {type:"randomize",mode:"pick-one",posX:0,posY:0,cat:"l"}\n' +
-            'variable:   {type:"variable",name:"score",initial:0,mode:"correct",posX:0,posY:0,cat:"l"}\n\n' +
+            'text:       {type:"text",content:"text",fontSize:32,color:"#333333",position:"center",fontWeight:"bold",newStep:false,step_duration:500,"映射按键":"a",cat:"s"}\n' +
+            'shape:      {type:"shape",shape:"circle|square|triangle|diamond|star",size:80,color:"#6366f1",position:"center","映射按键":"a",cat:"s"}\n' +
+            'fixation:   {type:"fixation",trial_duration:500,durationMin:0,durationMax:0,durationStep:250,cat:"s"}\n' +
+            'image:      {type:"image",fileData:"",fileName:"",stimulus_width:200,stimulus_height:0,maintain_aspect_ratio:true,render_on_canvas:true,"映射按键":"",cat:"s"}\n' +
+            'animation:  {type:"animation",frames:[],frame_time:250,frame_isi:0,sequence_reps:1,choices:[],prompt:"",render_on_canvas:true,cat:"s"}  // OWNS the display; never combine with other components\n' +
+            'audio:      {type:"audio",fileData:"",fileName:"",cat:"s"}\n' +
+            'video:      {type:"video",fileData:"",fileName:"",width:320,cat:"s"}\n' +
+            'keyboard:   {type:"keyboard",choices:["a","l"],correctKey:"",prompt:"Press a key",trial_duration:0,stimulus_duration:0,response_ends_trial:true,wait_for_key_release:false,cat:"r"}\n' +
+            'button:     {type:"button",choices:["Yes","No"],prompt:"",button_layout:"grid",grid_rows:1,grid_columns:0,trial_duration:0,stimulus_duration:0,response_ends_trial:true,enable_button_after:0,cat:"r"}\n' +
+            'slider:     {type:"slider",min:0,max:100,step:1,slider_start:50,labels:[],button_label:"Continue",slider_width:0,require_movement:false,prompt:"",trial_duration:0,stimulus_duration:0,response_ends_trial:true,cat:"r"}\n' +
+            'textInput:  {type:"textInput",prompt:"",placeholder:"Type here",name:"Q0",required:false,rows:1,columns:40,button_label:"Continue",autocomplete:false,cat:"r"}  // no right answer, no timeout\n' +
+            'loop:       {type:"loop",count:48,cat:"l"}\n' +
+            'branch:     {type:"branch",condition:"correct",matchValue:"",targetFail:"",operator:">=",compareValue:"",cat:"l"}\n' +
+            'randomize:  {type:"randomize",mode:"pick-one",cat:"l"}\n' +
+            'variable:   {type:"variable",name:"score",initial:0,mode:"correct",cat:"l"}\n\n' +
             '【Color Rules — CRITICAL! Preview background is WHITE #fff】\n' +
             '  Text color must use DARK colors (#333, #1a1a2e, #1e293b). NEVER use #fff/#ffffff/white/light gray!\n' +
             '  Button color: medium-dark (#6366f1, #ef4444, #3b82f6). Do NOT use white!\n' +
             '  Shape color: vivid dark (#ef4444, #22c55e, #3b82f6, #6366f1). Do NOT use white!\n' +
-            '  Keyboard keys support spacebar, use keys:" " displayed as "space"; multiple keys comma-separated e.g., "a,l, "\n\n' +
+            '  Keyboard: `choices` is an ARRAY of key strings, e.g. ["a","l"]. Write "space" for the spacebar.\n' +
+            '    An EMPTY array means any key (jsPsych ALL_KEYS). `correctKey` scores the trial.\n\n' +
             '【Standard Trial Structure — follow STRICTLY】\n' +
-            '[fixation] → [delay] → [randomize(if multiple stimuli)] → [stimulus(text/shape)×N] → [response(keyboard/button/slider/textInput)] → [branch(if error feedback needed)] → [loop]\n' +
+            '[fixation] → [randomize(if multiple stimuli)] → [stimulus(text/shape)×N] → [response(keyboard/button/slider/textInput)] → [branch(if error feedback needed)] → [loop]\n' +
             '  ⚠ Every trial MUST end with loop, or it runs only once!\n' +
-            '  ⚠ Every trial MUST have delay (after fixation, before stimulus), duration=200\n' +
+            '  ⚠ Set the fixation duration (e.g. 500-700) to control the inter-stimulus interval\n' +
+            '  ⚠ For a button trial, `choices` is an ARRAY of button labels, not a comma-separated string\n' +
             '  ⚠ Multiple stimulus variants MUST be wrapped in randomize, or all display at once!\n' +
-            '  ⚠ Logic components (loop/delay/branch/randomize/variable) have posX=0, posY=0, cat="l"\n\n' +
-            '【Position System】Device: ' + dev.w + '×' + dev.h + '\n' +
-            '  Horizontal center: posX=' + Math.round(dev.w / 2) + ' + position:"center"\n' +
-            '  Fixation posY≈' + Math.round(dev.h * 0.45) + '  Stimulus posY≈' + Math.round(dev.h * 0.38) + '  Response posY≈' + Math.round(dev.h * 0.62) + '\n' +
-            '  Multiple texts on same screen: MUST use different posY! Top to bottom, spacing ≥' + Math.round(dev.h * 0.08) + 'px\n' +
+            '  ⚠ Logic components (loop/branch/randomize/variable) have cat="l"\n\n' +
+            '【Layout】Components stack in document flow — there are NO x/y coordinates.\n' +
+            '  `position` is alignment only: "center" (default), "left", or "right".\n' +
+            '  Order in the components array IS the vertical order on screen.\n' +
+            '  There is no way to overlap two components; put them in sequence instead.\n' +
+            '  Target screen: ' + dev.w + '×' + dev.h + '\n' +
             '  Font sizes — MUST scale to device size (' + dev.w + '×' + dev.h + '):\n' +
             '    Instructions: ' + Math.round(dev.h * 0.025) + '-' + Math.round(dev.h * 0.035) + 'px (≈2.5-3.5% of device height)\n' +
             '    Stimuli (key text): ' + Math.round(dev.h * 0.05) + '-' + Math.round(dev.h * 0.08) + 'px (≈5-8% of height, bold, centered)\n' +
@@ -4343,25 +4464,25 @@ function _applyI18n() {
             '  mode:"correct"→+1 on correct  mode:"always"→+1 each time  mode:"manual"→manual control\n' +
             '  Place at trial start (before fixation). Use name in branch(variable)\n\n' +
             '【Experiment Patterns】\n' +
-            '  Stroop: texts(different colors/words, each with key mapping a/l/k) → randomize(pick-one) → keyboard(keys:"a,l,k") → branch(correct→error page) → loop(48)\n' +
-            '  Simon: shapes(red/green × left/right = 4 variants, each with key mapping a/l) → randomize(pick-one) → keyboard(keys:"a,l") → branch(correct→error page) → loop(60)\n' +
+            '  Stroop: texts(different colors/words, each with key mapping a/l/k) → randomize(pick-one) → keyboard(choices:["a","l","k"]) → branch(correct→error page) → loop(48)\n' +
+            '  Simon: shapes(red/green × left/right = 4 variants, each with key mapping a/l) → randomize(pick-one) → keyboard(choices:["a","l"]) → branch(correct→error page) → loop(60)\n' +
             '  Flanker: 5 arrow text variants with explicit 映射按键 f/j based on MIDDLE arrow direction:\n' +
             '    "<<<<<" (5 left)   → 映射按键:"f" (middle ←)\n' +
             '    ">>>>>" (5 right)  → 映射按键:"j" (middle →)\n' +
             '    "><><>" (conflict, middle >) → 映射按键:"j"\n' +
             '    "<><<>" (conflict, middle <) → 映射按键:"f"\n' +
             '    ">>><>" (conflict, middle >) → 映射按键:"j"\n' +
-            '    keyboard(keys:"f,j",timeout:1500) → branch(correct→error page) → loop(80)\n' +
-            '  Memory: variable(name,initial) → randomize(shuffle) → texts → delay(memorize) → textInput(correctAnswer,validation) → loop\n' +
+            '    keyboard(choices:["f","j"],trial_duration:1500) → branch(correct→error page) → loop(80)\n' +
+            '  Memory: variable(name,initial) → randomize(shuffle) → texts → textInput(prompt,placeholder,name) → loop\n' +
             '  Survey: text(question, top) + textInput(answer key, bottom) + loop\n' +
             '  Game: text(instructions) + slider(amount,min:0,max:100) + loop\n\n' +
             '【FORBIDDEN — common causes of invalid JSON】\n' +
             '  ❌ text color = #fff/white → invisible on white background\n' +
-            '  ❌ Multiple texts sharing same posY → overlapping text\n' +
+            '  ❌ Two components expected to overlap → impossible, they stack in flow\n' +
             '  ❌ randomize present but text/shape missing key mapping → keyboard has no correct key\n' +
             '  ❌ Error feedback trial placed BEFORE main trial → preview shows error first\n' +
             '  ❌ Trial missing loop → only runs once\n' +
-            '  ❌ Trial missing delay → no gap between fixation and stimulus\n' +
+            '  ❌ No blank-pause component exists → use the fixation duration instead\n' +
             '  ❌ Multiple stimuli without randomize → all display simultaneously\n' +
             '  ❌ JSON trailing commas or comments\n' +
             '  ❌ Single quotes instead of double quotes';
@@ -4386,21 +4507,19 @@ function _applyI18n() {
                 tr.id = 't' + ++editor.tc;
                 tr.components.forEach(function (c) {
                   c.id = 'c' + ++editor.cc;
-                  if (!c.posX) c.posX = 0;
-                  if (!c.posY) c.posY = 0;
                 });
               });
             });
             migratePos();
             // Ensure 3-phase structure
             if (editor.phases.length === 0 || editor.phases[0].type !== 'instructions') {
-              var instrPh = { id:'ph_ai_inst', type:'instructions', name: i18n('phase.instructions'), color:'i', trials:[{ id:'t_ai_inst', components:[ { id:'c_ai_txt', type:'text', content:'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize:20, color:'#333333', position:'center', fontWeight:'bold', posX:Math.round(dev.w/2), posY:Math.round(dev.h*0.14), cat:'s' }, { id:'c_ai_btn', type:'button', labels:'Start Experiment', posX:Math.round(dev.w/2), posY:Math.round(dev.h*0.74), cat:'r' } ] }] };
+              var instrPh = { id:'ph_ai_inst', type:'instructions', name: i18n('phase.instructions'), color:'i', trials:[{ id:'t_ai_inst', components:[ { id:'c_ai_txt', type:'text', content:'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize:20, color:'#333333', position:'center', fontWeight:'bold', cat:'s' }, { id:'c_ai_btn', type:'button', choices:['Start Experiment'], prompt:'', button_layout:'grid', grid_rows:1, grid_columns:0, trial_duration:0, stimulus_duration:0, response_ends_trial:true, enable_button_after:0, cat:'r' } ] }] };
               editor.phases.unshift(instrPh);
               editor.tc++; editor.cc += 2;
             }
             var lastPh = editor.phases[editor.phases.length - 1];
             if (!lastPh || lastPh.type !== 'feedback') {
-              var fbPh = { id:'ph_ai_fb', type:'feedback', name: i18n('phase.feedback'), color:'f', trials:[{ id:'t_ai_fb', components:[ { id:'c_ai_fbt', type:'text', content:'Experiment complete!\n\nThank you for your participation.', fontSize:24, color:'#333333', position:'center', fontWeight:'bold', posX:Math.round(dev.w/2), posY:Math.round(dev.h*0.4), cat:'s' } ] }] };
+              var fbPh = { id:'ph_ai_fb', type:'feedback', name: i18n('phase.feedback'), color:'f', trials:[{ id:'t_ai_fb', components:[ { id:'c_ai_fbt', type:'text', content:'Experiment complete!\n\nThank you for your participation.', fontSize:24, color:'#333333', position:'center', fontWeight:'bold', cat:'s' } ] }] };
               editor.phases.push(fbPh);
               editor.tc++; editor.cc++;
             }
@@ -4679,7 +4798,7 @@ function showVersionHistory() {
         h += '<h2 style="font-size:1.3rem;margin-bottom:4px;color:#1a1a2e">Select Device</h2>';
         h +=
           '<p style="font-size:0.82rem;color:#888;margin-bottom:28px">Select the screen device participants will use. Experiment layout will be designed for this resolution.</p>';
-        h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px">';
+        h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">';
         devicePresets.forEach(function (d, i) {
           h +=
             '<div class="device-option" data-idx="' +
@@ -4690,8 +4809,21 @@ function showVersionHistory() {
             '<div style="font-weight:700;font-size:0.82rem;margin-bottom:2px">' +
             d.name +
             '</div>';
-          h += '<div style="font-size:0.68rem;color:var(--text2)">' + d.w + ' × ' + d.h + '</div></div>';
+          h += '<div style="font-size:0.68rem;color:var(--text2)">' + d.w + ' × ' + d.h + ' px</div></div>';
         });
+        h += '</div>';
+        // Manual size, the same escape hatch the header offers.
+        h += '<div style="display:flex;align-items:center;justify-content:center;gap:8px;' +
+             'padding-top:16px;border-top:1px solid #ececf2">';
+        h += '<span style="font-size:0.75rem;color:#888">Or set a size:</span>';
+        h += '<input id="dw-w" type="number" value="1280" style="width:76px;padding:7px 8px;' +
+             'border:1px solid #e0e0e8;border-radius:8px;font-family:inherit;font-size:0.8rem;text-align:center">';
+        h += '<span style="color:#bbb">×</span>';
+        h += '<input id="dw-h" type="number" value="720" style="width:76px;padding:7px 8px;' +
+             'border:1px solid #e0e0e8;border-radius:8px;font-family:inherit;font-size:0.8rem;text-align:center">';
+        h += '<span style="font-size:0.72rem;color:#888">px</span>';
+        h += '<button id="dw-go" style="padding:7px 16px;border-radius:8px;border:none;background:#6366f1;' +
+             'color:#fff;font-family:inherit;font-size:0.78rem;font-weight:600;cursor:pointer">Use this size</button>';
         h += '</div>';
         card.innerHTML = h;
         overlay.appendChild(card);
@@ -4699,13 +4831,19 @@ function showVersionHistory() {
         card.querySelectorAll('.device-option').forEach(function (opt) {
           opt.onclick = function () {
             var idx = parseInt(opt.getAttribute('data-idx'));
-            editor.device = devicePresets[idx];
-            localStorage.setItem(_vek('device'), idx);
-            document.getElementById('device-select').value = idx;
             overlay.remove();
+            setDeviceSize(devicePresets[idx].w, devicePresets[idx].h);
             if (callback) callback();
           };
         });
+        document.getElementById('dw-go').onclick = function () {
+          // Read the fields before the overlay goes away — they live inside it.
+          var w = document.getElementById('dw-w').value;
+          var h = document.getElementById('dw-h').value;
+          overlay.remove();
+          setDeviceSize(w, h);
+          if (callback) callback();
+        };
       }
 
       // Restore last session
@@ -4713,8 +4851,14 @@ function showVersionHistory() {
         try {
           var savedDevice = localStorage.getItem(_vek('device'));
           if (savedDevice !== null) {
-            editor.device = devicePresets[parseInt(savedDevice)];
-            document.getElementById('device-select').value = savedDevice;
+            // Older sessions stored a preset index; newer ones store {w,h}.
+            if (/^\d+$/.test(savedDevice)) {
+              var p = devicePresets[parseInt(savedDevice)];
+              if (p) editor.device = {name: p.name, icon: p.icon, w: p.w, h: p.h};
+            } else {
+              var dd = JSON.parse(savedDevice);
+              if (dd && dd.w && dd.h) setDeviceSize(dd.w, dd.h);
+            }
           }
           var saved = localStorage.getItem(_vek('task_editor'));
           if (saved) {
@@ -4733,16 +4877,6 @@ function showVersionHistory() {
           if (ver) editor.versions = JSON.parse(ver);
         } catch (e) {}
       })();
-      // Hide splash after 1 second - schedule FIRST before any heavy init
-      setTimeout(function () {
-        var splash = document.getElementById('splash');
-        if (splash) {
-          splash.classList.add('fade-out');
-          setTimeout(function () {
-            splash.remove();
-          }, 300);
-        }
-      }, 1000);
       // Auto-load template from URL parameter
       (function () {
         var m = location.search.match(/[?&]template=(\w+)/);
@@ -4752,6 +4886,13 @@ function showVersionHistory() {
           }, 300);
         }
       })();
+      // The header fields and both previews read editor.device, so it must never
+      // be left unset — fall back to the desktop preset.
+      if (!editor.device) {
+        editor.device = {name: devicePresets[0].name, icon: devicePresets[0].icon,
+                         w: devicePresets[0].w, h: devicePresets[0].h};
+      }
+      syncDeviceControls();
       // Show device wizard if first visit (no saved device + no existing experiment)
       if (localStorage.getItem(_vek('device')) === null && localStorage.getItem(_vek('task_editor')) === null) {
         setTimeout(function () {
@@ -4960,19 +5101,19 @@ function showVersionHistory() {
             },
             {
               title: '🧩 Component-Based Building',
-              desc: 'The toolbox on the left provides <strong>components</strong> in two categories:<br><br>📺 <strong>Display</strong> — Text, Shape, Image, Audio, Video, Fixation<br>🎮 <strong>Response</strong> — Keyboard, Button, Slider, Click, Text Input<br><br>Drag into a trial node to add. Click a node to edit its properties.<br>Preset templates at the bottom for a quick start.',
+              desc: 'The toolbox on the left provides <strong>components</strong> in two categories:<br><br>📺 <strong>Display</strong> — Text, Shape, Image, Animation, Audio, Video, Fixation<br>🎮 <strong>Response</strong> — Keyboard, Button, Slider, Survey Text<br><br>Drag into a trial node to add. Click a node to edit its properties.<br>Preset templates at the bottom for a quick start.',
               el: 'panel-left',
               btn: 'Next →',
             },
             {
               title: '🧩 Trial Settings',
-              desc: 'Click a <strong>trial</strong> (not a component) to open its settings:<br>loop count · randomization · branch condition · delay · counter.<br>These become jsPsych <strong>node / trial parameters</strong>, not trials.<br><br>Components stack in a responsive flow — click <strong>⛶ Expand</strong> for a full-window layout preview.',
+              desc: 'Click a <strong>trial</strong> (not a component) to open its settings:<br>loop count · randomization · branch condition · trial duration · counter.<br>These become jsPsych <strong>node / trial parameters</strong>, not trials.<br><br>Components stack in a responsive flow — click <strong>⛶ Expand</strong> for a full-window layout preview.',
               el: 'inspector',
               btn: 'Next →',
             },
             {
               title: '🎮 Interactive Fullscreen Preview',
-              desc: 'Fullscreen preview is NOT a static screenshot —<br>participants can <strong>press keys, click buttons, drag sliders</strong>.<br>Auto-records <strong>reaction times</strong> and accuracy.<br><br>Supports 🔀 branching, 🔄 loop countdown,<br>⏱️ staged delays, 🎲 randomization, 📊 variable tracking.',
+              desc: 'Fullscreen preview is NOT a static screenshot —<br>participants can <strong>press keys, click buttons, drag sliders, type answers</strong>.<br>Auto-records <strong>reaction times</strong> and accuracy.<br><br>Supports 🔀 branching, 🔄 loop countdown,<br>🎲 randomization, 📊 variable tracking.',
               el: 'header',
               btn: 'Next →',
             },

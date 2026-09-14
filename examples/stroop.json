@@ -1,6 +1,10 @@
 {
   "version": "1.0",
-  "device": { "name": "Desktop 1280×720", "w": 1280, "h": 720 },
+  "device": {
+    "name": "Desktop 1280×720",
+    "w": 1280,
+    "h": 720
+  },
   "phases": [
     {
       "id": "ph1",
@@ -12,15 +16,34 @@
           "id": "t1",
           "components": [
             {
-              "id": "c1", "type": "text", "cat": "s",
+              "id": "c1",
+              "type": "text",
+              "cat": "s",
               "content": "Welcome to this experiment!\n\nYou will see words displayed in different colors.\nIgnore the word meaning and respond to the FONT COLOR.\n\nRed font → Press A\nBlue font → Press L\n\nRespond as quickly and accurately as possible!",
-              "fontSize": 20, "color": "#333333", "position": "center", "fontWeight": "bold",
-              "posX": 640, "posY": 100
+              "fontSize": 20,
+              "color": "#333333",
+              "position": "center",
+              "fontWeight": "bold",
+              "posX": 640,
+              "posY": 100
             },
             {
-              "id": "c2", "type": "button", "cat": "r",
-              "labels": "Start Experiment",
-              "posX": 640, "posY": 530
+              "id": "c2",
+              "type": "button",
+              "cat": "r",
+              "posX": 640,
+              "posY": 530,
+              "choices": [
+                "Start Experiment"
+              ],
+              "prompt": "",
+              "button_layout": "grid",
+              "grid_rows": 1,
+              "grid_columns": 0,
+              "trial_duration": 0,
+              "stimulus_duration": 0,
+              "response_ends_trial": true,
+              "enable_button_after": 0
             }
           ]
         }
@@ -35,11 +58,57 @@
         {
           "id": "t2",
           "components": [
-            { "id": "c3", "type": "fixation", "cat": "s", "duration": 500, "posX": 640, "posY": 324 },
-            { "id": "c4", "type": "delay", "cat": "l", "duration": 200, "posX": 0, "posY": 0 },
-            { "id": "c5", "type": "text", "cat": "s", "content": "RED", "color": "#3b82f6", "fontSize": 48, "position": "center", "fontWeight": "bold", "posX": 640, "posY": 274 },
-            { "id": "c6", "type": "keyboard", "cat": "r", "keys": "a,l", "correctKey": "a", "posX": 640, "posY": 446 },
-            { "id": "c7", "type": "loop", "cat": "l", "count": 48, "posX": 0, "posY": 0 }
+            {
+              "id": "c3",
+              "type": "fixation",
+              "cat": "s",
+              "duration": 500,
+              "posX": 640,
+              "posY": 324
+            },
+            {
+              "id": "c4",
+              "type": "delay",
+              "cat": "l",
+              "duration": 200,
+              "posX": 0,
+              "posY": 0
+            },
+            {
+              "id": "c5",
+              "type": "text",
+              "cat": "s",
+              "content": "RED",
+              "color": "#3b82f6",
+              "fontSize": 48,
+              "position": "center",
+              "fontWeight": "bold",
+              "posX": 640,
+              "posY": 274
+            },
+            {
+              "id": "c6",
+              "type": "keyboard",
+              "cat": "r",
+              "correctKey": "a",
+              "choices": [
+                "a",
+                "l"
+              ],
+              "prompt": "Press a key",
+              "trial_duration": 0,
+              "stimulus_duration": 0,
+              "response_ends_trial": true,
+              "wait_for_key_release": false
+            },
+            {
+              "id": "c7",
+              "type": "loop",
+              "cat": "l",
+              "count": 48,
+              "posX": 0,
+              "posY": 0
+            }
           ]
         }
       ]
@@ -54,10 +123,16 @@
           "id": "t3",
           "components": [
             {
-              "id": "c8", "type": "text", "cat": "s",
+              "id": "c8",
+              "type": "text",
+              "cat": "s",
               "content": "Experiment complete!\n\nThank you for your participation.\nYour response data has been recorded.",
-              "fontSize": 24, "color": "#333333", "position": "center", "fontWeight": "bold",
-              "posX": 640, "posY": 288
+              "fontSize": 24,
+              "color": "#333333",
+              "position": "center",
+              "fontWeight": "bold",
+              "posX": 640,
+              "posY": 288
             }
           ]
         }

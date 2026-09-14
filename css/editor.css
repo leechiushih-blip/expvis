@@ -281,13 +281,60 @@
         cursor: grabbing;
       }
 
+      /* The per-trial container is the sequence: steps stack vertically so the
+         order reads top-to-bottom and never wraps into an ambiguous second row. */
       .flow-row {
         display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
         margin-bottom: 8px;
         margin-left: 12px;
+      }
+      /* Drop strip under a trial's steps: dropping here starts a new
+         presentation step instead of joining the screen above. */
+      .flow-newstep {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 26px;
+        padding: 7px 10px;
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        font-size: 0.6rem;
+        color: var(--text2);
+        opacity: 0.6;
+        cursor: default;
+        transition: all 0.15s;
+      }
+      .flow-newstep.drag-over {
+        border-color: var(--accent2);
+        background: rgba(99, 102, 241, 0.06);
+        color: var(--accent);
+        opacity: 1;
+      }
+
+      /* One presentation step: a gutter number plus whatever it shows. */
+      .flow-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 0;
+      }
+      .flow-step > :last-child {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .flow-step-num {
+        flex: 0 0 18px;
+        text-align: right;
+        padding-right: 2px;
+        font-size: 0.58rem;
+        line-height: 2.2;
+        color: var(--text2);
+        opacity: 0.5;
+        font-variant-numeric: tabular-nums;
+        user-select: none;
       }
       .flow-node {
         display: flex;
@@ -340,15 +387,6 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-      }
-      .flow-arrow {
-        display: flex;
-        align-items: center;
-        padding: 0 8px;
-        color: #c0c0d0;
-        font-size: 1rem;
-        z-index: 2;
-        flex-shrink: 0;
       }
       .flow-node.drag-before {
         border-top: 4px solid var(--accent2) !important;
@@ -497,44 +535,6 @@
         display: none;
       }
 
-      /* Splash loading */
-      .splash-loading {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        background: #f5f5f8;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 24px;
-        font-family: 'Inter', 'Noto Sans SC', sans-serif;
-        transition: opacity 0.3s;
-      }
-      .splash-loading.fade-out {
-        opacity: 0;
-        pointer-events: none;
-      }
-      .splash-logo {
-        font-weight: 800;
-        font-size: 1.6rem;
-        background: linear-gradient(135deg, #a5b4fc, #6366f1);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-      .splash-spinner {
-        width: 40px;
-        height: 40px;
-        border: 3px solid #e0e0e8;
-        border-top-color: #6366f1;
-        border-radius: 50%;
-        animation: spin 0.7s linear infinite;
-      }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
 /* Trial-level settings shown on the flow row. These are jsPsych node/trial
    parameters (repetitions, sample, conditional_function, trial_duration),
    deliberately styled apart from the component nodes. */
@@ -593,6 +593,16 @@
 }
 
 .flow-chip.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(99,102,241,.2); }
+/* Drag feedback for the compact chips inside a simultaneous group — without
+   this a drop onto a chip gave no visual cue, unlike a full flow-node. */
+.flow-chip.drag-before {
+  border-left: 3px solid var(--accent2);
+  margin-left: 6px;
+}
+.flow-chip.drag-over-highlight {
+  border-color: var(--accent2);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
 .flow-chip-icon { font-size: 0.7rem; }
 .flow-chip-label { font-weight: 600; color: var(--text); }
 .flow-chip-detail { color: var(--text2); overflow: hidden; text-overflow: ellipsis; }

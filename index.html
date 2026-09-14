@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>ExpVis — Experiment Builder</title>
   <link rel="stylesheet" href="css/editor.css"/>
+  <!--
+    jspsych.css so the preview renders buttons exactly as the exported
+    experiment will. It is safe to load here: every selector in it is scoped to
+    a .jspsych-* class or #jspsych-* id — it contains no global or element rules.
+  -->
+  <link rel="stylesheet" href="https://unpkg.com/jspsych@8.3.0/css/jspsych.css" type="text/css"/>
 </head>
 <body>
-<div class="splash-loading" id="splash">
-      <div class="splash-logo">ExpVis</div>
-      <div class="splash-spinner"></div>
-    </div>
-    <div class="header" id="header">
+<div class="header" id="header">
       <div class="logo">ExpVis</div>
       <span style="font-size: 0.75rem; color: var(--text2)">Component-based · Visual · WYSIWYG</span>
       <div class="header-right">
@@ -25,21 +27,54 @@
         >
           ❓
         </button>
-        <select
-          id="device-select"
-          onchange="setDevice(this.value)"
+        <span
           style="
-            padding: 6px 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
             border-radius: 8px;
             border: 1px solid var(--border);
             background: var(--surface);
-            color: var(--text);
-            font-family: inherit;
-            font-size: 0.75rem;
-            cursor: pointer;
           "
-        ></select>
-        <button class="btn btn-primary" onclick="previewExperiment()">▶ Preview</button>
+        >
+          <select
+            id="device-select"
+            onchange="setDevice(this.value)"
+            title="Stage size — drives the exported experiment and every preview"
+            style="
+              border: none;
+              background: transparent;
+              color: var(--text);
+              font-family: inherit;
+              font-size: 0.75rem;
+              cursor: pointer;
+              outline: none;
+            "
+          ></select>
+          <input
+            type="number"
+            id="device-w"
+            title="Stage width in px"
+            onchange="setDeviceSize(this.value, document.getElementById('device-h').value)"
+            style="width: 58px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 0.72rem; text-align: center"
+          />
+          <span style="color: var(--text2); font-size: 0.7rem">×</span>
+          <input
+            type="number"
+            id="device-h"
+            title="Stage height in px"
+            onchange="setDeviceSize(document.getElementById('device-w').value, this.value)"
+            style="width: 58px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 0.72rem; text-align: center"
+          />
+        </span>
+        <button
+          class="btn btn-primary"
+          onclick="previewExperiment()"
+          title="Runs the experiment itself in a new tab — the same HTML the code export produces"
+        >
+          ▶ Preview
+        </button>
         <button class="btn btn-outline" onclick="showCodeEditor()" style="font-family: monospace; font-weight: 700">
           &lt;/&gt; Code
         </button>
@@ -111,6 +146,20 @@
           <div
             class="comp-card"
             draggable="true"
+            data-type="animation"
+            data-cat="s"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon s">🎞️</div>
+            <div>
+              <div class="comp-card-name">Animation</div>
+              <div class="comp-card-desc">Frame sequence · flipbook</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
             data-type="audio"
             data-cat="s"
             ondragstart="dragStart(event)"
@@ -174,7 +223,7 @@
             <div class="comp-card-icon r">⌨️</div>
             <div>
               <div class="comp-card-name">Keyboard</div>
-              <div class="comp-card-desc">Key Mapping · Correct Key / Timeout</div>
+              <div class="comp-card-desc">Keys · Correct Key · Trial Duration</div>
             </div>
           </div>
           <div
@@ -188,7 +237,7 @@
             <div class="comp-card-icon r">🔘</div>
             <div>
               <div class="comp-card-name">Button</div>
-              <div class="comp-card-desc">Multi-Button · Click Response</div>
+              <div class="comp-card-desc">Choices · Grid Layout · Prompt</div>
             </div>
           </div>
           <div
@@ -202,21 +251,7 @@
             <div class="comp-card-icon r">🎚️</div>
             <div>
               <div class="comp-card-name">Slider</div>
-              <div class="comp-card-desc">Continuous Value · Range / Step</div>
-            </div>
-          </div>
-          <div
-            class="comp-card"
-            draggable="true"
-            data-type="click"
-            data-cat="r"
-            ondragstart="dragStart(event)"
-            ondragend="dragEnd(event)"
-          >
-            <div class="comp-card-icon r">👆</div>
-            <div>
-              <div class="comp-card-name">Click</div>
-              <div class="comp-card-desc">Click / Touch Anywhere</div>
+              <div class="comp-card-desc">Range · Step · Labels · Movement</div>
             </div>
           </div>
           <div
@@ -229,8 +264,8 @@
           >
             <div class="comp-card-icon r">✏️</div>
             <div>
-              <div class="comp-card-name">Text Input</div>
-              <div class="comp-card-desc">Free Input · Placeholder</div>
+              <div class="comp-card-name">Survey Text</div>
+              <div class="comp-card-desc">Question · Free Text · Required</div>
             </div>
           </div>
           </div>
@@ -345,7 +380,7 @@
                 border-radius: 4px;
                 font-family: inherit;
               "
-              title="Expand to layout preview"
+              title="Static layout check for the selected trial — use ▶ Preview to actually run the experiment"
             >
               ⛶ Expand</button
             ><button
