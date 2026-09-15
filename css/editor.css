@@ -241,6 +241,21 @@
       .phase-index.f {
         background: var(--green);
       }
+      /* How the phase's trials compiled. A factored phase — one procedure run
+         once per condition — is the case worth spotting, so it is the one that
+         gets colour; plain trials stay quiet text. */
+      .phase-mode {
+        font-size: 0.68rem;
+        color: var(--text2);
+        cursor: help;
+      }
+      .phase-mode.factored {
+        color: var(--accent);
+        background: rgba(99, 102, 241, 0.1);
+        border: 1px solid rgba(99, 102, 241, 0.25);
+        border-radius: 999px;
+        padding: 1px 8px;
+      }
       .phase-arrow {
         display: flex;
         align-items: center;

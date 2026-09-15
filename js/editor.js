@@ -913,10 +913,18 @@ function _applyI18n() {
         fc.querySelectorAll('.phase-card,.phase-arrow').forEach((el) => el.remove());
         fc.querySelectorAll('.flow-row').forEach((el) => el.remove());
 
+        var _modes = phaseModes();
         editor.phases.forEach(function (ph, i) {
           // Presentation steps are numbered across the whole phase, not per trial:
           // a phase is one block of the experiment, so its screens read as a single
           // sequence instead of every trial restarting at 1.
+          //
+          // Except when the phase's trials are one procedure repeated — then they
+          // are conditions, not a sequence, so each runs the same steps and the
+          // numbering restarts. Counted straight across, a 4-condition phase would
+          // claim 12 consecutive screens.
+          var _mode = _modes[ph.id];
+          var _perTrial = !!(_mode && _mode.factored);
           var _stepNo = 0;
           // Phase card wrapper
           var card = document.createElement('div');
@@ -968,9 +976,10 @@ function _applyI18n() {
             (i + 1) +
             '</span><span style="font-weight:700;font-size:0.82rem">' +
             _phaseLabel(ph) +
-            '</span><span style="font-size:0.68rem;color:var(--text2)">' +
-            ph.timeline.length +
-            ' trials</span><button data-phase="' +
+            '</span><span class="phase-mode' + (_mode && _mode.factored ? ' factored' : '') +
+            '" title="' + _phaseModeTitle(_mode) + '">' +
+            _phaseModeLabel(_mode) +
+            '</span><button data-phase="' +
             ph.id +
             '" class="phase-delete-btn" style="margin-left:auto;background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;padding:2px 8px;border-radius:4px" title="Delete this phase">✕ Delete</button>';
           card.appendChild(hdr);
@@ -1018,6 +1027,9 @@ function _applyI18n() {
             cardBody.appendChild(emptyRow);
           }
           ph.timeline.forEach(function (t) {
+            // Each condition of a factored phase runs the same procedure, so its
+            // steps are numbered from 1 again rather than continuing the count.
+            if (_perTrial) _stepNo = 0;
             var row = document.createElement('div');
             row.className = 'flow-row';
             row.setAttribute('data-trial', t.id);
@@ -1207,7 +1219,8 @@ function _applyI18n() {
                 num.className = 'flow-step-num';
                 _stepNo++;
                 num.textContent = _stepNo;
-                num.title = 'Presentation step ' + _stepNo + ' of this phase' +
+                num.title = 'Presentation step ' + _stepNo +
+                  (_perTrial ? ' of this condition' : ' of this phase') +
                   (step.simul && step.comps.length > 1
                     ? ' — ' + step.comps.length + ' components shown together on one screen'
                     : '');
@@ -3022,8 +3035,12 @@ function _applyI18n() {
       function _compileExperiment(opts) {
         opts = opts || {};
         if (editor.phases.length === 0) {
-          return { code: '// No experiment created yet\n', usedPlugins: {} };
+          return { code: '// No experiment created yet\n', usedPlugins: {}, phases: [] };
         }
+        // What was decided about each phase — whether its trials turned out to
+        // be one procedure with different values. Returned so the canvas can
+        // report the compiler's actual decision instead of forming its own.
+        var _phaseModes = [];
         var dev = editor.device || {w: 1280, h: 720};
         // Collect jsPsych plugins actually used by this experiment, so the
         // generated HTML only loads what it needs.
@@ -3753,10 +3770,12 @@ function _applyI18n() {
           // it is noted rather than emitted as an empty `timeline: []`.
           if (phaseParts.length === 0) {
             code += '// (this phase holds no trials, so it adds nothing to the timeline)\n\n';
+            _phaseModes.push({id: ph.id, trials: 0, factored: false});
             return;
           }
           var nodeName = phaseSlug + '_timeline';
           var factored = _factorPhase(phaseParts);
+          _phaseModes.push({id: ph.id, trials: ph.timeline.length, factored: !!factored});
 
           if (factored) {
             var varName = phaseSlug + '_variables';
@@ -3826,7 +3845,50 @@ function _applyI18n() {
           mediaBlock += 'timeline.push({\n  type: jsPsychPreload,\n' + entries.join(',\n') + '\n});\n\n';
         }
         code = code.replace('@@MEDIA_PRELOAD@@', mediaBlock);
-        return { code: code, usedPlugins: _usedPlugins };
+        return { code: code, usedPlugins: _usedPlugins, phases: _phaseModes };
+      }
+
+      // What the compiler decided about each phase, for the canvas to report.
+      // Asked of the compiler rather than worked out again here: a second
+      // opinion about whether some trials are "the same procedure" is exactly
+      // the duplicate-opinion bug this file has been bitten by repeatedly.
+      // It is affordable because building the code is cheap — measured at well
+      // under a millisecond for a hundred trials, less than serialising the
+      // phases to JSON.
+      function phaseModes() {
+        try {
+          var modes = {};
+          (_compileExperiment({}).phases || []).forEach(function (m) { modes[m.id] = m; });
+          return modes;
+        } catch (e) {
+          // A phase card must never fail to draw because a badge could not.
+          return {};
+        }
+      }
+
+      // How a phase's trials compile, in words. The pair matters more than
+      // either half: seeing "4 trials · 4 procedures" next to a phase that says
+      // "one procedure × 4 conditions" is what tells the reader that making the
+      // trials the same shape is what produces a timeline_variables table.
+      function _phaseModeLabel(mode) {
+        if (!mode || !mode.trials) return 'empty';
+        if (mode.factored) return '1 procedure × ' + mode.trials + ' conditions';
+        return mode.trials === 1 ? '1 trial' : mode.trials + ' trials · ' +
+          mode.trials + ' procedures';
+      }
+      function _phaseModeTitle(mode) {
+        if (!mode || !mode.trials) return 'This phase has no trials';
+        if (mode.factored) {
+          return 'These ' + mode.trials + ' trials are the same procedure with different ' +
+            'values, so they compile to one timeline_variables table.';
+        }
+        if (mode.trials === 1) {
+          return 'A phase with one trial has nothing to vary — a variable table ' +
+            'needs at least two.';
+        }
+        return 'These ' + mode.trials + ' trials differ in shape, so each compiles to its ' +
+          'own trial. Give them the same response component and the same layout and they ' +
+          'become one procedure with a timeline_variables table.';
       }
 
       // Code export: the compiled experiment as a standalone runnable HTML file.
