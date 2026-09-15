@@ -190,8 +190,72 @@ function phaseCases() {
   return out;
 }
 
+// Media is the one path none of the five templates touches — no template has an
+// image, a sound or a video — so nothing here was covered before. jsPsych's
+// Preload plugin is only useful if it runs before the trials that need the
+// asset, and the asset is declared as a variable the preload trial refers to, so
+// there are two orderings to hold: declarations, then preload, then first use.
+function mediaCases() {
+  var out = {};
+  function run(label, setup) {
+    resetEditor();
+    eval(setup);
+    var code = _compileExperiment({}).code;
+    var body = code.slice(code.indexOf('var timeline = [];'));
+    var decl = body.indexOf('var EXP_MEDIA_0');
+    var preload = body.indexOf('type: jsPsychPreload');
+    var phase = body.indexOf('// ── ');
+    // The first reference that is not the preload trial's own use of it.
+    var afterPreload = body.indexOf('EXP_MEDIA_0', preload + 1);
+    out[label] = {
+      declarations: decl,
+      preload: preload,
+      firstUse: afterPreload,
+      firstPhase: phase,
+      ordered: decl >= 0 && preload >= 0 && decl < preload && preload < afterPreload
+               && preload < phase,
+      // The CDN tags live in the HTML shell, which _compileExperiment does not
+      // build — so this has to look at the finished file. Both the presence of
+      // the preload plugin and its position among the tags: it must load before
+      // the plugin whose asset it is preloading.
+      preloadTagBeforeImages: (function () {
+        var html = generateCode();
+        var p = html.indexOf('plugin-preload');
+        var i = html.indexOf('plugin-image-');
+        return p >= 0 && (i < 0 || p < i);
+      })(),
+    };
+  }
+  run('image trial', "addPhase('trials'); addTrial(editor.phases[0].id);"
+    + "var t=findTrial(editor.selectedTrial);"
+    + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
+    + "t.components[0].fileData='data:image/png;base64,AAAA';");
+  run('image in a later phase', "addPhase('instructions'); addTrial(editor.phases[0].id);"
+    + "addComponent(findTrial(editor.selectedTrial).id,'text','s');"
+    + "addPhase('trials'); addTrial(editor.phases[1].id);"
+    + "var t=findTrial(editor.selectedTrial);"
+    + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
+    + "t.components[0].fileData='data:image/png;base64,AAAA';");
+  run('image + button', "addPhase('trials'); addTrial(editor.phases[0].id);"
+    + "var t=findTrial(editor.selectedTrial);"
+    + "addComponent(t.id,'image','s'); addComponent(t.id,'button','r');"
+    + "t.components[0].fileData='data:image/png;base64,AAAA';"
+    + "t.components[1].choices=['Yes','No'];");
+  run('audio and video', "addPhase('trials'); addTrial(editor.phases[0].id);"
+    + "var t=findTrial(editor.selectedTrial);"
+    + "addComponent(t.id,'audio','s'); addComponent(t.id,'video','s');"
+    + "addComponent(t.id,'keyboard','r');"
+    + "t.components[0].fileData='data:audio/mp3;base64,AAAA';"
+    + "t.components[1].fileData='data:video/mp4;base64,BBBB';");
+  run('animation frames', "addPhase('trials'); addTrial(editor.phases[0].id);"
+    + "var t=findTrial(editor.selectedTrial); addComponent(t.id,'animation','r');"
+    + "t.components[0].frames=[{fileData:'data:image/png;base64,AAAA',fileName:'a.png'},"
+    + "{fileData:'data:image/png;base64,BBBB',fileName:'b.png'}];");
+  return out;
+}
+
 window.addEventListener('load', function () {
-  var out = { ok: true, templates: {}, cases: {}, errors: [] };
+  var out = { ok: true, templates: {}, cases: {}, media: {}, errors: [] };
   window.addEventListener('error', function (e) { out.errors.push(String(e.message)); });
   try {
     localStorage.clear();
@@ -220,6 +284,12 @@ window.addEventListener('load', function () {
     } catch (e) {
       out.ok = false;
       out.cases = { error: String(e.message) + ' @ ' + String(e.stack).split('\\n')[1] };
+    }
+    try {
+      out.media = mediaCases();
+    } catch (e) {
+      out.ok = false;
+      out.media = { error: String(e.message) + ' @ ' + String(e.stack).split('\\n')[1] };
     }
   } catch (e) {
     out.ok = false;
@@ -283,6 +353,18 @@ def cmd_check():
     if not res["ok"]:
         print(json.dumps(res, indent=1)[:2000])
         sys.exit("FAIL: the probe itself errored")
+    media = res.get("media", {})
+    if "error" in media:
+        broken_media = [f"media cases threw: {media['error']}"]
+    else:
+        broken_media = [f"media case {name}: declarations/preload/use out of order "
+                        f"(decl={c['declarations']} preload={c['preload']} "
+                        f"use={c['firstUse']} phase={c['firstPhase']})"
+                        for name, c in media.items() if not c["ordered"]]
+        broken_media += [f"media case {name}: preload plugin tag missing or after "
+                         f"an image plugin tag"
+                         for name, c in media.items() if not c["preloadTagBeforeImages"]]
+
     cases = res.get("cases", {})
     if "error" in cases:
         broken_cases = [f"phase cases threw: {cases['error']}"]
@@ -338,7 +420,7 @@ def cmd_check():
                     f"got {c['trialsPerNode']}")
 
     bad = 0
-    broken = list(broken_cases)
+    broken = list(broken_cases) + list(broken_media)
     for name, t in res["templates"].items():
         struct = t["structure"]
         # Invariants that must hold whatever the bytes are.
