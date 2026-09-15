@@ -981,7 +981,14 @@ function _applyI18n() {
             _phaseModeLabel(_mode) +
             '</span><button data-phase="' +
             ph.id +
-            '" class="phase-delete-btn" style="margin-left:auto;background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;padding:2px 8px;border-radius:4px" title="Delete this phase">✕ Delete</button>';
+            '" class="phase-settings-btn" style="margin-left:auto;background:none;border:none;' +
+            'color:var(--text2);cursor:pointer;font-size:0.72rem;opacity:0.5;padding:2px 8px;' +
+            'border-radius:4px" title="Repetitions, sampling and randomisation for this phase' +
+            (ph.sample || Number(ph.repetitions) > 1 ? ' — configured' : '') + '">⚙' +
+            (ph.sample || Number(ph.repetitions) > 1 ? ' <span style="color:var(--accent)">•</span>' : '') +
+            '</button><button data-phase="' +
+            ph.id +
+            '" class="phase-delete-btn" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;padding:2px 8px;border-radius:4px" title="Delete this phase">✕ Delete</button>';
           card.appendChild(hdr);
 
           // Card body
@@ -1288,6 +1295,12 @@ function _applyI18n() {
           btn.onclick = function (e) {
             e.stopPropagation();
             deletePhase(this.getAttribute('data-phase'));
+          };
+        });
+        document.querySelectorAll('.phase-settings-btn').forEach(function (btn) {
+          btn.onclick = function (e) {
+            e.stopPropagation();
+            showPhaseSettings(this.getAttribute('data-phase'));
           };
         });
         document.querySelectorAll('.drag-handle').forEach(function (handle) {
@@ -3296,6 +3309,82 @@ function _applyI18n() {
           };
         }
 
+        // The node-level parameters the phase's settings ask for, under jsPsych's
+        // own names and shapes.
+        //
+        // `sample` and `randomize_order` only mean anything alongside
+        // `timeline_variables`: jsPsych's generateTimelineVariableOrder returns
+        // [null] before looking at either when there is no table to draw from,
+        // so writing them onto a phase of unrelated trials would emit parameters
+        // that do nothing. They are therefore gated on the phase having factored,
+        // which is the same fact the phase badge shows.
+        //
+        // `sample.groups` is derived from the trials' own group numbers rather
+        // than stored, so there is one answer to which condition is in which
+        // group instead of a list that can drift from the trials it indexes.
+        function _phaseNodeParams(ph, factored) {
+          var out = [];
+          var s = ph.sample;
+          if (factored && s && s.type) {
+            if (s.type === 'alternate-groups') {
+              // Only the groups that actually hold conditions, renumbered from
+              // zero. Carrying a gap through would leave an empty group, and
+              // shuffleAlternateGroups loops over the SMALLEST group — so a
+              // single empty group silently runs nothing at all.
+              var byGroup = {};
+              ph.timeline.forEach(function (t, i) {
+                var gi = Math.max(0, Math.round(Number(t.group) || 0));
+                (byGroup[gi] = byGroup[gi] || []).push(i);
+              });
+              var buckets = Object.keys(byGroup)
+                .sort(function (a, b) { return a - b; })
+                .map(function (k) { return byGroup[k]; });
+              out.push('sample: {type: \'alternate-groups\', groups: ' + JSON.stringify(buckets) +
+                ', randomize_group_order: ' + (s.randomizeGroupOrder ? 'true' : 'false') + '}');
+            } else if (s.type === 'custom') {
+              out.push("sample: {type: 'custom', fn: " +
+                (s.fn || 'function (order) { return order; }') + '}');
+            } else {
+              var bits = ["type: '" + s.type + "'"];
+              if (s.size != null && s.size !== '') bits.push('size: ' + Number(s.size));
+              if (s.type === 'with-replacement' &&
+                  ph.timeline.some(function (t) { return t.weight != null && t.weight !== ''; })) {
+                bits.push('weights: [' + ph.timeline.map(function (t) {
+                  return Number(t.weight) || 1;
+                }).join(', ') + ']');
+              }
+              out.push('sample: {' + bits.join(', ') + '}');
+            }
+          }
+          // Independent of sample, not an alternative to it: jsPsych runs the
+          // sample first and then shuffles whatever it produced, so both can be
+          // set at once and either can be set alone.
+          if (factored && ph.randomize_order) out.push('randomize_order: true');
+          var reps = Number(ph.repetitions);
+          if (reps > 1) out.push('repetitions: ' + Math.round(reps));
+          return out;
+        }
+
+        // The node object. `props` is one array of lines per property — a
+        // property can span lines (`timeline: [` … `]`), and the comma goes
+        // between properties, not between the lines of one.
+        function _emitNode(nodeName, props) {
+          var all = props.filter(function (p) { return p && p.length; });
+          code += 'var ' + nodeName + ' = {\n';
+          all.forEach(function (linesOfProp, i) {
+            var last = linesOfProp.length - 1;
+            linesOfProp.forEach(function (l, j) {
+              code += l + (j === last && i < all.length - 1 ? ',' : '') + '\n';
+            });
+          });
+          code += '};\n';
+          code += 'timeline.push(' + nodeName + ');\n\n';
+        }
+        // The phase settings as emitted properties, indented.
+        function _nodeParamProps(ph, factored) {
+          return _phaseNodeParams(ph, factored).map(function (p) { return ['  ' + p]; });
+        }
+
         // One jsPsych node per phase. When the phase's trials are one procedure
         // with different values, that is what is emitted: a `timeline_variables`
         // table the trials' values were lifted into. Otherwise the trials are
@@ -3787,15 +3876,11 @@ function _applyI18n() {
               }).join(', ') + '}' + (i < factored.table.length - 1 ? ',' : '') + '\n';
             });
             code += '];\n\n';
-            code += 'var ' + nodeName + ' = {\n';
-            code += '  timeline: [\n';
-            code += '    {\n';
-            factored.procedure.forEach(function (l) { code += '    ' + l + '\n'; });
-            code += '    }\n';
-            code += '  ],\n';
-            code += '  timeline_variables: ' + varName + '\n';
-            code += '};\n';
-            code += 'timeline.push(' + nodeName + ');\n\n';
+            var procLines = ['  timeline: [', '    {'];
+            factored.procedure.forEach(function (l) { procLines.push('    ' + l); });
+            procLines.push('    }', '  ]');
+            _emitNode(nodeName, [procLines, ['  timeline_variables: ' + varName]]
+              .concat(_nodeParamProps(ph, true)));
             return;
           }
 
@@ -3809,18 +3894,15 @@ function _applyI18n() {
             phaseTrials.push(p.name);
           });
           var collected = '  timeline: [' + phaseTrials.join(', ') + ']';
-          code += 'var ' + nodeName + ' = {\n';
+          var tlLines;
           if (collected.length <= 96) {
-            code += collected + '\n';
+            tlLines = [collected];
           } else {
-            code += '  timeline: [\n';
-            phaseTrials.forEach(function (n, i) {
-              code += '    ' + n + (i < phaseTrials.length - 1 ? ',' : '') + '\n';
-            });
-            code += '  ]\n';
+            tlLines = ['  timeline: ['];
+            phaseTrials.forEach(function (n) { tlLines.push('    ' + n); });
+            tlLines.push('  ]');
           }
-          code += '};\n';
-          code += 'timeline.push(' + nodeName + ');\n\n';
+          _emitNode(nodeName, [tlLines].concat(_nodeParamProps(ph, false)));
         });
 
         code += 'jsPsych.run(timeline);\n';
@@ -3889,6 +3971,339 @@ function _applyI18n() {
         return 'These ' + mode.trials + ' trials differ in shape, so each compiles to its ' +
           'own trial. Give them the same response component and the same layout and they ' +
           'become one procedure with a timeline_variables table.';
+      }
+
+      // How many trials the phase will actually run, per jsPsych's own rules for
+      // each sample type. Null when the answer depends on a function only the
+      // researcher can read.
+      function _drawnPerRepetition(draft, n) {
+        var size = Number(draft.size) || 0;
+        if (!draft.sampleType) return n;
+        if (draft.sampleType === 'custom') return null;
+        if (draft.sampleType === 'fixed-repetitions') return n * (size || 1);
+        // sampleWithoutReplacement shuffles and slices, so a size past the
+        // number of conditions cannot produce more than there are.
+        if (draft.sampleType === 'without-replacement') return Math.min(size, n);
+        if (draft.sampleType === 'alternate-groups') {
+          var counts = _groupCounts(draft.groups);
+          var keys = Object.keys(counts);
+          // shuffleAlternateGroups loops over the SMALLEST group, so everything
+          // beyond it is dropped rather than run.
+          if (keys.length < 2) return n;
+          return Math.min.apply(null, keys.map(function (k) { return counts[k]; })) * keys.length;
+        }
+        return size;
+      }
+      function _groupCounts(groups) {
+        var counts = {};
+        (groups || []).forEach(function (g) {
+          var k = Math.max(0, Math.round(Number(g) || 0));
+          counts[k] = (counts[k] || 0) + 1;
+        });
+        return counts;
+      }
+      // The places where a setting produces something other than what it looks
+      // like it will. Each of these is jsPsych behaving as documented; none of
+      // them surfaces anywhere the researcher would see it, so the dialog says
+      // so up front.
+      function _sampleWarnings(draft, n) {
+        var out = [];
+        var size = Number(draft.size) || 0;
+        if (draft.sampleType === 'without-replacement' && size > n) {
+          out.push('Size is larger than the ' + n + ' conditions. jsPsych logs ' +
+            '"Cannot take a sample larger than the size of the set of items to sample" ' +
+            'and then runs whatever slice it got.');
+        }
+        if (draft.sampleType === 'alternate-groups') {
+          var counts = _groupCounts(draft.groups);
+          var keys = Object.keys(counts);
+          if (keys.length < 2) {
+            out.push('Everything is in one group. jsPsych warns and falls back to a ' +
+              'plain shuffle — give the conditions at least two different group numbers.');
+          } else if (keys.some(function (k) { return counts[k] !== counts[keys[0]]; })) {
+            var min = Math.min.apply(null, keys.map(function (k) { return counts[k]; }));
+            out.push('The groups are uneven, and jsPsych alternates only up to the ' +
+              'smallest one (' + min + ' × ' + keys.length + ' = ' + (min * keys.length) +
+              ' trials). The rest of the longer groups is dropped.');
+          }
+        }
+        return out;
+      }
+
+      // The jsPsych node-level parameters for a phase. They belong to the node,
+      // not to a trial or a component, which is why they are not in the trial
+      // inspector — and why a phase with no variable table is told to its face
+      // that there is nothing here to sample.
+      function showPhaseSettings(pid) {
+        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+        if (!ph) return;
+        var mode = phaseModes()[pid];
+        var factored = !!(mode && mode.factored);
+        var n = ph.timeline.length;
+        var sample = ph.sample || {};
+        var draft = {
+          repetitions: Number(ph.repetitions) > 1 ? Number(ph.repetitions) : 1,
+          sampleType: factored ? (sample.type || '') : '',
+          size: sample.size != null ? sample.size : '',
+          randomizeOrder: !!ph.randomize_order,
+          randomizeGroupOrder: !!sample.randomizeGroupOrder,
+          fn: sample.fn || 'function (order) { return order; }',
+          groups: ph.timeline.map(function (t) { return t.group == null ? 0 : t.group; }),
+          weights: ph.timeline.map(function (t) { return t.weight == null ? 1 : t.weight; }),
+        };
+
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2200;background:rgba(0,0,0,0.4);' +
+          'display:flex;align-items:center;justify-content:center';
+        var box = document.createElement('div');
+        box.style.cssText = 'background:#fff;border-radius:12px;width:560px;max-height:86vh;' +
+          'display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.25)';
+        overlay.appendChild(box);
+
+        var NUM = 'width:78px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;' +
+          'font-family:inherit;font-size:0.78rem';
+        var ROW = 'display:flex;align-items:flex-start;gap:10px;padding:7px 0';
+        var LBL = 'width:150px;font-size:0.78rem;color:var(--text);padding-top:5px';
+        var HINT = 'font-size:0.68rem;color:var(--text2);line-height:1.45;margin-top:3px';
+
+        function head() {
+          return '<div style="display:flex;justify-content:space-between;align-items:center;' +
+            'padding:14px 20px;border-bottom:1px solid var(--border)">' +
+            '<span style="font-weight:700;font-size:0.9rem">⚙ Phase settings · ' +
+            _stripEmoji(ph.name) + '</span>' +
+            '<button id="ps-close" style="background:none;border:none;font-size:1.1rem;' +
+            'cursor:pointer;color:var(--text2)">✕</button></div>';
+        }
+
+        // Everything that is not a plain value control is rebuilt on change, so
+        // the condition columns and the warnings always describe the settings
+        // currently in the form.
+        function body() {
+          var h = '<div style="padding:14px 20px">';
+          if (!factored) {
+            h += '<div style="background:#fff7ed;border:1px solid rgba(249,115,22,0.3);' +
+              'border-radius:8px;padding:10px 12px;font-size:0.72rem;line-height:1.5;' +
+              'color:#9a3412;margin-bottom:12px">These ' + n + ' trials are not one procedure, ' +
+              'so there is no variable table to draw from. Sampling is a jsPsych node ' +
+              'parameter and would be ignored here — give the trials the same response ' +
+              'component and the same layout, and this panel opens up.</div>';
+          }
+          h += '<div style="' + ROW + '"><div style="' + LBL + '">Repetitions</div><div>' +
+            '<input id="ps-reps" type="number" min="1" style="' + NUM + '" value="' +
+            draft.repetitions + '">' +
+            '<div style="' + HINT + '">Runs the whole block this many times. jsPsych draws ' +
+            'the sample again on each repetition, which is what makes a fixed number of ' +
+            'trials out of a set of conditions.</div></div></div>';
+
+          h += '<div style="border-top:1px solid var(--border);margin:10px 0 4px"></div>';
+          h += '<div style="' + ROW + '"><div style="' + LBL + '">Sampling</div><div style="flex:1">';
+          h += '<select id="ps-type" ' + (factored ? '' : 'disabled ') +
+            'style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;' +
+            'font-family:inherit;font-size:0.78rem;width:100%">';
+          [['', 'None — run every condition once'],
+           ['without-replacement', 'Sample without replacement'],
+           ['with-replacement', 'Sample with replacement'],
+           ['fixed-repetitions', 'Repeat each condition'],
+           ['alternate-groups', 'Alternate groups'],
+           ['custom', 'Custom function']].forEach(function (o) {
+            h += '<option value="' + o[0] + '"' + (draft.sampleType === o[0] ? ' selected' : '') +
+              '>' + o[1] + '</option>';
+          });
+          h += '</select>';
+          var needsSize = ['without-replacement', 'with-replacement', 'fixed-repetitions']
+            .indexOf(draft.sampleType) >= 0;
+          if (needsSize) {
+            h += '<div style="margin-top:8px">' +
+              '<span style="font-size:0.78rem">' +
+              (draft.sampleType === 'fixed-repetitions' ? 'Times each condition' : 'Size') +
+              '</span> <input id="ps-size" type="number" min="0" style="' + NUM + ';margin-left:6px" ' +
+              'value="' + draft.size + '"></div>';
+          }
+          if (draft.sampleType === 'custom') {
+            h += '<textarea id="ps-fn" spellcheck="false" style="margin-top:8px;width:100%;' +
+              'height:62px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;' +
+              'font-family:ui-monospace,Menlo,monospace;font-size:0.72rem;line-height:1.5;' +
+              'box-sizing:border-box;resize:vertical">' + _escAttr(draft.fn) + '</textarea>' +
+              '<div style="' + HINT + '">Given the list of condition indices, return the order ' +
+              'to run them in.</div>';
+          }
+          h += '</div></div>';
+
+          h += '<div style="' + ROW + '"><div style="' + LBL + '"></div><div>' +
+            '<label style="font-size:0.78rem;display:flex;gap:7px;align-items:center' +
+            (factored ? '' : ';opacity:0.45') + '">' +
+            '<input id="ps-shuffle" type="checkbox"' + (draft.randomizeOrder ? ' checked' : '') +
+            (factored ? '' : ' disabled') + '> Randomize the order</label>' +
+            '<div style="' + HINT + '">Shuffles what the sampling produced, or the whole ' +
+            'condition list when nothing is sampled. Separate from sampling, not instead ' +
+            'of it — jsPsych applies both.</div></div></div>';
+
+          if (factored && n) {
+            var groups = _groupCounts(draft.groups);
+            var showGroup = draft.sampleType === 'alternate-groups';
+            var showWeight = draft.sampleType === 'with-replacement';
+            h += '<div style="border-top:1px solid var(--border);margin:10px 0 4px"></div>';
+            if (draft.sampleType === 'alternate-groups') {
+              h += '<div style="' + ROW + '"><div style="' + LBL + '"></div><div>' +
+                '<label style="font-size:0.78rem;display:flex;gap:7px;align-items:center">' +
+                '<input id="ps-gorder" type="checkbox"' +
+                (draft.randomizeGroupOrder ? ' checked' : '') +
+                '> Randomize the order of the groups</label></div></div>';
+            }
+            if (showGroup || showWeight) {
+              h += '<div style="font-size:0.72rem;color:var(--text2);margin:6px 0 4px">' +
+                'Conditions <span style="opacity:0.7">(' + n +
+                (showGroup ? ' · ' + Object.keys(groups).length + ' groups' : '') + ')</span></div>';
+              h += '<div style="max-height:170px;overflow-y:auto;border:1px solid var(--border);' +
+                'border-radius:8px">';
+              ph.timeline.forEach(function (t, i) {
+                h += '<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;' +
+                  'font-size:0.75rem;border-bottom:1px solid #f2f2f7">' +
+                  '<span style="color:var(--text2);width:22px">' + (i + 1) + '</span>';
+                if (showGroup) {
+                  h += '<span>group</span><input type="number" min="0" data-group="' + i +
+                    '" style="' + NUM + ';width:60px" value="' + draft.groups[i] + '">';
+                }
+                if (showWeight) {
+                  h += '<span>weight</span><input type="number" min="0" step="0.1" data-weight="' +
+                    i + '" style="' + NUM + ';width:60px" value="' + draft.weights[i] + '">';
+                }
+                h += '</div>';
+              });
+              h += '</div>';
+            }
+            h += '<div id="ps-notes" style="margin-top:10px">' + notes() + '</div>';
+          }
+          h += '</div>';
+          return h;
+        }
+
+        // The live summary and the jsPsych-behaviour warnings.
+        function notes() {
+          var per = _drawnPerRepetition(draft, n);
+          var reps = Math.max(1, Number(draft.repetitions) || 1);
+          var h = '';
+          var total = per == null ? null : per * reps;
+          var plural = function (k, word) { return k + ' ' + word + (k === 1 ? '' : 's'); };
+          h += '<div style="font-size:0.72rem;color:var(--text2)">' + plural(n, 'condition') +
+            ' → <b style="color:var(--accent)">' +
+            (total == null ? 'as many as the function returns' : plural(total, 'trial')) + '</b>' +
+            (reps > 1 ? ' (' + per + ' × ' + plural(reps, 'repetition') + ')' : '') + '</div>';
+          _sampleWarnings(draft, n).forEach(function (w) {
+            h += '<div style="margin-top:8px;background:#fef2f2;border:1px solid rgba(239,68,68,0.25);' +
+              'border-radius:8px;padding:9px 11px;font-size:0.7rem;line-height:1.5;color:#991b1b">' +
+              '⚠ ' + w + '</div>';
+          });
+          return h;
+        }
+
+        function repaint() {
+          box.innerHTML = head() +
+            '<div style="flex:1;overflow-y:auto">' + body() + '</div>' +
+            '<div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;' +
+            'border-top:1px solid var(--border)">' +
+            '<button id="ps-cancel" class="btn btn-outline" style="font-size:0.78rem">Cancel</button>' +
+            '<button id="ps-apply" class="btn btn-primary" style="font-size:0.78rem">Apply</button>' +
+            '</div>';
+          wire();
+        }
+
+        function readFields() {
+          var r = document.getElementById('ps-reps');
+          if (r) draft.repetitions = Math.max(1, Math.round(Number(r.value) || 1));
+          var z = document.getElementById('ps-size');
+          if (z) draft.size = z.value;
+          var f = document.getElementById('ps-fn');
+          if (f) draft.fn = f.value;
+          var s = document.getElementById('ps-shuffle');
+          if (s) draft.randomizeOrder = s.checked;
+          var go = document.getElementById('ps-gorder');
+          if (go) draft.randomizeGroupOrder = go.checked;
+          box.querySelectorAll('[data-group]').forEach(function (el) {
+            draft.groups[Number(el.getAttribute('data-group'))] = el.value;
+          });
+          box.querySelectorAll('[data-weight]').forEach(function (el) {
+            draft.weights[Number(el.getAttribute('data-weight'))] = el.value;
+          });
+        }
+        function refreshNotes() {
+          var el = document.getElementById('ps-notes');
+          if (el) el.innerHTML = notes();
+        }
+
+        function wire() {
+          document.getElementById('ps-close').onclick = function () { overlay.remove(); };
+          document.getElementById('ps-cancel').onclick = function () { overlay.remove(); };
+          document.getElementById('ps-apply').onclick = function () { apply(); };
+          overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
+
+          var t = document.getElementById('ps-type');
+          if (t) t.onchange = function () { readFields(); draft.sampleType = t.value; repaint(); };
+          ['ps-reps', 'ps-size'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.oninput = function () { readFields(); refreshNotes(); };
+          });
+          ['ps-shuffle', 'ps-gorder'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.onchange = function () { readFields(); };
+          });
+          box.querySelectorAll('[data-group], [data-weight]').forEach(function (el) {
+            el.oninput = function () { readFields(); refreshNotes(); };
+          });
+        }
+
+        function apply() {
+          readFields();
+          var s = null;
+          if (factored && draft.sampleType) {
+            s = {type: draft.sampleType};
+            if (['without-replacement', 'with-replacement', 'fixed-repetitions']
+                .indexOf(draft.sampleType) >= 0) {
+              s.size = Number(draft.size) || 0;
+            }
+            if (draft.sampleType === 'alternate-groups') {
+              s.randomizeGroupOrder = draft.randomizeGroupOrder;
+            }
+            if (draft.sampleType === 'custom') {
+              // Refuse a function that will not parse rather than writing it into
+              // the experiment: the error would otherwise surface in the
+              // participant's browser, at run time, as a blank screen.
+              try {
+                new Function('return (' + draft.fn + ');')();
+              } catch (e) {
+                alert('That function does not parse:\n\n' + e.message);
+                return;
+              }
+              s.fn = draft.fn;
+            }
+          }
+          saveState();
+          ph.sample = s;
+          ph.randomize_order = factored && draft.randomizeOrder;
+          ph.repetitions = draft.repetitions > 1 ? draft.repetitions : null;
+          if (draft.sampleType === 'alternate-groups') {
+            ph.timeline.forEach(function (tr, i) {
+              tr.group = Math.max(0, Math.round(Number(draft.groups[i]) || 0));
+            });
+          }
+          if (draft.sampleType === 'with-replacement') {
+            // Only when a weight was actually changed. Writing the default 1 onto
+            // every trial would emit `weights: [1, 1, 1]` — uniform, so it means
+            // exactly what omitting it means, but it says something the
+            // researcher never asked for.
+            var weighted = draft.weights.some(function (w) { return Number(w) !== 1; });
+            ph.timeline.forEach(function (tr, i) {
+              if (weighted) tr.weight = Number(draft.weights[i]) || 1;
+              else delete tr.weight;
+            });
+          }
+          overlay.remove();
+          autoSave();
+          renderAll();
+        }
+
+        document.body.appendChild(overlay);
+        repaint();
       }
 
       // Code export: the compiled experiment as a standalone runnable HTML file.

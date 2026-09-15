@@ -35,16 +35,14 @@ PROBE = """
 var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
   'jsPsychHtmlSliderResponse', 'jsPsychSurveyText', 'jsPsychPreload', 'jsPsychAnimation',
   'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
-// Node-level parameters ExpVis never sets, because it no longer has the
-// capability: repetition counts, sampling policy, conditional jumps and loop
-// functions are things the researcher adds by hand to the export.
-//
-// `timeline_variables` is deliberately NOT on this list. It is derived from the
-// canvas — a phase whose trials are one procedure with different values becomes
-// a table — rather than being a policy anyone configures. Its presence or
-// absence is asserted per case in phaseCases() instead.
-var __FORBIDDEN = ['repetitions', 'sample', 'conditional_function',
-  'randomize_order', 'loop_function'];
+// Node-level parameters ExpVis has no way to set at all, and so must never
+// appear. Everything else a node can carry — timeline_variables, sample,
+// randomize_order, repetitions — is now either derived from the canvas or set
+// in the phase settings, and is asserted per case in phaseCases() instead of
+// banned outright. `loop_function` in particular would need a function the GUI
+// has nowhere to put, and `conditional_function` needs a condition it cannot
+// express.
+var __FORBIDDEN = ['conditional_function', 'loop_function'];
 function inspectStructure(code) {
   var stub = {
     run: function (tl) { stub._timeline = tl; },
@@ -76,7 +74,7 @@ function inspectStructure(code) {
 function phaseCases() {
   var out = {};
   function build(pid, spec) {
-    spec.forEach(function (v) {
+    return spec.map(function (v) {
       addTrial(pid);
       var t = findTrial(editor.selectedTrial);
       v.forEach(function (c) {
@@ -84,6 +82,7 @@ function phaseCases() {
         var comp = t.components[t.components.length - 1];
         Object.keys(c[1] || {}).forEach(function (k) { comp[k] = c[1][k]; });
       });
+      return t;
     });
   }
   function run(label, spec) {
@@ -121,6 +120,73 @@ function phaseCases() {
   ]);
   // A single trial is not a variable table either.
   run('one trial', [[['text', {content: 'ONLY'}]]]);
+
+  // Node-level parameters, set the way the phase settings dialog sets them.
+  // `nodeParams` is the exact text emitted between `timeline` and the closing
+  // brace, so the mapping from a control to a jsPsych parameter is pinned here
+  // rather than being re-checked by hand in a browser.
+  function runSampled(label, spec, phaseProps, perTrial) {
+    resetEditor();
+    addPhase('trials');
+    var made = build(editor.phases[0].id, spec);
+    // Per-condition fields (group, weight) belong on the trials the editor
+    // made, not on the spec they were built from.
+    (perTrial || []).forEach(function (props, i) {
+      Object.keys(props).forEach(function (k) { made[i][k] = props[k]; });
+    });
+    Object.keys(phaseProps).forEach(function (k) { editor.phases[0][k] = phaseProps[k]; });
+    var code = _compileExperiment({}).code;
+    out[label] = {
+      factored: code.indexOf('timeline_variables') >= 0,
+      nodeParams: (code.match(/^  (?:sample|randomize_order|repetitions):.*$/gm) || [])
+        .map(function (s) { return s.trim().replace(/,$/, ''); }),
+      trialsPerNode: inspectStructure(code).trialsPerNode,
+      forbiddenParams: inspectStructure(code).forbiddenParams
+    };
+  }
+  function cond(word) {
+    return [['text', {content: word}], ['keyboard', {choices: ['a'], correctKey: 'a'}]];
+  }
+  var three = [cond('A'), cond('B'), cond('C')];
+
+  runSampled('sample without-replacement', three,
+    {sample: {type: 'without-replacement', size: 2}});
+  runSampled('sample with-replacement', three,
+    {sample: {type: 'with-replacement', size: 1}});
+  runSampled('sample fixed-repetitions', three,
+    {sample: {type: 'fixed-repetitions', size: 3}});
+  runSampled('sample custom', three,
+    {sample: {type: 'custom', fn: 'function (order) { return order.reverse(); }'}});
+  // Two groups: indices are bucketed from each trial's own group number.
+  var four = [cond('A'), cond('B'), cond('C'), cond('D')];
+  runSampled('sample alternate-groups', four,
+    {sample: {type: 'alternate-groups', randomizeGroupOrder: true}},
+    [{group: 0}, {group: 0}, {group: 1}, {group: 1}]);
+  // Group numbers with a gap must be closed up. Passed through as typed they
+  // would become an empty group, and jsPsych alternates up to the smallest
+  // group — so the experiment would run zero trials.
+  runSampled('sample alternate-groups, gapped numbering', four,
+    {sample: {type: 'alternate-groups', randomizeGroupOrder: false}},
+    [{group: 0}, {group: 0}, {group: 7}, {group: 7}]);
+  // Weights are per condition, so they only appear when one is set.
+  runSampled('sample with weights', [cond('A'), cond('B')],
+    {sample: {type: 'with-replacement', size: 2}},
+    [{weight: 3}, {weight: 1}]);
+  runSampled('randomize_order', three, {randomize_order: true});
+  // The classic 48-trial block: one condition per repetition, drawn each time.
+  runSampled('repetitions + sample', three,
+    {sample: {type: 'with-replacement', size: 1}, repetitions: 48});
+  // repetitions stands on its own — it repeats the block whatever it holds.
+  runSampled('repetitions on a ragged phase', [
+    [['text', {content: 'A'}], ['keyboard', {choices: ['a']}]],
+    [['text', {content: 'B'}]]
+  ], {repetitions: 2});
+  // …but sampling has nothing to draw from without a table, and jsPsych would
+  // ignore it, so it must not be emitted. Gated the same way the badge is.
+  runSampled('sample ignored without a table', [
+    [['text', {content: 'A'}], ['keyboard', {choices: ['a']}]],
+    [['text', {content: 'B'}]]
+  ], {sample: {type: 'with-replacement', size: 1}, repetitions: 2});
   return out;
 }
 
@@ -231,6 +297,38 @@ def cmd_check():
             for name, want in WANT.items()
             if name in cases and cases[name]["factored"] != want
         ]
+        # The phase settings, mapped to the exact jsPsych parameters they emit.
+        # Written out in full rather than pattern-matched: a control that quietly
+        # stops emitting, or starts emitting the wrong shape, is the failure this
+        # is here to catch.
+        WANT_PARAMS = {
+            "sample without-replacement":
+                ["sample: {type: 'without-replacement', size: 2}"],
+            "sample with-replacement":
+                ["sample: {type: 'with-replacement', size: 1}"],
+            "sample fixed-repetitions":
+                ["sample: {type: 'fixed-repetitions', size: 3}"],
+            "sample custom":
+                ["sample: {type: 'custom', fn: function (order) { return order.reverse(); }}"],
+            "sample alternate-groups":
+                ["sample: {type: 'alternate-groups', groups: [[0,1],[2,3]], "
+                 "randomize_group_order: true}"],
+            "sample alternate-groups, gapped numbering":
+                ["sample: {type: 'alternate-groups', groups: [[0,1],[2,3]], "
+                 "randomize_group_order: false}"],
+            "sample with weights":
+                ["sample: {type: 'with-replacement', size: 2, weights: [3, 1]}"],
+            "randomize_order": ["randomize_order: true"],
+            "repetitions + sample":
+                ["sample: {type: 'with-replacement', size: 1}", "repetitions: 48"],
+            "repetitions on a ragged phase": ["repetitions: 2"],
+            # sample is dropped here, repetitions is not.
+            "sample ignored without a table": ["repetitions: 2"],
+        }
+        for name, want in WANT_PARAMS.items():
+            got = cases.get(name, {}).get("nodeParams")
+            if got != want:
+                broken_cases.append(f"phase case {name}: emitted {got}, expected {want}")
         for name, c in cases.items():
             if c["forbiddenParams"]:
                 broken_cases.append(f"phase case {name}: {c['forbiddenParams']}")
