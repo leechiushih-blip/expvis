@@ -1447,6 +1447,9 @@ function _applyI18n() {
         }
         var t = findTrial(editor.selectedTrial);
         if (!t) return;
+        // Where each uploaded file will be referenced from, straight from the
+        // compiler that will write it.
+        var paths = assetPathsByData();
         var h = '';
         var sc = t.components.find(function (c) {
           return c.id === editor.selComp;
@@ -1456,7 +1459,7 @@ function _applyI18n() {
           var compDesc = {
             text: 'Click a text node in the flow, then edit content, font size, color, weight, and position in this panel. Multi-line text supported — line breaks become &lt;br&gt;.',
             shape: 'Select shape type (circle/square/triangle/diamond/star), size, and color. Use with 🎲 randomize pick-one mode to show one random shape per trial.',
-            image: 'Upload a local image (≤4MB), stored as base64. When this is the only thing on screen the trial runs on the official jsPsych image plugin for its response type (as the jsPsych RT-task demo does); mixed with other components it is inlined as <img> instead.',
+            image: 'Upload a local image (≤4MB). The code refers to it by path — img/blue.png — and publishing bundles the file alongside the experiment. When this is the only thing on screen the trial runs on the official jsPsych image plugin for its response type (as the jsPsych RT-task demo does); mixed with other components it becomes an <img> tag instead.',
             stimulus_width: 'Image width in px. When the trial shows this image alone it becomes the image plugin\'s stimulus_width.',
             stimulus_height: 'Image height in px. 0 = work it out from the width.',
             maintain_aspect_ratio: 'true = scale by width without distorting. Only used by the image plugins.',
@@ -1669,7 +1672,8 @@ function _applyI18n() {
               c.id +
               '" style="display:none"><span id="img-file-name" style="font-size:0.7rem;color:var(--text2);margin-left:8px">' +
               (c.fileName || 'No file selected') +
-              '</span></div><p style="font-size:0.6rem;color:var(--text2);margin:0 0 4px">JPG/PNG/GIF/WebP/SVG/BMP, max 4MB</p>';
+              '</span></div>' + _assetPathRow([c.fileData ? paths[c.fileData] : null]) +
+              '<p style="font-size:0.6rem;color:var(--text2);margin:0 0 4px">JPG/PNG/GIF/WebP/SVG/BMP, max 4MB</p>';
           }
           if (c.type === 'audio') {
             h +=
@@ -1679,7 +1683,8 @@ function _applyI18n() {
               c.id +
               '" style="display:none"><span id="aud-file-name" style="font-size:0.7rem;color:var(--text2);margin-left:8px">' +
               (c.fileName || 'No file selected') +
-              '</span></div><p style="font-size:0.6rem;color:var(--text2);margin:0 0 4px">MP3/WAV/OGG/M4A/AAC, max 16MB</p>';
+              '</span></div>' + _assetPathRow([c.fileData ? paths[c.fileData] : null]) +
+              '<p style="font-size:0.6rem;color:var(--text2);margin:0 0 4px">MP3/WAV/OGG/M4A/AAC, max 16MB</p>';
           }
           if (c.type === 'video') {
             h +=
@@ -1689,7 +1694,8 @@ function _applyI18n() {
               c.id +
               '" style="display:none"><span id="vid-file-name" style="font-size:0.7rem;color:var(--text2);margin-left:8px">' +
               (c.fileName || 'No file selected') +
-              '</span></div><p style="font-size:0.6rem;color:var(--text2);margin:0 0 4px">MP4/WebM/OGG/MOV, max 64MB</p>';
+              '</span></div>' + _assetPathRow([c.fileData ? paths[c.fileData] : null]) +
+              '<p style="font-size:0.6rem;color:var(--text2);margin:0 0 4px">MP4/WebM/OGG/MOV, max 64MB</p>';
           }
           if (c.type === 'animation') {
             var frList = (Array.isArray(c.frames) ? c.frames : []).filter(function (f) { return f && f.fileData; });
@@ -1700,6 +1706,7 @@ function _applyI18n() {
               frList.length + ' frame' + (frList.length === 1 ? '' : 's') +
               '</span></div><p style="font-size:0.6rem;color:var(--text2);margin:0 0 6px">Played in order, one image at a time. JPG/PNG/WebP, max 4MB each. Select several at once to append.</p>';
             if (frList.length) {
+              h += _assetPathRow(frList.map(function (f) { return paths[f.fileData]; }));
               h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">';
               frList.forEach(function (f, fi) {
                 h += '<div style="position:relative;width:48px;height:48px">' +
@@ -2325,7 +2332,7 @@ function _applyI18n() {
         }
         var html;
         try {
-          html = generateCode();
+          html = generatePreviewFile();
         } catch (e) {
           alert('Could not generate the experiment:\n' + e.message);
           return;
@@ -3047,8 +3054,14 @@ function _applyI18n() {
       // Returns { code, usedPlugins }.
       function _compileExperiment(opts) {
         opts = opts || {};
+        // The preview runs from a blob URL, where a relative path like
+        // 'img/blue.png' has nothing to resolve against. It therefore asks for a
+        // build with the bytes written in. The exported file and the published
+        // bundle both use paths — the same compiler, the same experiment.
+        var _inlineAssets = !!opts.inlineAssets;
         if (editor.phases.length === 0) {
-          return { code: '// No experiment created yet\n', usedPlugins: {}, phases: [] };
+          return { code: '// No experiment created yet\n', usedPlugins: {}, phases: [],
+                   assets: [] };
         }
         // What was decided about each phase — whether its trials turned out to
         // be one procedure with different values. Returned so the canvas can
@@ -3058,21 +3071,47 @@ function _applyI18n() {
         // Collect jsPsych plugins actually used by this experiment, so the
         // generated HTML only loads what it needs.
         var _usedPlugins = {};
-        // Media (image/audio/video) is emitted once as a named variable and then
-        // shared between the preload trial and the stimulus HTML. Components
-        // carry base64 data URIs, so inlining them twice would double file size.
-        var _mediaVars = {};
-        var _mediaDecls = [];
-        function _mediaRefData(data, type) {
+        // Assets are referenced by PATH in the generated code — 'img/blue.png',
+        // the way the jsPsych docs write them — not inlined as data URIs. The
+        // editor keeps the bytes (`fileData`) because the canvas, the live
+        // preview and the export bundle all need them; the experiment file gets
+        // a path that the bundle satisfies.
+        //
+        // Paths are derived from the uploaded file's name, so the folder in the
+        // bundle and the string in the code cannot disagree. Two different files
+        // that happen to share a name get a numeric suffix rather than one
+        // silently overwriting the other in the archive.
+        var _assets = [];
+        var _assetByData = {};
+        var _assetPaths = {};
+        function _assetFor(fileName, type, data) {
           if (!data) return null;
-          if (_mediaVars[data]) return _mediaVars[data];
-          var name = 'EXP_MEDIA_' + _mediaDecls.length;
-          _mediaVars[data] = name;
-          _mediaDecls.push({name: name, type: type || 'image', data: data});
-          return name;
+          if (_assetByData[data] != null) return _assets[_assetByData[data]];
+          var kind = type === 'audio' ? 'snd' : type === 'video' ? 'vid' : 'img';
+          var base = _assetBaseName(fileName);
+          var path = kind + '/' + base, n = 2;
+          while (_assetPaths[path]) {
+            path = kind + '/' + base.replace(/(\.[^.]*)?$/, '_' + (n++) + '$1');
+          }
+          _assetPaths[path] = true;
+          _assetByData[data] = _assets.length;
+          _assets.push({path: path, type: type || 'image', data: data, idx: _assets.length});
+          return _assets[_assets.length - 1];
+        }
+        // Where an asset is written into HTML, the compiler leaves this token and
+        // _jsStr() replaces it — with the path, or with the data URI when the
+        // build is one that has to stand alone (see opts.inlineAssets).
+        function _assetToken(fileName, type, data) {
+          var a = _assetFor(fileName, type, data);
+          return a ? '@@ASSET_' + (a.idx - 1) + '@@' : '';
         }
         function _mediaRef(c) {
-          return _mediaRefData(c.fileData, c.type);
+          return _assetFor(c.fileName, c.type, c.fileData);
+        }
+        function _assetHref(fileName, type, data) {
+          var a = _assetFor(fileName, type, data);
+          if (!a) return null;
+          return _inlineAssets ? a.data : a.path;
         }
         // The stage every stimulus is laid out on. jsPsych's own
         // `.jspsych-content-wrapper { margin:auto }` centres this block, so it
@@ -3089,8 +3128,16 @@ function _applyI18n() {
         // Turn stimulus HTML into a single-quoted JS string. Placeholders left by
         // compHTML() become variable concatenations AFTER quote-escaping, so the
         // escaped HTML and the live expression don't interfere.
+        // The one place an asset's name is decided. Everything else asks for a
+        // token and this resolves it — to the path the bundle will contain, or,
+        // for a build that has to stand alone, to the bytes themselves. Both
+        // outputs are the same experiment written the same way; only the spelling
+        // of an asset differs.
         function _jsStr(html) {
-          return html.replace(/'/g, "\\'").replace(/@@(\w+)@@/g, "' + $1 + '");
+          return html.replace(/'/g, "\\'").replace(/@@ASSET_(\d+)@@/g, function (_, i) {
+            var a = _assets[Number(i)];
+            return _inlineAssets ? a.data : a.path;
+          });
         }
         var code = '';
         var onFinishBody = opts.onFinish || 'jsPsych.data.displayData();';
@@ -3208,22 +3255,18 @@ function _applyI18n() {
               return '<div style="' + px + 'font-size:60px;color:#ccc">+</div>';
             case 'image':
               return c.fileData
-                ? '<img src="@@' + _mediaRef(c) + '@@" style="' + px + 'max-width:' +
-                  (c.stimulus_width || 200) + 'px">'
+                ? '<img src="' + _assetToken(c.fileName, c.type, c.fileData) +
+                  '" style="' + px + 'max-width:' + (c.stimulus_width || 200) + 'px">'
                 : '';
             case 'audio':
               return c.fileData
-                ? '<audio controls src="@@' + _mediaRef(c) + '@@" style="' + px + '"></audio>'
+                ? '<audio controls src="' + _assetToken(c.fileName, c.type, c.fileData) +
+                  '" style="' + px + '"></audio>'
                 : '';
             case 'video':
               return c.fileData
-                ? '<video controls src="@@' +
-                    _mediaRef(c) +
-                    '@@" style="' +
-                    px +
-                    'max-width:' +
-                    (c.width || 320) +
-                    'px"></video>'
+                ? '<video controls src="' + _assetToken(c.fileName, c.type, c.fileData) +
+                  '" style="' + px + 'max-width:' + (c.width || 320) + 'px"></video>'
                 : '';
             default:
               return '';
@@ -3591,7 +3634,7 @@ function _applyI18n() {
               _out += 'var ' + trialName + ' = {\n';
               _out += _a + 'type: jsPsychAnimation,\n';
               _out += _a + 'stimuli: [' + _fr.map(function (f) {
-                return _mediaRefData(f.fileData, 'image');
+                return "'" + _assetHref(f.fileName, 'image', f.fileData) + "'";
               }).join(', ') + '],\n';
               _out += _a + 'frame_time: ' + (respInfo.frameTime || 250) + ',\n';
               if (respInfo.frameIsi) _out += _a + 'frame_isi: ' + respInfo.frameIsi + ',\n';
@@ -3737,7 +3780,8 @@ function _applyI18n() {
             {
               if (useImagePlugin) {
                 // The picture itself, as the image plugins expect.
-                P(indent, 'stimulus', _mediaRef(imageOnlyComp));
+                P(indent, 'stimulus', "'" + _assetHref(
+                  imageOnlyComp.fileName, imageOnlyComp.type, imageOnlyComp.fileData) + "'");
               } else if (preHTML || postStims.length > 0) {
                 P(indent, _stimKey, "'" + fullStimHTML + "'");
               } else if (respType === 'button' || respType === 'slider') {
@@ -3906,28 +3950,39 @@ function _applyI18n() {
         });
 
         code += 'jsPsych.run(timeline);\n';
-        // Assemble the media block now that every component has been scanned:
-        // one declaration per unique asset, plus a preload trial up front.
+        // The preload trial, now that every component has been scanned. Assets
+        // are named by path, so there is nothing to declare first — which is what
+        // this block looks like in the jsPsych docs:
+        //
+        //     timeline.push({ type: jsPsychPreload, images: ['img/blue.png'] });
+        //
+        // It exists because jsPsych does not preload on its own: the core defines
+        // getAutoPreloadList() but never calls it, so without this trial the first
+        // image of the experiment is decoded mid-trial.
         var mediaBlock = '';
-        if (_mediaDecls.length > 0) {
+        if (_assets.length > 0) {
           _usedPlugins['jsPsychPreload'] = true;
-          mediaBlock += '// Media assets (declared once, shared with the trials below)\n';
-          _mediaDecls.forEach(function (m) {
-            mediaBlock += 'var ' + m.name + " = '" + m.data + "';\n";
-          });
           var groups = {images: [], audio: [], video: []};
-          _mediaDecls.forEach(function (m) {
-            groups[m.type === 'image' ? 'images' : m.type].push(m.name);
+          _assets.forEach(function (a) {
+            var src = _inlineAssets ? a.data : a.path;
+            groups[a.type === 'image' ? 'images' : a.type].push("'" + src + "'");
           });
           var entries = [];
           ['images', 'audio', 'video'].forEach(function (k) {
             if (groups[k].length) entries.push('  ' + k + ': [' + groups[k].join(', ') + ']');
           });
-          mediaBlock += '\n// Preload so media is decoded before a trial needs it\n';
+          mediaBlock += '// Preload so no trial has to wait for a decode\n';
           mediaBlock += 'timeline.push({\n  type: jsPsychPreload,\n' + entries.join(',\n') + '\n});\n\n';
         }
         code = code.replace('@@MEDIA_PRELOAD@@', mediaBlock);
-        return { code: code, usedPlugins: _usedPlugins, phases: _phaseModes };
+        return {
+          code: code,
+          usedPlugins: _usedPlugins,
+          phases: _phaseModes,
+          // For the export bundle: the file names and bytes behind every path the
+          // code now refers to.
+          assets: _assets,
+        };
       }
 
       // What the compiler decided about each phase, for the canvas to report.
@@ -3944,6 +3999,40 @@ function _applyI18n() {
           return modes;
         } catch (e) {
           // A phase card must never fail to draw because a badge could not.
+          return {};
+        }
+      }
+
+      // The path an uploaded file will be referenced by in the generated code, and
+      // the folder it will occupy in the published bundle. Shown, not edited: it
+      // is derived from the file, so the code and the archive cannot disagree.
+      function _assetPathRow(paths) {
+        var real = (paths || []).filter(function (p) { return p; });
+        if (!real.length) return '';
+        return '<p style="font-size:0.65rem;color:var(--text2);margin:0 0 8px;' +
+          'font-family:ui-monospace,Menlo,monospace;word-break:break-all">\u2192 ' +
+          real.join('<br>\u2192 ') + '</p>';
+      }
+
+      // An uploaded file's name, reduced to something safe in a path and in a
+      // JS string literal. Leading directories are dropped so a name cannot
+      // escape the folder it is put in.
+      function _assetBaseName(fileName) {
+        return String(fileName || 'asset').replace(/^.*[\\/]/, '')
+          .replace(/[^A-Za-z0-9._-]/g, '_').replace(/_+/g, '_')
+          .replace(/_+\./g, '.').replace(/^\.+/, '') || 'asset';
+      }
+
+      // Where each asset is referenced from, keyed by the bytes it holds. Asked
+      // of the compiler so the inspector shows the path the code will actually
+      // carry — deriving it a second time is how the two would drift apart, and
+      // the archive has to match the code exactly.
+      function assetPathsByData() {
+        try {
+          var map = {};
+          (_compileExperiment({}).assets || []).forEach(function (a) { map[a.data] = a.path; });
+          return map;
+        } catch (e) {
           return {};
         }
       }
@@ -4309,6 +4398,16 @@ function _applyI18n() {
       // Code export: the compiled experiment as a standalone runnable HTML file.
       function generateCode() {
         var r = _compileExperiment({});
+        return _buildJsPsychHTML(r.code, r.usedPlugins);
+      }
+
+      // The preview's build. Assets are named by path in the exported code, and
+      // a blob URL has no directory for 'img/blue.png' to resolve against, so the
+      // preview asks the same compiler for the same experiment with the bytes
+      // written in. Nothing else differs — not the trials, not the plugins, not
+      // the order. See _jsStr, which is the single place an asset is spelled.
+      function generatePreviewFile() {
+        var r = _compileExperiment({inlineAssets: true});
         return _buildJsPsychHTML(r.code, r.usedPlugins);
       }
 
@@ -4882,7 +4981,13 @@ function _applyI18n() {
           if (!saved && !editor.projectName) return;
         }
         downloadPublishedExperiment();
-        alert('Experiment file downloaded.\n\nOpen it in a browser to run the experiment.\nData is collected in the browser and stored in localStorage.');
+        var _n = _compileExperiment({}).assets.length;
+        alert(_n
+          ? 'Experiment downloaded as a ZIP.\n\nUnzip it and open index.html — the ' + _n +
+            ' asset' + (_n === 1 ? '' : 's') + ' it needs are in the folders beside it. ' +
+            'Keep the layout: the code refers to them by path.\n\n' +
+            'Data is collected in the browser and stored in localStorage.'
+          : 'Experiment file downloaded.\n\nOpen it in a browser to run the experiment.\nData is collected in the browser and stored in localStorage.');
       }
 
       function showPublishConfig(callback) {
@@ -5443,16 +5548,113 @@ function generatePublishedFile() {
   return generateCode();
 }
 
-function downloadPublishedExperiment() {
-  var html = generatePublishedFile();
-  var name = (editor.projectName || 'experiment').replace(/[^a-zA-Z0-9_-]/g, '_');
-  var blob = new Blob([html], {type: 'text/html'});
+// ============ Export bundle ============
+// The experiment file names its assets by path, so the published artifact is a
+// bundle rather than a single file. The archive is written here rather than
+// pulled from a library: this project has no dependencies, and a stored (not
+// deflated) ZIP is a fixed sequence of headers — while deflate would barely help
+// on PNG, MP3 and MP4, which are already compressed.
+
+function _utf8Bytes(str) {
+  var out = [];
+  for (var i = 0; i < str.length; i++) {
+    var c = str.charCodeAt(i);
+    if (c < 0x80) out.push(c);
+    else if (c < 0x800) out.push(0xC0 | (c >> 6), 0x80 | (c & 63));
+    else out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+  }
+  return new Uint8Array(out);
+}
+
+// Uploads arrive as data URIs; the archive wants the bytes back.
+function _dataUriBytes(uri) {
+  var comma = uri.indexOf(',');
+  var meta = uri.slice(0, comma);
+  var body = uri.slice(comma + 1);
+  if (meta.indexOf('base64') < 0) return _utf8Bytes(decodeURIComponent(body));
+  var bin = atob(body);
+  var out = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+var _crcTable = null;
+function _crc32(bytes) {
+  if (!_crcTable) {
+    _crcTable = new Uint32Array(256);
+    for (var n = 0; n < 256; n++) {
+      var c = n;
+      for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      _crcTable[n] = c >>> 0;
+    }
+  }
+  var crc = 0xFFFFFFFF;
+  for (var i = 0; i < bytes.length; i++) {
+    crc = _crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// A stored ZIP: local header + data per file, then the central directory, then
+// the end record. `files` is [{name, data: Uint8Array}].
+function _zipBytes(files) {
+  var chunks = [], central = [], offset = 0;
+  var now = new Date();
+  var dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  var dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+
+  function u16(v) { return [v & 0xFF, (v >> 8) & 0xFF]; }
+  function u32(v) { return [v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF]; }
+  function push(target, arr) { for (var i = 0; i < arr.length; i++) target.push(arr[i]); }
+
+  files.forEach(function (f) {
+    var name = _utf8Bytes(f.name);
+    var crc = _crc32(f.data);
+    var head = [].concat([0x50, 0x4b, 0x03, 0x04], u16(20), u16(0), u16(0),
+      u16(dosTime), u16(dosDate), u32(crc), u32(f.data.length), u32(f.data.length),
+      u16(name.length), u16(0));
+    push(chunks, head);
+    push(chunks, name);
+    push(chunks, f.data);
+
+    var cd = [].concat([0x50, 0x4b, 0x01, 0x02], u16(20), u16(20), u16(0), u16(0),
+      u16(dosTime), u16(dosDate), u32(crc), u32(f.data.length), u32(f.data.length),
+      u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset));
+    push(central, cd);
+    push(central, name);
+    offset += head.length + name.length + f.data.length;
+  });
+
+  var centralSize = central.length;
+  var end = [].concat([0x50, 0x4b, 0x05, 0x06], u16(0), u16(0),
+    u16(files.length), u16(files.length), u32(centralSize), u32(offset), u16(0));
+  return new Uint8Array(chunks.concat(central, end));
+}
+
+function _downloadBlob(blob, filename) {
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = name + '_published.html';
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// What publishing hands the researcher: the experiment file plus every asset it
+// refers to, laid out exactly as the code names them.
+function downloadPublishedExperiment() {
+  var r = _compileExperiment({});
+  var name = (editor.projectName || 'experiment').replace(/[^a-zA-Z0-9_-]/g, '_');
+  var files = [{name: 'index.html', data: _utf8Bytes(_buildJsPsychHTML(r.code, r.usedPlugins))}];
+  r.assets.forEach(function (a) {
+    files.push({name: a.path, data: _dataUriBytes(a.data)});
+  });
+  if (r.assets.length === 0) {
+    // Nothing to carry: a bundle of one file is just the file.
+    _downloadBlob(new Blob([files[0].data], {type: 'text/html'}), name + '_published.html');
+    return;
+  }
+  _downloadBlob(new Blob([_zipBytes(files)], {type: 'application/zip'}), name + '.zip');
 }
 
 // ============ Data Dashboard ============

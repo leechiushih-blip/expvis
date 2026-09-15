@@ -197,27 +197,38 @@ function phaseCases() {
 // there are two orderings to hold: declarations, then preload, then first use.
 function mediaCases() {
   var out = {};
-  function run(label, setup) {
+  function run(label, setup, wantPaths) {
     resetEditor();
     eval(setup);
     var code = _compileExperiment({}).code;
-    var body = code.slice(code.indexOf('var timeline = [];'));
-    var decl = body.indexOf('var EXP_MEDIA_0');
-    var preload = body.indexOf('type: jsPsychPreload');
-    var phase = body.indexOf('// ── ');
-    // The first reference that is not the preload trial's own use of it.
-    var afterPreload = body.indexOf('EXP_MEDIA_0', preload + 1);
+    var preload = code.indexOf('type: jsPsychPreload');
+    var phase = code.indexOf('// ── ');
+    var inPreload = preload >= 0 ? code.slice(preload, phase) : '';
+    var referenced = [];
+    (code.match(/'(?:img|snd|vid)\\/[^']*'/g) || []).forEach(function (q) {
+      var p = q.slice(1, -1);
+      if (referenced.indexOf(p) < 0) referenced.push(p);
+    });
+    var preloaded = [];
+    (inPreload.match(/'(?:img|snd|vid)\\/[^']*'/g) || []).forEach(function (q) {
+      var p = q.slice(1, -1);
+      if (preloaded.indexOf(p) < 0) preloaded.push(p);
+    });
+    // The preview runs from a blob URL, where a relative path has nothing to
+    // resolve against, so it is compiled with the bytes written in instead. Same
+    // compiler, same experiment — only the spelling of an asset differs.
+    var inline = _compileExperiment({inlineAssets: true}).code;
     out[label] = {
-      declarations: decl,
-      preload: preload,
-      firstUse: afterPreload,
-      firstPhase: phase,
-      ordered: decl >= 0 && preload >= 0 && decl < preload && preload < afterPreload
-               && preload < phase,
-      // The CDN tags live in the HTML shell, which _compileExperiment does not
-      // build — so this has to look at the finished file. Both the presence of
-      // the preload plugin and its position among the tags: it must load before
-      // the plugin whose asset it is preloading.
+      paths: referenced,
+      pathsMatch: JSON.stringify(referenced) === JSON.stringify(wantPaths || []),
+      preloadFirst: preload >= 0 && phase >= 0 && preload < phase,
+      // every path the trials use is in the preload list
+      allPreloaded: referenced.every(function (p) { return preloaded.indexOf(p) >= 0; }),
+      // and nothing is preloaded that no trial uses
+      noExtraPreloads: preloaded.every(function (p) { return referenced.indexOf(p) >= 0; }),
+      noInlineData: code.indexOf('data:') < 0,
+      noOldIndirection: code.indexOf('EXP_MEDIA_') < 0,
+      inlineHasData: inline.indexOf('data:') >= 0 && inline.indexOf('img/') < 0,
       preloadTagBeforeImages: (function () {
         var html = generateCode();
         var p = html.indexOf('plugin-preload');
@@ -229,28 +240,74 @@ function mediaCases() {
   run('image trial', "addPhase('trials'); addTrial(editor.phases[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
-    + "t.components[0].fileData='data:image/png;base64,AAAA';");
+    + "t.components[0].fileData='data:image/png;base64,AAAA';"
+    + "t.components[0].fileName='blue.png';",
+    ['img/blue.png']);
   run('image in a later phase', "addPhase('instructions'); addTrial(editor.phases[0].id);"
     + "addComponent(findTrial(editor.selectedTrial).id,'text','s');"
     + "addPhase('trials'); addTrial(editor.phases[1].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
-    + "t.components[0].fileData='data:image/png;base64,AAAA';");
+    + "t.components[0].fileData='data:image/png;base64,AAAA';"
+    + "t.components[0].fileName='blue.png';",
+    ['img/blue.png']);
   run('image + button', "addPhase('trials'); addTrial(editor.phases[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'button','r');"
     + "t.components[0].fileData='data:image/png;base64,AAAA';"
-    + "t.components[1].choices=['Yes','No'];");
+    + "t.components[0].fileName='blue.png';"
+    + "t.components[1].choices=['Yes','No'];",
+    ['img/blue.png']);
+  // Each kind gets its own folder, so a name collision across kinds is fine.
   run('audio and video', "addPhase('trials'); addTrial(editor.phases[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'audio','s'); addComponent(t.id,'video','s');"
     + "addComponent(t.id,'keyboard','r');"
     + "t.components[0].fileData='data:audio/mp3;base64,AAAA';"
-    + "t.components[1].fileData='data:video/mp4;base64,BBBB';");
+    + "t.components[0].fileName='beep.mp3';"
+    + "t.components[1].fileData='data:video/mp4;base64,BBBB';"
+    + "t.components[1].fileName='clip.mp4';",
+    ['snd/beep.mp3', 'vid/clip.mp4']);
   run('animation frames', "addPhase('trials'); addTrial(editor.phases[0].id);"
     + "var t=findTrial(editor.selectedTrial); addComponent(t.id,'animation','r');"
-    + "t.components[0].frames=[{fileData:'data:image/png;base64,AAAA',fileName:'a.png'},"
-    + "{fileData:'data:image/png;base64,BBBB',fileName:'b.png'}];");
+    + "t.components[0].frames=[{fileData:'data:image/png;base64,AAAA',fileName:'f1.png'},"
+    + "{fileData:'data:image/png;base64,BBBB',fileName:'f2.png'}];",
+    ['img/f1.png', 'img/f2.png']);
+  // Two different files that share a name must both survive the archive, so the
+  // second gets a suffix rather than overwriting the first.
+  run('same file name, different bytes', "addPhase('trials');"
+    + "['AAAA','BBBB'].forEach(function (d, i) {"
+    + "addTrial(editor.phases[0].id);"
+    + "var t=findTrial(editor.selectedTrial);"
+    + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
+    + "t.components[0].fileData='data:image/png;base64,'+d;"
+    + "t.components[0].fileName='face.png';"
+    + "t.components[1].choices=['f','j']; });",
+    ['img/face.png', 'img/face_2.png']);
+  // The same file twice is one archive entry, one path, one preload entry.
+  run('same file used twice', "addPhase('trials');"
+    + "['x','y'].forEach(function () {"
+    + "addTrial(editor.phases[0].id);"
+    + "var t=findTrial(editor.selectedTrial);"
+    + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
+    + "t.components[0].fileData='data:image/png;base64,AAAA';"
+    + "t.components[0].fileName='blue.png';"
+    + "t.components[1].choices=['f','j']; });",
+    ['img/blue.png']);
+  // A name with characters that cannot go in a path or a JS string.
+  run('awkward file name', "addPhase('trials'); addTrial(editor.phases[0].id);"
+    + "var t=findTrial(editor.selectedTrial);"
+    + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
+    + "t.components[0].fileData='data:image/png;base64,AAAA';"
+    + "t.components[0].fileName=\\\"my face (1)'s.png\\\";",
+    ['img/my_face_1_s.png']);
+  // A bracket before the extension must not leave a trailing underscore.
+  run('bracket before extension', "addPhase('trials'); addTrial(editor.phases[0].id);"
+    + "var t=findTrial(editor.selectedTrial);"
+    + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
+    + "t.components[0].fileData='data:image/png;base64,AAAA';"
+    + "t.components[0].fileName=\\\"face (1).png\\\";",
+    ['img/face_1.png']);
   return out;
 }
 
@@ -357,13 +414,25 @@ def cmd_check():
     if "error" in media:
         broken_media = [f"media cases threw: {media['error']}"]
     else:
-        broken_media = [f"media case {name}: declarations/preload/use out of order "
-                        f"(decl={c['declarations']} preload={c['preload']} "
-                        f"use={c['firstUse']} phase={c['firstPhase']})"
-                        for name, c in media.items() if not c["ordered"]]
-        broken_media += [f"media case {name}: preload plugin tag missing or after "
-                         f"an image plugin tag"
-                         for name, c in media.items() if not c["preloadTagBeforeImages"]]
+        broken_media = []
+        for name, c in media.items():
+            if not c["pathsMatch"]:
+                broken_media.append(f"media case {name}: paths {c['paths']}")
+            if not c["preloadFirst"]:
+                broken_media.append(f"media case {name}: preload is not before the trials")
+            if not c["allPreloaded"]:
+                broken_media.append(f"media case {name}: a used asset is not preloaded")
+            if not c["noExtraPreloads"]:
+                broken_media.append(f"media case {name}: an unused asset is preloaded")
+            if not c["noInlineData"]:
+                broken_media.append(f"media case {name}: the exported code still inlines bytes")
+            if not c["noOldIndirection"]:
+                broken_media.append(f"media case {name}: EXP_MEDIA_ indirection survived")
+            if not c["inlineHasData"]:
+                broken_media.append(f"media case {name}: the standalone build has no bytes")
+            if not c["preloadTagBeforeImages"]:
+                broken_media.append(f"media case {name}: preload plugin tag missing or "
+                                    f"after an image plugin tag")
 
     cases = res.get("cases", {})
     if "error" in cases:
