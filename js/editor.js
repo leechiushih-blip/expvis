@@ -3103,7 +3103,7 @@ function _applyI18n() {
         // build is one that has to stand alone (see opts.inlineAssets).
         function _assetToken(fileName, type, data) {
           var a = _assetFor(fileName, type, data);
-          return a ? '@@ASSET_' + (a.idx - 1) + '@@' : '';
+          return a ? '@@ASSET_' + a.idx + '@@' : '';
         }
         function _mediaRef(c) {
           return _assetFor(c.fileName, c.type, c.fileData);

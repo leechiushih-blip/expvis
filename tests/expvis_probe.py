@@ -100,7 +100,8 @@ function phaseCases() {
       uniform: !!m.uniform,
       // a factored node holds the one procedure, not one entry per condition
       trialsPerNode: st.trialsPerNode,
-      forbiddenParams: st.forbiddenParams
+      forbiddenParams: st.forbiddenParams,
+      noTokens: code.indexOf('@@') < 0
     };
   }
   // Two trials that share a shape are STILL two trials. The compiler cannot
@@ -154,7 +155,8 @@ function phaseCases() {
       nodeParams: (code.match(/^  (?:sample|randomize_order|repetitions):.*$/gm) || [])
         .map(function (s) { return s.trim().replace(/,$/, ''); }),
       trialsPerNode: inspectStructure(code).trialsPerNode,
-      forbiddenParams: inspectStructure(code).forbiddenParams
+      forbiddenParams: inspectStructure(code).forbiddenParams,
+      noTokens: code.indexOf('@@') < 0
     };
   }
   function cond(word) {
@@ -245,6 +247,7 @@ function mediaCases() {
       noExtraPreloads: preloaded.every(function (p) { return referenced.indexOf(p) >= 0; }),
       noInlineData: code.indexOf('data:') < 0,
       noOldIndirection: code.indexOf('EXP_MEDIA_') < 0,
+      noTokens: code.indexOf('@@') < 0 && inline.indexOf('@@') < 0,
       inlineHasData: inline.indexOf('data:') >= 0 && inline.indexOf('img/') < 0,
       preloadTagBeforeImages: (function () {
         var html = generateCode();
@@ -275,6 +278,18 @@ function mediaCases() {
     + "t.components[0].fileName='blue.png';"
     + "t.components[1].choices=['Yes','No'];",
     ['img/blue.png']);
+  // An image mixed with anything else leaves the dedicated image plugin for the
+  // HTML path, where the asset is written into a tag via a compiler token rather
+  // than passed as `stimulus`. That token was the one nothing exercised.
+  run('image + text (HTML path)', "addPhase('trials'); addTrial(editor.phases[0].id);"
+    + "var t=findTrial(editor.selectedTrial);"
+    + "addComponent(t.id,'image','s'); addComponent(t.id,'text','s');"
+    + "addComponent(t.id,'keyboard','r');"
+    + "t.components[0].fileData='data:image/png;base64,AAAA';"
+    + "t.components[0].fileName='face.png';"
+    + "t.components[1].content='Is this Alex?';"
+    + "t.components[2].choices=['y','n'];",
+    ['img/face.png']);
   // Each kind gets its own folder, so a name collision across kinds is fine.
   run('audio and video', "addPhase('trials'); addTrial(editor.phases[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
@@ -359,6 +374,7 @@ function contentlessCases() {
       emptyStimulus: /^\\s*(stimulus|preamble): ''/m.test(trial),
       prompt: (trial.match(/^\\s*prompt: (.*?),?$/m) || [null, null])[1],
       saysUndefined: code.indexOf('undefined') >= 0,
+      noTokens: code.indexOf('@@') < 0,
     };
   }
   // Nothing at all: the one case the canned prompt is for.
@@ -390,6 +406,7 @@ window.addEventListener('load', function () {
         out.templates[name] = {
           code: code,
           publishedMatches: generatePublishedFile() === code,
+          noTokens: code.indexOf('@@') < 0,
           // Structural facts, independent of the exact bytes. Regexes over the
           // generated text were tried first and were worse than useless — they
           // cannot tell a node from a trial, and they tripped over nested
@@ -502,6 +519,8 @@ def cmd_check():
                 broken_media.append(f"media case {name}: EXP_MEDIA_ indirection survived")
             if not c["inlineHasData"]:
                 broken_media.append(f"media case {name}: the standalone build has no bytes")
+            if not c["noTokens"]:
+                broken_media.append(f"media case {name}: an internal @@TOKEN@@ survived")
             if not c["preloadTagBeforeImages"]:
                 broken_media.append(f"media case {name}: preload plugin tag missing or "
                                     f"after an image plugin tag")
@@ -530,6 +549,8 @@ def cmd_check():
                 continue
             if c["saysUndefined"]:
                 broken_contentless.append(f"contentless case {name}: the code says 'undefined'")
+            if not c["noTokens"]:
+                broken_contentless.append(f"contentless case {name}: an @@TOKEN@@ survived")
             if not c["emptyStimulus"]:
                 broken_contentless.append(
                     f"contentless case {name}: no empty stimulus (hasStimulus={c['hasStimulus']})")
@@ -598,6 +619,8 @@ def cmd_check():
         for name, c in cases.items():
             if c["forbiddenParams"]:
                 broken_cases.append(f"phase case {name}: {c['forbiddenParams']}")
+            if not c["noTokens"]:
+                broken_cases.append(f"phase case {name}: an @@TOKEN@@ survived")
             # A factored node holds the one procedure, not one entry per
             # condition. Keyed on the case's own result: `want` above is the
             # last value of a different loop.
@@ -617,6 +640,8 @@ def cmd_check():
             broken.append(f"{name}: a phase node collects no trials ({struct['trialsPerNode']})")
         if not t.get("publishedMatches"):
             broken.append(f"{name}: publish != export")
+        if not t.get("noTokens"):
+            broken.append(f"{name}: an internal @@TOKEN@@ survived into the output")
 
         path = os.path.join(GOLDEN, name + ".html")
         if not os.path.exists(path):
