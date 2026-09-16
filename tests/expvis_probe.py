@@ -85,47 +85,59 @@ function phaseCases() {
       return t;
     });
   }
-  function run(label, spec) {
+  function run(label, spec, phaseProps) {
     resetEditor();
     addPhase('trials');
     build(editor.phases[0].id, spec);
+    Object.keys(phaseProps || {}).forEach(function (k) { editor.phases[0][k] = phaseProps[k]; });
     var code = _compileExperiment({}).code;
+    var st = inspectStructure(code);
+    var m = phaseModes()[editor.phases[0].id] || {};
     out[label] = {
       factored: code.indexOf('timeline_variables') >= 0,
+      // whether the trials COULD be one procedure, which is what the settings
+      // dialog offers before the researcher asks for it
+      uniform: !!m.uniform,
       // a factored node holds the one procedure, not one entry per condition
-      trialsPerNode: inspectStructure(code).trialsPerNode,
-      forbiddenParams: inspectStructure(code).forbiddenParams
+      trialsPerNode: st.trialsPerNode,
+      forbiddenParams: st.forbiddenParams
     };
   }
-  // Two trials, same shape, different words and answers: one procedure.
-  run('homogeneous', [
+  // Two trials that share a shape are STILL two trials. The compiler cannot
+  // tell them from two conditions of one procedure, so it does not guess — it
+  // emits what the canvas shows and leaves the reading to the researcher.
+  var HOMOGENEOUS = [
     [['text', {content: 'RED'}], ['keyboard', {choices: ['a'], correctKey: 'a'}]],
     [['text', {content: 'BLUE'}], ['keyboard', {choices: ['a'], correctKey: 'l'}]]
-  ]);
-  // Same shape as each other but a fixation opens each trial — the varying
-  // value sits inside the node's own timeline, not at its top level.
-  run('homogeneous+fixation', [
+  ];
+  run('homogeneous, default', HOMOGENEOUS);
+  run('homogeneous, run as one procedure', HOMOGENEOUS, {conditions: true});
+  // A fixation opens each trial, so the varying value sits inside the node's own
+  // timeline rather than at its top level.
+  var WITH_FIXATION = [
     [['fixation', {trial_duration: 500}], ['text', {content: 'RED'}]],
     [['fixation', {trial_duration: 500}], ['text', {content: 'BLUE'}]]
-  ]);
-  // Trials that differ in shape have no single procedure to hoist.
-  run('ragged', [
+  ];
+  run('fixation, run as one procedure', WITH_FIXATION, {conditions: true});
+  // Asking for one procedure does not make one exist: trials of different
+  // shapes still have no single procedure to hoist, so the phase falls back.
+  run('ragged, run as one procedure', [
     [['text', {content: 'RED'}], ['keyboard', {choices: ['a']}]],
     [['text', {content: 'BLUE'}]]
-  ]);
-  // Identical trials: nothing varies, so there is no table to build.
-  run('identical', [
+  ], {conditions: true});
+  // Identical trials have nothing to vary, whatever the mode.
+  run('identical, run as one procedure', [
     [['text', {content: 'SAME'}]],
     [['text', {content: 'SAME'}]]
-  ]);
-  // A single trial is not a variable table either.
-  run('one trial', [[['text', {content: 'ONLY'}]]]);
+  ], {conditions: true});
+  run('one trial, run as one procedure', [[['text', {content: 'ONLY'}]]],
+    {conditions: true});
 
   // Node-level parameters, set the way the phase settings dialog sets them.
   // `nodeParams` is the exact text emitted between `timeline` and the closing
   // brace, so the mapping from a control to a jsPsych parameter is pinned here
   // rather than being re-checked by hand in a browser.
-  function runSampled(label, spec, phaseProps, perTrial) {
+  function runSampled(label, spec, phaseProps, perTrial, noMode) {
     resetEditor();
     addPhase('trials');
     var made = build(editor.phases[0].id, spec);
@@ -134,6 +146,7 @@ function phaseCases() {
     (perTrial || []).forEach(function (props, i) {
       Object.keys(props).forEach(function (k) { made[i][k] = props[k]; });
     });
+    if (!noMode) editor.phases[0].conditions = true;
     Object.keys(phaseProps).forEach(function (k) { editor.phases[0][k] = phaseProps[k]; });
     var code = _compileExperiment({}).code;
     out[label] = {
@@ -176,6 +189,10 @@ function phaseCases() {
   // The classic 48-trial block: one condition per repetition, drawn each time.
   runSampled('repetitions + sample', three,
     {sample: {type: 'with-replacement', size: 1}, repetitions: 48});
+  // Sampling belongs to a variable table. Without the mode there is no table,
+  // and jsPsych would ignore the parameter — so it must not be emitted.
+  runSampled('sampling without the mode', three,
+    {sample: {type: 'with-replacement', size: 1}}, null, true);
   // repetitions stands on its own — it repeats the block whatever it holds.
   runSampled('repetitions on a ragged phase', [
     [['text', {content: 'A'}], ['keyboard', {choices: ['a']}]],
@@ -532,8 +549,13 @@ def cmd_check():
         # What each synthetic phase must compile to. `factored` is the point:
         # a phase whose trials are one procedure becomes a table, and every
         # other shape must stay plain trials rather than being forced into one.
-        WANT = {"homogeneous": True, "homogeneous+fixation": True,
-                "ragged": False, "identical": False, "one trial": False}
+        WANT = {"homogeneous, default": False,
+                "homogeneous, run as one procedure": True,
+                "fixation, run as one procedure": True,
+                # Asked for, but the trials do not share a shape
+                "ragged, run as one procedure": False,
+                "identical, run as one procedure": False,
+                "one trial, run as one procedure": False}
         broken_cases = [
             f"phase case {name}: factored={cases[name]['factored']}, expected {want}"
             for name, want in WANT.items()
@@ -564,6 +586,8 @@ def cmd_check():
             "repetitions + sample":
                 ["sample: {type: 'with-replacement', size: 1}", "repetitions: 48"],
             "repetitions on a ragged phase": ["repetitions: 2"],
+            # no table, so no sampling and no randomize_order
+            "sampling without the mode": [],
             # sample is dropped here, repetitions is not.
             "sample ignored without a table": ["repetitions: 2"],
         }
@@ -574,7 +598,10 @@ def cmd_check():
         for name, c in cases.items():
             if c["forbiddenParams"]:
                 broken_cases.append(f"phase case {name}: {c['forbiddenParams']}")
-            if name in ("homogeneous", "homogeneous+fixation") and c["trialsPerNode"] != [1]:
+            # A factored node holds the one procedure, not one entry per
+            # condition. Keyed on the case's own result: `want` above is the
+            # last value of a different loop.
+            if c["factored"] and c["trialsPerNode"] != [1]:
                 broken_cases.append(
                     f"phase case {name}: node should hold the one procedure, "
                     f"got {c['trialsPerNode']}")

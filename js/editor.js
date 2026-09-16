@@ -3922,8 +3922,22 @@ function _applyI18n() {
             return;
           }
           var nodeName = phaseSlug + '_timeline';
-          var factored = _factorPhase(phaseParts);
-          _phaseModes.push({id: ph.id, trials: ph.timeline.length, factored: !!factored});
+          // Whether the trials COULD be one procedure, which the settings dialog
+          // needs to know before the researcher asks for it — and whether they
+          // are being run as one, which is the researcher's call rather than the
+          // compiler's.
+          //
+          // It has to be a call. Two trials that happen to share a shape are
+          // indistinguishable from two conditions of one procedure: the data
+          // model holds the same thing either way. Inferring the second reading
+          // from the first is the compiler asserting an intent nobody expressed,
+          // and it rewrites `trial_1, trial_2` into a condition table that the
+          // reader then has to read back out. So the default is what the canvas
+          // shows — that many trials, in that order — and the table is asked for.
+          var uniform = _factorPhase(phaseParts);
+          var factored = ph.conditions ? uniform : null;
+          _phaseModes.push({id: ph.id, trials: ph.timeline.length, factored: !!factored,
+                            uniform: !!uniform, mode: ph.conditions ? 'conditions' : 'trials'});
 
           if (factored) {
             var varName = phaseSlug + '_variables';
@@ -4059,22 +4073,25 @@ function _applyI18n() {
       function _phaseModeLabel(mode) {
         if (!mode || !mode.trials) return 'empty';
         if (mode.factored) return '1 procedure × ' + mode.trials + ' conditions';
-        return mode.trials === 1 ? '1 trial' : mode.trials + ' trials · ' +
-          mode.trials + ' procedures';
+        if (mode.mode === 'conditions') return mode.trials + ' trials · not one procedure';
+        return mode.trials === 1 ? '1 trial' : mode.trials + ' trials';
       }
       function _phaseModeTitle(mode) {
         if (!mode || !mode.trials) return 'This phase has no trials';
         if (mode.factored) {
-          return 'These ' + mode.trials + ' trials are the same procedure with different ' +
-            'values, so they compile to one timeline_variables table.';
+          return 'Run as one procedure: these ' + mode.trials + ' trials are the same ' +
+            'procedure with different values, so they compile to one timeline_variables ' +
+            'table. Turn it off in ⚙ to get them as ' + mode.trials + ' separate trials.';
         }
-        if (mode.trials === 1) {
-          return 'A phase with one trial has nothing to vary — a variable table ' +
-            'needs at least two.';
+        if (mode.mode === 'conditions') {
+          return 'Asked to run as one procedure, but these trials are not the same shape, ' +
+            'so there is no single procedure to hoist. Give them the same response ' +
+            'component and the same layout, or run them as separate trials.';
         }
-        return 'These ' + mode.trials + ' trials differ in shape, so each compiles to its ' +
-          'own trial. Give them the same response component and the same layout and they ' +
-          'become one procedure with a timeline_variables table.';
+        if (mode.trials === 1) return 'One trial, run once.';
+        return mode.trials + ' separate trials, run in this order. ⚙ can run them ' +
+          'instead as one procedure × ' + mode.trials + ' conditions' +
+          (mode.uniform ? '.' : ' — which needs them to share a shape.');
       }
 
       // How many trials the phase will actually run, per jsPsych's own rules for
@@ -4146,6 +4163,7 @@ function _applyI18n() {
         var n = ph.timeline.length;
         var sample = ph.sample || {};
         var draft = {
+          mode: ph.conditions ? 'conditions' : 'trials',
           repetitions: Number(ph.repetitions) > 1 ? Number(ph.repetitions) : 1,
           sampleType: factored ? (sample.type || '') : '',
           size: sample.size != null ? sample.size : '',
@@ -4183,14 +4201,43 @@ function _applyI18n() {
         // the condition columns and the warnings always describe the settings
         // currently in the form.
         function body() {
+          var asConditions = draft.mode === 'conditions';
+          var canFactor = factored || (mode && mode.uniform);
           var h = '<div style="padding:14px 20px">';
-          if (!factored) {
-            h += '<div style="background:#fff7ed;border:1px solid rgba(249,115,22,0.3);' +
+
+          // The compiler cannot tell two conditions of one procedure from two
+          // trials that happen to look alike, so it does not guess. This is the
+          // researcher's call and it is made here.
+          h += '<div style="' + ROW + '"><div style="' + LBL + '">Run as</div><div style="flex:1">';
+          [['trials', 'Separate trials', n + ' trials, in this order'],
+           ['conditions', 'One procedure \u00d7 ' + n + ' conditions',
+            'the same procedure once per set of values']].forEach(function (o) {
+            var disabled = o[0] === 'conditions' && !canFactor;
+            h += '<label style="display:flex;gap:8px;align-items:flex-start;font-size:0.78rem;' +
+              'padding:5px 0' + (disabled ? ';opacity:0.45' : ';cursor:pointer') + '">' +
+              '<input type="radio" name="ps-mode" value="' + o[0] + '"' +
+              (draft.mode === o[0] ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
+              '<span>' + o[1] + '<br><span style="font-size:0.68rem;color:var(--text2)">' +
+              o[2] + '</span></span></label>';
+          });
+          if (!canFactor && n > 1) {
+            h += '<div style="font-size:0.68rem;color:var(--text2);margin-top:4px">' +
+              'Not offered: these trials do not share a shape — the same response ' +
+              'component and the same layout in each — so no single procedure describes ' +
+              'them all.</div>';
+          } else if (n === 1) {
+            h += '<div style="font-size:0.68rem;color:var(--text2);margin-top:4px">' +
+              'A phase with one trial has nothing to vary.</div>';
+          }
+          h += '</div></div>';
+          h += '<div style="border-top:1px solid var(--border);margin:10px 0 4px"></div>';
+
+          if (!asConditions) {
+            h += '<div style="background:#f8f8ff;border:1px solid var(--border);' +
               'border-radius:8px;padding:10px 12px;font-size:0.72rem;line-height:1.5;' +
-              'color:#9a3412;margin-bottom:12px">These ' + n + ' trials are not one procedure, ' +
-              'so there is no variable table to draw from. Sampling is a jsPsych node ' +
-              'parameter and would be ignored here — give the trials the same response ' +
-              'component and the same layout, and this panel opens up.</div>';
+              'color:var(--text2);margin:2px 0 10px">Each trial runs once, in order. ' +
+              'Sampling and randomisation belong to a variable table, so they are only ' +
+              'available in the other mode.</div>';
           }
           h += '<div style="' + ROW + '"><div style="' + LBL + '">Repetitions</div><div>' +
             '<input id="ps-reps" type="number" min="1" style="' + NUM + '" value="' +
@@ -4201,7 +4248,7 @@ function _applyI18n() {
 
           h += '<div style="border-top:1px solid var(--border);margin:10px 0 4px"></div>';
           h += '<div style="' + ROW + '"><div style="' + LBL + '">Sampling</div><div style="flex:1">';
-          h += '<select id="ps-type" ' + (factored ? '' : 'disabled ') +
+          h += '<select id="ps-type" ' + (asConditions ? '' : 'disabled ') +
             'style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;' +
             'font-family:inherit;font-size:0.78rem;width:100%">';
           [['', 'None — run every condition once'],
@@ -4235,14 +4282,14 @@ function _applyI18n() {
 
           h += '<div style="' + ROW + '"><div style="' + LBL + '"></div><div>' +
             '<label style="font-size:0.78rem;display:flex;gap:7px;align-items:center' +
-            (factored ? '' : ';opacity:0.45') + '">' +
+            (asConditions ? '' : ';opacity:0.45') + '">' +
             '<input id="ps-shuffle" type="checkbox"' + (draft.randomizeOrder ? ' checked' : '') +
-            (factored ? '' : ' disabled') + '> Randomize the order</label>' +
+            (asConditions ? '' : ' disabled') + '> Randomize the order</label>' +
             '<div style="' + HINT + '">Shuffles what the sampling produced, or the whole ' +
             'condition list when nothing is sampled. Separate from sampling, not instead ' +
             'of it — jsPsych applies both.</div></div></div>';
 
-          if (factored && n) {
+          if (asConditions && n) {
             var groups = _groupCounts(draft.groups);
             var showGroup = draft.sampleType === 'alternate-groups';
             var showWeight = draft.sampleType === 'with-replacement';
@@ -4313,6 +4360,8 @@ function _applyI18n() {
         }
 
         function readFields() {
+          var m = box.querySelector('input[name=ps-mode]:checked');
+          if (m) draft.mode = m.value;
           var r = document.getElementById('ps-reps');
           if (r) draft.repetitions = Math.max(1, Math.round(Number(r.value) || 1));
           var z = document.getElementById('ps-size');
@@ -4343,6 +4392,9 @@ function _applyI18n() {
 
           var t = document.getElementById('ps-type');
           if (t) t.onchange = function () { readFields(); draft.sampleType = t.value; repaint(); };
+          box.querySelectorAll('input[name=ps-mode]').forEach(function (el) {
+            el.onchange = function () { readFields(); draft.mode = el.value; repaint(); };
+          });
           ['ps-reps', 'ps-size'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) el.oninput = function () { readFields(); refreshNotes(); };
@@ -4358,8 +4410,9 @@ function _applyI18n() {
 
         function apply() {
           readFields();
+          var asConditions = draft.mode === 'conditions';
           var s = null;
-          if (factored && draft.sampleType) {
+          if (asConditions && draft.sampleType) {
             s = {type: draft.sampleType};
             if (['without-replacement', 'with-replacement', 'fixed-repetitions']
                 .indexOf(draft.sampleType) >= 0) {
@@ -4382,9 +4435,19 @@ function _applyI18n() {
             }
           }
           saveState();
-          ph.sample = s;
-          ph.randomize_order = factored && draft.randomizeOrder;
-          ph.repetitions = draft.repetitions > 1 ? draft.repetitions : null;
+          ph.conditions = asConditions || undefined;
+          if (!asConditions) {
+            // The mode is the reason these existed; leaving them behind would be
+            // settings that silently do nothing, and switching back would
+            // resurrect a configuration nobody remembers making.
+            ph.sample = null;
+            ph.randomize_order = false;
+            ph.repetitions = null;
+          } else {
+            ph.sample = s;
+            ph.randomize_order = draft.randomizeOrder;
+            ph.repetitions = draft.repetitions > 1 ? draft.repetitions : null;
+          }
           if (draft.sampleType === 'alternate-groups') {
             ph.timeline.forEach(function (tr, i) {
               tr.group = Math.max(0, Math.round(Number(draft.groups[i]) || 0));
