@@ -311,8 +311,57 @@ function mediaCases() {
   return out;
 }
 
+// A trial can have nothing to show. Every HTML plugin writes its `stimulus`
+// straight into the page — `'<div …>' + trial.stimulus + '</div>'` — so a trial
+// that omits the parameter puts the literal word "undefined" on the participant's
+// screen. survey-text is the same with `preamble`, and its guard is `!== null`,
+// which an absent property does not satisfy either.
+//
+// The canned "press any key" prompt is the other half: it exists for a trial that
+// shows nothing AND asks nothing, and must not overwrite a prompt the researcher
+// deliberately cleared.
+function contentlessCases() {
+  var out = {};
+  function run(label, spec) {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    spec.forEach(function (c) {
+      var cat = ['keyboard', 'button', 'slider', 'textInput', 'animation'].indexOf(c[0]) >= 0
+        ? 'r' : 's';
+      addComponent(t.id, c[0], cat);
+      var comp = t.components[t.components.length - 1];
+      Object.keys(c[1] || {}).forEach(function (k) { comp[k] = c[1][k]; });
+    });
+    var code = _compileExperiment({}).code;
+    var trial = code.slice(code.indexOf('// ── '), code.indexOf('timeline.push'));
+    out[label] = {
+      // The plugin concatenates this value, so it has to be present and a string.
+      hasStimulus: /^\\s*(stimulus|preamble): /m.test(trial),
+      emptyStimulus: /^\\s*(stimulus|preamble): ''/m.test(trial),
+      prompt: (trial.match(/^\\s*prompt: (.*?),?$/m) || [null, null])[1],
+      saysUndefined: code.indexOf('undefined') >= 0,
+    };
+  }
+  // Nothing at all: the one case the canned prompt is for.
+  run('no components', []);
+  // A fixation then a key wait. The screen is blank by design, and the prompt
+  // was cleared — nothing should be invented.
+  run('fixation + keyboard, prompt cleared',
+    [['fixation', {trial_duration: 500}], ['keyboard', {prompt: '', choices: ['a']}]]);
+  // A keyboard with its prompt left alone keeps it.
+  run('fixation + keyboard, prompt kept',
+    [['fixation', {trial_duration: 500}], ['keyboard', {choices: ['a']}]]);
+  // A survey with no preamble: textInput renders `preamble` the same way.
+  run('survey with no preamble', [['textInput', {}]]);
+  // A button with no stimulus — covered before, kept here so it stays covered.
+  run('button with no stimulus', [['button', {choices: ['Go']}]]);
+  return out;
+}
+
 window.addEventListener('load', function () {
-  var out = { ok: true, templates: {}, cases: {}, media: {}, errors: [] };
+  var out = { ok: true, templates: {}, cases: {}, media: {}, contentless: {}, errors: [] };
   window.addEventListener('error', function (e) { out.errors.push(String(e.message)); });
   try {
     localStorage.clear();
@@ -347,6 +396,12 @@ window.addEventListener('load', function () {
     } catch (e) {
       out.ok = false;
       out.media = { error: String(e.message) + ' @ ' + String(e.stack).split('\\n')[1] };
+    }
+    try {
+      out.contentless = contentlessCases();
+    } catch (e) {
+      out.ok = false;
+      out.contentless = { error: String(e.message) + ' @ ' + String(e.stack).split('\\n')[1] };
     }
   } catch (e) {
     out.ok = false;
@@ -434,6 +489,42 @@ def cmd_check():
                 broken_media.append(f"media case {name}: preload plugin tag missing or "
                                     f"after an image plugin tag")
 
+    contentless = res.get("contentless", {})
+    if "error" in contentless:
+        broken_contentless = [f"contentless cases threw: {contentless['error']}"]
+    else:
+        # Every trial must carry a stimulus string, and the canned prompt must
+        # appear only where nothing else does.
+        CANNED = "'<p>Press any key to continue</p>'"
+        # A sentinel, because None already means "this case does not care".
+        ABSENT = "<no prompt at all>"
+        WANT = {
+            "no components":                      {"empty": True,  "prompt": CANNED},
+            "fixation + keyboard, prompt cleared": {"empty": True,  "prompt": ABSENT},
+            "fixation + keyboard, prompt kept":    {"empty": True,  "prompt": "'Press a key'"},
+            "survey with no preamble":             {"empty": True,  "prompt": None},
+            "button with no stimulus":             {"empty": True,  "prompt": None},
+        }
+        broken_contentless = []
+        for name, want in WANT.items():
+            c = contentless.get(name)
+            if not c:
+                broken_contentless.append(f"contentless case {name}: missing")
+                continue
+            if c["saysUndefined"]:
+                broken_contentless.append(f"contentless case {name}: the code says 'undefined'")
+            if not c["emptyStimulus"]:
+                broken_contentless.append(
+                    f"contentless case {name}: no empty stimulus (hasStimulus={c['hasStimulus']})")
+            if want["prompt"] == ABSENT:
+                if c["prompt"] is not None:
+                    broken_contentless.append(
+                        f"contentless case {name}: invented a prompt ({c['prompt']}) where the "
+                        f"researcher cleared it")
+            elif want["prompt"] is not None and c["prompt"] != want["prompt"]:
+                broken_contentless.append(
+                    f"contentless case {name}: prompt {c['prompt']}, expected {want['prompt']}")
+
     cases = res.get("cases", {})
     if "error" in cases:
         broken_cases = [f"phase cases threw: {cases['error']}"]
@@ -489,7 +580,7 @@ def cmd_check():
                     f"got {c['trialsPerNode']}")
 
     bad = 0
-    broken = list(broken_cases) + list(broken_media)
+    broken = list(broken_cases) + list(broken_media) + list(broken_contentless)
     for name, t in res["templates"].items():
         struct = t["structure"]
         # Invariants that must hold whatever the bytes are.

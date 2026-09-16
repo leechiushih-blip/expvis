@@ -3561,8 +3561,10 @@ function _applyI18n() {
             // This used to emit `choices: [' ']` — space only — while the prompt
             // said "press any key". ALL_KEYS is the jsPsych way to say what was
             // meant.
+            var _noResponseComponent = false;
             if (!respType) {
               respType = 'keyboard';
+              _noResponseComponent = true;
               // No explicit choices: the plugin's default is already "any key".
               if (stims.length > 0) respInfo = {};
             }
@@ -3784,10 +3786,17 @@ function _applyI18n() {
                   imageOnlyComp.fileName, imageOnlyComp.type, imageOnlyComp.fileData) + "'");
               } else if (preHTML || postStims.length > 0) {
                 P(indent, _stimKey, "'" + fullStimHTML + "'");
-              } else if (respType === 'button' || respType === 'slider') {
-                // The button and slider plugins both expect `stimulus`; omitting
-                // it makes them render the literal string "undefined".
-                P(indent, 'stimulus', "''");
+              } else {
+                // Every one of these plugins writes the value straight into the
+                // page — `'<div …>' + trial.stimulus + '</div>'` — so leaving it
+                // out puts the literal word "undefined" on the participant's
+                // screen. survey-text is the same with `preamble`, and its guard
+                // is `!== null`, which an absent property does not satisfy.
+                //
+                // A trial can reach here with nothing to show: a keyboard wait
+                // after a fixation, a survey with no preamble, or a trial with no
+                // components at all. An empty string is what "nothing" looks like.
+                P(indent, _stimKey, "''");
               }
               if (respInfo.choices === 'ALL_KEYS') {
                 // "ALL_KEYS" is the plugin's own default, so it is left out — the
@@ -3865,7 +3874,13 @@ function _applyI18n() {
             if (_trialDuration && respType !== 'textInput') {
               P(indent, 'trial_duration', String(_trialDuration));
             }
-            if (respType === 'keyboard' && (respInfo.prompt || stims.length === 0))
+            // The fallback text is for a trial that shows nothing and asks for
+            // nothing — an empty screen with no way to know what to do. It is
+            // NOT a substitute for a prompt the researcher cleared: an empty
+            // Prompt on a keyboard component is a decision, and answering it with
+            // canned words puts a sentence in the experiment that nobody wrote.
+            if (respType === 'keyboard' && (respInfo.prompt ||
+                (_noResponseComponent && stims.length === 0)))
               P(indent, 'prompt', "'" + _jsStr(respInfo.prompt || '<p>Press any key to continue</p>') + "'");
 
             // --- scoring ---
