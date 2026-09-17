@@ -365,7 +365,6 @@ function _applyI18n() {
       // Phase/device labels: storage keeps plain text so that generated jsPsych
       // code carries no decorative emoji. The UI re-adds an icon at render time.
       // _stripEmoji also cleans legacy data saved before this convention.
-      var _phaseIcons = {instructions: '📖', trials: '🧪', feedback: '📊'};
       function _stripEmoji(s) {
         return (s || '').replace(
           /^(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]+\s*)+/u,
@@ -397,8 +396,7 @@ function _applyI18n() {
         return s;
       }
       function _phaseLabel(ph) {
-        var icon = _phaseIcons[ph.type];
-        return (icon ? icon + ' ' : '') + _stripEmoji(ph.name);
+        return _stripEmoji(ph.name);
       }
       // What the phase is called where it matters — in the code. Asked of the
       // compiler, which knows the de-duplicated name a repeated one gets.
@@ -521,19 +519,16 @@ function _applyI18n() {
         if (hi && document.activeElement !== hi) hi.value = d.h;
       }
 
-      // `type` is a UI category — which icon and colour the card carries — not
-      // a structural fact, so a new phase defaults to the generic one and the
-      // rest is set on the card. Templates still pass it explicitly so their
-      // phases arrive labelled.
-      function addPhase(type) {
-        type = type || 'trials';
-        var labels = {instructions: 'Instructions', trials: 'Trials', feedback: 'Feedback'};
+      // A phase is a name and a list of trials. It used to carry a `type` as
+      // well — instructions / trials / feedback — which chose the card's icon
+      // and colour; with the toolbar down to one button that distinction had
+      // nowhere to be made and nothing to mean, so it is gone. The name is what
+      // the generated code uses; nothing else about a phase is in the file.
+      function addPhase(name) {
         saveState();
         editor.phases.push({
           id: 'ph' + ++editor.pc,
-          type: type,
-          name: labels[type] || type,
-          color: type === 'instructions' ? 'i' : type === 'feedback' ? 'f' : 't',
+          name: name || 'Trials',
           timeline: [],
         });
         document.getElementById('empty-state').style.display = 'none';
@@ -1021,9 +1016,7 @@ function _applyI18n() {
           var hdr = document.createElement('div');
           hdr.className = 'phase-card-header';
           hdr.innerHTML =
-            '<span class="drag-handle" draggable="true" title="Drag to reorder phase">⋮⋮</span><span class="phase-index ' +
-            ph.color +
-            '">' +
+            '<span class="drag-handle" draggable="true" title="Drag to reorder phase">⋮⋮</span><span class="phase-index">' +
             (i + 1) +
             '</span><span class="phase-name" data-phase="' + ph.id + '" title="' +
             _phaseRenameTitle(ph, _mode) + '">' +
@@ -2439,6 +2432,11 @@ function _applyI18n() {
         editor.phases.forEach(function (p) {
           if (!Array.isArray(p.timeline)) p.timeline = Array.isArray(p.trials) ? p.trials : [];
           delete p.trials;
+          // `type` and `color` categorised a phase for the card's icon and
+          // badge. There is one category now, so they are dropped rather than
+          // left behind for the next reader to wonder about.
+          delete p.type;
+          delete p.color;
         });
         editor.phases.forEach(function (p) {
           p.timeline.forEach(function (t) {
@@ -2711,7 +2709,7 @@ function _applyI18n() {
 
         if (name === 'stroop') {
           // Phase 1: Instructions
-          addPhase('instructions');
+          addPhase('Instructions');
           var p1 = editor.phases[0].id;
           addTrial(p1);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -2720,7 +2718,7 @@ function _applyI18n() {
           sc(t1, 0, {content: 'Welcome to the Stroop experiment!\n\nYou will see color words (RED, BLUE, GREEN) displayed in different font colors.\nYour task is to respond to the FONT COLOR, ignoring the word meaning.\n\nRed font → Press A\nBlue font → Press L\nGreen font → Press K\n\nRespond as quickly and accurately as possible!', fontSize: 20, position: 'center'});
           sc(t1, 1, {choices: ['Start Experiment']});
           // Phase 2: Stroop trials — 9 variants (3 colors × 3 characters)
-          addPhase('trials');
+          addPhase('Trials');
           var p2 = editor.phases[1].id;
           // Main trial: fixation → delay → randomize(9 texts) → keyboard → branch → loop
           addTrial(p2);
@@ -2759,7 +2757,7 @@ function _applyI18n() {
           t3.trial_duration = 1200;
           sc(t2, 12, {condition: 'correct', targetFail: t3.id});
           // Phase 3: Feedback
-          addPhase('feedback');
+          addPhase('Feedback');
           var p3 = editor.phases[2].id;
           addTrial(p3);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -2771,7 +2769,7 @@ function _applyI18n() {
           );
         } else if (name === 'simon') {
           // Phase 1: Instructions
-          addPhase('instructions');
+          addPhase('Instructions');
           var p1 = editor.phases[0].id;
           addTrial(p1);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -2789,7 +2787,7 @@ function _applyI18n() {
           );
           sc(t1, 1, {choices: ['Start Experiment']});
           // Phase 2: Simon trials — pick-one from 4 variants (red/green × left/right)
-          addPhase('trials');
+          addPhase('Trials');
           var p2 = editor.phases[1].id;
           // Main trial: fixation → delay → randomize(4 shapes) → keyboard → branch → loop
           addTrial(p2);
@@ -2825,7 +2823,7 @@ function _applyI18n() {
           // Set branch target to error trial
           sc(t2, 7, {condition: 'correct', targetFail: t3.id});
           // Phase 3: Feedback
-          addPhase('feedback');
+          addPhase('Feedback');
           var p3 = editor.phases[2].id;
           addTrial(p3);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -2841,7 +2839,7 @@ function _applyI18n() {
           );
         } else if (name === 'flanker') {
           // Phase 1: Instructions
-          addPhase('instructions');
+          addPhase('Instructions');
           var p1 = editor.phases[0].id;
           addTrial(p1);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -2857,7 +2855,7 @@ function _applyI18n() {
           });
           sc(t1, 2, {choices: ['Start Experiment']});
           // Phase 2: Flanker trials
-          addPhase('trials');
+          addPhase('Trials');
           var p2 = editor.phases[1].id;
           // Main trial: fixation → delay → randomize(5 texts) → keyboard → branch → loop
           addTrial(p2);
@@ -2904,7 +2902,7 @@ function _applyI18n() {
           });
           sc(t3, 1, Object.assign({choices: ['space'], prompt: 'Press space to continue'}));
           // Phase 3: Feedback
-          addPhase('feedback');
+          addPhase('Feedback');
           var p3 = editor.phases[2].id;
           addTrial(p3);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -2916,7 +2914,7 @@ function _applyI18n() {
           sc(tf, 1, Object.assign({choices: ['space']}));
         } else if (name === 'branch-demo') {
           // Phase 1: explain the branch concept
-          addPhase('instructions');
+          addPhase('Instructions');
           var p1 = editor.phases[0].id;
           addTrial(p1);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -2934,7 +2932,7 @@ function _applyI18n() {
           );
           sc(t1, 1, {choices: ['Start Demo']});
           // Phase 2: branch demo trials
-          addPhase('trials');
+          addPhase('Trials');
           var p2 = editor.phases[1].id;
           // -- Trial 2: red text, A key (correctKey: a), branch→t3 on error
           addTrial(p2);
@@ -2986,7 +2984,7 @@ function _applyI18n() {
           sc(t2, 3, {condition: 'correct', targetFail: t3.id});
           sc(t4, 3, {condition: 'correct', targetFail: t5.id});
           // Phase 3: feedback
-          addPhase('feedback');
+          addPhase('Feedback');
           var p3 = editor.phases[2].id;
           addTrial(p3);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -3003,7 +3001,7 @@ function _applyI18n() {
           );
         } else if (name === 'randomize-demo') {
           // Phase 1: Instructions
-          addPhase('instructions');
+          addPhase('Instructions');
           var p1 = editor.phases[0].id;
           addTrial(p1);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -3021,7 +3019,7 @@ function _applyI18n() {
           );
           sc(t1, 1, {choices: ['Start Demo']});
           // Phase 2: Trials
-          addPhase('trials');
+          addPhase('Trials');
           var p2 = editor.phases[1].id;
           // Trial 2: init variable
           addTrial(p2);
@@ -3072,7 +3070,7 @@ function _applyI18n() {
           sc(t3, 7, {name: 'score', initial: 0});
           sc(t3, 8, {count: 5});
           // Phase 3: Feedback
-          addPhase('feedback');
+          addPhase('Feedback');
           var p3 = editor.phases[2].id;
           addTrial(p3);
           addComponent(editor.selectedTrial, 'text', 's');
@@ -4265,7 +4263,6 @@ function _applyI18n() {
         var n = ph.timeline.length;
         var sample = ph.sample || {};
         var draft = {
-          kind: ph.type || 'trials',
           mode: ph.conditions ? 'conditions' : 'trials',
           repetitions: Number(ph.repetitions) > 1 ? Number(ph.repetitions) : 1,
           sampleType: factored ? (sample.type || '') : '',
@@ -4307,27 +4304,6 @@ function _applyI18n() {
           var asConditions = draft.mode === 'conditions';
           var canFactor = factored || (mode && mode.uniform);
           var h = '<div style="padding:14px 20px">';
-
-          // Which icon the card carries. This is all `type` ever meant — a UI
-          // category, not part of the experiment — and it lives here because the
-          // toolbar no longer asks for it when the phase is created.
-          h += '<div style="' + ROW + '"><div style="' + LBL + '">Kind</div><div>' +
-            '<div style="display:flex;gap:6px">';
-          [['instructions', '\ud83d\udcd6', 'Instructions'],
-           ['trials', '\ud83e\uddea', 'Trials'],
-           ['feedback', '\ud83d\udcca', 'Feedback']].forEach(function (k) {
-            var on = draft.kind === k[0];
-            h += '<button type="button" data-kind="' + k[0] + '" title="' + k[2] +
-              '" style="padding:5px 11px;border-radius:7px;font-family:inherit;' +
-              'font-size:0.75rem;cursor:pointer;border:1px solid ' +
-              (on ? 'var(--accent)' : 'var(--border)') + ';background:' +
-              (on ? 'rgba(99,102,241,0.1)' : '#fff') + ';color:' +
-              (on ? 'var(--accent)' : 'var(--text)') + '">' + k[1] + ' ' + k[2] + '</button>';
-          });
-          h += '</div><div style="' + HINT + '">Only the card\u2019s icon and colour. ' +
-            'It does not affect the generated code \u2014 the name is what the code uses.' +
-            '</div></div></div>';
-          h += '<div style="border-top:1px solid var(--border);margin:10px 0 4px"></div>';
 
           // The compiler cannot tell two conditions of one procedure from two
           // trials that happen to look alike, so it does not guess. This is the
@@ -4516,9 +4492,6 @@ function _applyI18n() {
 
           var t = document.getElementById('ps-type');
           if (t) t.onchange = function () { readFields(); draft.sampleType = t.value; repaint(); };
-          box.querySelectorAll('button[data-kind]').forEach(function (el) {
-            el.onclick = function () { readFields(); draft.kind = el.getAttribute('data-kind'); repaint(); };
-          });
           box.querySelectorAll('input[name=ps-mode]').forEach(function (el) {
             el.onchange = function () { readFields(); draft.mode = el.value; repaint(); };
           });
@@ -4562,16 +4535,6 @@ function _applyI18n() {
             }
           }
           saveState();
-          // The icon and the name should not contradict each other. A name the
-          // researcher has not touched still belongs to the old kind, so it
-          // follows; one they chose themselves is left alone.
-          var _defaults = {instructions: 'Instructions', trials: 'Trials', feedback: 'Feedback'};
-          if (_stripEmoji(ph.name) === _defaults[ph.type || 'trials']) {
-            ph.name = _defaults[draft.kind];
-          }
-          ph.type = draft.kind;
-          ph.color = draft.kind === 'instructions' ? 'i'
-                   : draft.kind === 'feedback' ? 'f' : 't';
           ph.conditions = asConditions || undefined;
           if (!asConditions) {
             // The mode is the reason these existed; leaving them behind would be
@@ -5046,8 +5009,7 @@ function _applyI18n() {
             editor.pc = 0; editor.tc = 0; editor.cc = 0;
             editor.phases.forEach(function (ph) {
               ph.id = 'ph' + ++editor.pc;
-              if (!ph.color) ph.color = ph.type === 'instructions' ? 'i' : ph.type === 'feedback' ? 'f' : 't';
-              if (!ph.name) ph.name = ph.type === 'instructions' ? i18n('phase.instructions') : ph.type === 'feedback' ? i18n('phase.feedback') : i18n('phase.timeline');
+              if (!ph.name) ph.name = i18n('phase.timeline');
               ph.timeline.forEach(function (tr) {
                 tr.id = 't' + ++editor.tc;
                 tr.components.forEach(function (c) {
@@ -5057,14 +5019,14 @@ function _applyI18n() {
             });
             migratePos();
             // Ensure 3-phase structure
-            if (editor.phases.length === 0 || editor.phases[0].type !== 'instructions') {
-              var instrPh = { id:'ph_ai_inst', type:'instructions', name: i18n('phase.instructions'), color:'i', timeline:[{ id:'t_ai_inst', components:[ { id:'c_ai_txt', type:'text', content:'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize:20, color:'#333333', position:'center', fontWeight:'bold', cat:'s' }, { id:'c_ai_btn', type:'button', choices:['Start Experiment'], prompt:'', button_layout:'grid', grid_rows:1, grid_columns:0, trial_duration:0, stimulus_duration:0, response_ends_trial:true, enable_button_after:0, cat:'r' } ] }] };
+            if (editor.phases.length === 0 || editor.phases[0].name !== i18n('phase.instructions')) {
+              var instrPh = { id:'ph_ai_inst', name: i18n('phase.instructions'), timeline:[{ id:'t_ai_inst', components:[ { id:'c_ai_txt', type:'text', content:'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize:20, color:'#333333', position:'center', fontWeight:'bold', cat:'s' }, { id:'c_ai_btn', type:'button', choices:['Start Experiment'], prompt:'', button_layout:'grid', grid_rows:1, grid_columns:0, trial_duration:0, stimulus_duration:0, response_ends_trial:true, enable_button_after:0, cat:'r' } ] }] };
               editor.phases.unshift(instrPh);
               editor.tc++; editor.cc += 2;
             }
             var lastPh = editor.phases[editor.phases.length - 1];
-            if (!lastPh || lastPh.type !== 'feedback') {
-              var fbPh = { id:'ph_ai_fb', type:'feedback', name: i18n('phase.feedback'), color:'f', timeline:[{ id:'t_ai_fb', components:[ { id:'c_ai_fbt', type:'text', content:'Experiment complete!\n\nThank you for your participation.', fontSize:24, color:'#333333', position:'center', fontWeight:'bold', cat:'s' } ] }] };
+            if (!lastPh || lastPh.name !== i18n('phase.feedback')) {
+              var fbPh = { id:'ph_ai_fb', name: i18n('phase.feedback'), timeline:[{ id:'t_ai_fb', components:[ { id:'c_ai_fbt', type:'text', content:'Experiment complete!\n\nThank you for your participation.', fontSize:24, color:'#333333', position:'center', fontWeight:'bold', cat:'s' } ] }] };
               editor.phases.push(fbPh);
               editor.tc++; editor.cc++;
             }

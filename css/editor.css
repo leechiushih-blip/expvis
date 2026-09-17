@@ -232,15 +232,6 @@
         font-weight: 700;
         flex-shrink: 0;
       }
-      .phase-index.i {
-        background: var(--accent2);
-      }
-      .phase-index.t {
-        background: var(--orange);
-      }
-      .phase-index.f {
-        background: var(--green);
-      }
       /* The phase's name, which is also where every generated name in the code
          comes from. Editable in place, so it has to look editable. */
       .phase-name {
