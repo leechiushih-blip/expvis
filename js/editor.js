@@ -3273,6 +3273,12 @@ function _applyI18n() {
           }
         }
 
+        // Why a trial the canvas shows has no counterpart in the file.
+        function _emptyTrialNote(name) {
+          return '// ' + name + ' is empty \u2014 nothing to show and nothing to ask, ' +
+            'so it is not in the timeline';
+        }
+
         // What makes two of a phase's trials the same procedure. Everything
         // except the values of the properties: the shape of the object, the
         // properties it has, in order, and at what nesting they sit.
@@ -3733,6 +3739,15 @@ function _applyI18n() {
             // really holds more than one trial, i.e. when it has extra timed
             // segments around the stimulus.
             var _plainNode = preTiming.length === 0 && postTiming.length === 0;
+            // A trial needs a screen to show or a response to collect. Without
+            // either, its timed segments are the whole of it — and with no timed
+            // segments either, it is an unfilled trial, which is what "+ Add
+            // Trial" leaves behind and contributes nothing to run.
+            var _hasScreen = stims.length > 0 || !_noResponseComponent;
+            if (!_hasScreen && _plainNode) {
+              phaseParts.push({kind: 'skip', name: trialName, note: _emptyTrialNote(trialName)});
+              return;
+            }
 
             L(0, 'var ' + trialName + ' = {');
 
@@ -3773,6 +3788,7 @@ function _applyI18n() {
             preTiming.forEach(emitTimingTrial);
 
 
+            if (_hasScreen) {
             if (!_plainNode) L(ei, '{');
             var indent = _plainNode ? 1 : ei + 1;
             P(indent, 'type', pname);
@@ -3874,14 +3890,12 @@ function _applyI18n() {
             if (_trialDuration && respType !== 'textInput') {
               P(indent, 'trial_duration', String(_trialDuration));
             }
-            // The fallback text is for a trial that shows nothing and asks for
-            // nothing — an empty screen with no way to know what to do. It is
-            // NOT a substitute for a prompt the researcher cleared: an empty
-            // Prompt on a keyboard component is a decision, and answering it with
-            // canned words puts a sentence in the experiment that nobody wrote.
-            if (respType === 'keyboard' && (respInfo.prompt ||
-                (_noResponseComponent && stims.length === 0)))
-              P(indent, 'prompt', "'" + _jsStr(respInfo.prompt || '<p>Press any key to continue</p>') + "'");
+            // Only ever the researcher's own words. The canned "press any key"
+            // fallback that used to live here is gone: the only trials that
+            // reached it were ones with nothing to show and nothing to ask, and
+            // those no longer produce a response trial at all.
+            if (respType === 'keyboard' && respInfo.prompt)
+              P(indent, 'prompt', "'" + _jsStr(respInfo.prompt) + "'");
 
             // --- scoring ---
             // `data` is written only when it carries something the analysis needs.
@@ -3900,6 +3914,7 @@ function _applyI18n() {
             var last = lines[lines.length - 1];
             if (last.slice(-1) === ',') lines[lines.length - 1] = last.slice(0, -1);
             if (!_plainNode) L(ei, '},');
+            }  // end of the response trial
 
             postTiming.forEach(emitTimingTrial);
 
@@ -3921,6 +3936,14 @@ function _applyI18n() {
             _phaseModes.push({id: ph.id, trials: 0, factored: false});
             return;
           }
+          if (!phaseParts.some(function (p) { return p.kind !== 'skip'; })) {
+            phaseParts.forEach(function (p) { code += p.note + '\n'; });
+            code += '// (this phase adds nothing to the timeline)\n\n';
+            _phaseModes.push({id: ph.id, trials: ph.timeline.length, factored: false,
+                              uniform: false, mode: ph.conditions ? 'conditions' : 'trials',
+                              empty: phaseParts.length, emitted: 0});
+            return;
+          }
           var nodeName = phaseSlug + '_timeline';
           // Whether the trials COULD be one procedure, which the settings dialog
           // needs to know before the researcher asks for it — and whether they
@@ -3936,8 +3959,12 @@ function _applyI18n() {
           // shows — that many trials, in that order — and the table is asked for.
           var uniform = _factorPhase(phaseParts);
           var factored = ph.conditions ? uniform : null;
+          var emptyCount = phaseParts.filter(function (p) {
+            return p.kind === 'skip';
+          }).length;
           _phaseModes.push({id: ph.id, trials: ph.timeline.length, factored: !!factored,
-                            uniform: !!uniform, mode: ph.conditions ? 'conditions' : 'trials'});
+                            uniform: !!uniform, mode: ph.conditions ? 'conditions' : 'trials',
+                            empty: emptyCount, emitted: ph.timeline.length - emptyCount});
 
           if (factored) {
             var varName = phaseSlug + '_variables';
@@ -3961,6 +3988,9 @@ function _applyI18n() {
           // collected into the node.
           var phaseTrials = [];
           phaseParts.forEach(function (p) {
+            // Said out loud rather than dropped in silence: the canvas shows this
+            // trial, so its absence from the file needs an explanation.
+            if (p.kind === 'skip') { code += p.note + '\n'; return; }
             if (p.kind === 'raw') { code += p.text; return; }
             p.hints.forEach(function (h) { code += h + '\n'; });
             code += p.lines.join('\n') + '\n\n';
@@ -4074,10 +4104,23 @@ function _applyI18n() {
         if (!mode || !mode.trials) return 'empty';
         if (mode.factored) return '1 procedure × ' + mode.trials + ' conditions';
         if (mode.mode === 'conditions') return mode.trials + ' trials · not one procedure';
-        return mode.trials === 1 ? '1 trial' : mode.trials + ' trials';
+        // Counted as what the file will contain, not what the canvas shows —
+        // a phase whose second trial is still blank runs one trial, and the
+        // badge is the only place that says so before you export.
+        var n = mode.emitted == null ? mode.trials : mode.emitted;
+        if (!n) return mode.empty + ' empty';
+        return (n === 1 ? '1 trial' : n + ' trials') +
+          (mode.empty ? ' · ' + mode.empty + ' empty' : '');
       }
       function _phaseModeTitle(mode) {
         if (!mode || !mode.trials) return 'This phase has no trials';
+        if (mode.empty) {
+          return mode.empty + ' of these ' + mode.trials + ' trials ' +
+            (mode.empty === 1 ? 'is' : 'are') + ' empty — nothing to show and nothing to ' +
+            'ask — so ' + (mode.empty === 1 ? 'it is' : 'they are') + ' left out of the ' +
+            'timeline. Fill ' + (mode.empty === 1 ? 'it' : 'them') + ' in, or delete ' +
+            (mode.empty === 1 ? 'it' : 'them') + '.';
+        }
         if (mode.factored) {
           return 'Run as one procedure: these ' + mode.trials + ' trials are the same ' +
             'procedure with different values, so they compile to one timeline_variables ' +

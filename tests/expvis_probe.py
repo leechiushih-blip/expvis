@@ -369,6 +369,12 @@ function contentlessCases() {
     var code = _compileExperiment({}).code;
     var trial = code.slice(code.indexOf('// ── '), code.indexOf('timeline.push'));
     out[label] = {
+      // A trial with nothing to show and nothing to ask is left out entirely
+      // rather than run as a blank screen.
+      emitted: /var \\w+_trial_\\d+ = \\{/.test(trial),
+      // How many jsPsych trials it became: a timed segment is one of its own,
+      // and the response trial is another.
+      parts: (trial.match(/type: jsPsych/g) || []).length,
       // The plugin concatenates this value, so it has to be present and a string.
       hasStimulus: /^\\s*(stimulus|preamble): /m.test(trial),
       emptyStimulus: /^\\s*(stimulus|preamble): ''/m.test(trial),
@@ -377,8 +383,12 @@ function contentlessCases() {
       noTokens: code.indexOf('@@') < 0,
     };
   }
-  // Nothing at all: the one case the canned prompt is for.
+  // Nothing at all: what "+ Add Trial" leaves behind. Not a trial.
   run('no components', []);
+  // A fixation is timed; it does not need a screen after it. This used to emit a
+  // trailing blank "press any key", so a 500ms cross became a cross then a wait.
+  run('fixation only', [['fixation', {trial_duration: 500}]]);
+  run('two fixations', [['fixation', {trial_duration: 500}], ['fixation', {trial_duration: 300}]]);
   // A fixation then a key wait. The screen is blank by design, and the prompt
   // was cleared — nothing should be invented.
   run('fixation + keyboard, prompt cleared',
@@ -531,15 +541,23 @@ def cmd_check():
     else:
         # Every trial must carry a stimulus string, and the canned prompt must
         # appear only where nothing else does.
-        CANNED = "'<p>Press any key to continue</p>'"
         # A sentinel, because None already means "this case does not care".
         ABSENT = "<no prompt at all>"
+        # `emitted` is the headline: a trial with nothing to show and nothing to
+        # ask is not a trial. `parts` counts the jsPsych trials it became, which
+        # pins that a fixation is timed rather than a screen.
         WANT = {
-            "no components":                      {"empty": True,  "prompt": CANNED},
-            "fixation + keyboard, prompt cleared": {"empty": True,  "prompt": ABSENT},
-            "fixation + keyboard, prompt kept":    {"empty": True,  "prompt": "'Press a key'"},
-            "survey with no preamble":             {"empty": True,  "prompt": None},
-            "button with no stimulus":             {"empty": True,  "prompt": None},
+            "no components":                       {"emitted": False, "parts": 0},
+            "fixation only":                       {"emitted": True,  "parts": 1},
+            "two fixations":                       {"emitted": True,  "parts": 2},
+            "fixation + keyboard, prompt cleared": {"emitted": True,  "parts": 2,
+                                                    "empty": True, "prompt": ABSENT},
+            "fixation + keyboard, prompt kept":    {"emitted": True,  "parts": 2,
+                                                    "empty": True, "prompt": "'Press a key'"},
+            "survey with no preamble":             {"emitted": True,  "parts": 1,
+                                                    "empty": True, "prompt": None},
+            "button with no stimulus":             {"emitted": True,  "parts": 1,
+                                                    "empty": True, "prompt": None},
         }
         broken_contentless = []
         for name, want in WANT.items():
@@ -551,15 +569,22 @@ def cmd_check():
                 broken_contentless.append(f"contentless case {name}: the code says 'undefined'")
             if not c["noTokens"]:
                 broken_contentless.append(f"contentless case {name}: an @@TOKEN@@ survived")
-            if not c["emptyStimulus"]:
+            if c["emitted"] != want["emitted"]:
+                broken_contentless.append(
+                    f"contentless case {name}: emitted={c['emitted']}, expected {want['emitted']}")
+            if c["parts"] != want["parts"]:
+                broken_contentless.append(
+                    f"contentless case {name}: became {c['parts']} jsPsych trials, "
+                    f"expected {want['parts']}")
+            if want.get("empty") and not c["emptyStimulus"]:
                 broken_contentless.append(
                     f"contentless case {name}: no empty stimulus (hasStimulus={c['hasStimulus']})")
-            if want["prompt"] == ABSENT:
+            if want.get("prompt") == ABSENT:
                 if c["prompt"] is not None:
                     broken_contentless.append(
                         f"contentless case {name}: invented a prompt ({c['prompt']}) where the "
                         f"researcher cleared it")
-            elif want["prompt"] is not None and c["prompt"] != want["prompt"]:
+            elif want.get("prompt") is not None and c["prompt"] != want["prompt"]:
                 broken_contentless.append(
                     f"contentless case {name}: prompt {c['prompt']}, expected {want['prompt']}")
 

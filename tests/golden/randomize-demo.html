@@ -45,12 +45,7 @@
     timeline.push(instructions_timeline);
 
     // ── Trials (2/3) ──
-    var trials_trial_1 = {
-      type: jsPsychHtmlKeyboardResponse,
-      stimulus: '',
-      prompt: '<p>Press any key to continue</p>'
-    };
-
+    // trials_trial_1 is empty — nothing to show and nothing to ask, so it is not in the timeline
     var trials_trial_2 = {
       timeline: [
         {
@@ -73,7 +68,7 @@
     };
 
     var trials_timeline = {
-      timeline: [trials_trial_1, trials_trial_2]
+      timeline: [trials_trial_2]
     };
     timeline.push(trials_timeline);
 
