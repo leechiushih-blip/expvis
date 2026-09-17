@@ -403,6 +403,55 @@ function _applyI18n() {
         var icon = _phaseIcons[ph.type];
         return (icon ? icon + ' ' : '') + _stripEmoji(ph.name);
       }
+      // What the phase is called where it matters — in the code. Asked of the
+      // compiler, which knows the de-duplicated name a repeated one gets.
+      function _phaseRenameTitle(ph, mode) {
+        var base = 'Double-click to rename.';
+        if (!mode || !mode.slug) return base;
+        return base + ' In the generated code this phase is \u2018' + mode.slug +
+          '\u2019: its trials are ' + mode.slug + '_trial_1, ' + mode.slug +
+          '_trial_2 \u2026 and the node it pushes is ' + mode.slug + '_timeline.';
+      }
+
+      // Renaming happens on the card, where the phase is. The code follows on
+      // its own: every generated name is derived from this one string.
+      function _startPhaseRename(el) {
+        var pid = el.getAttribute('data-phase');
+        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+        if (!ph) return;
+        var was = _stripEmoji(ph.name);
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = was;
+        input.className = 'phase-name-input';
+        el.replaceWith(input);
+        input.focus();
+        input.select();
+        var settled = false;
+        function finish(save) {
+          if (settled) return;
+          settled = true;
+          var v = input.value.replace(/\s+/g, ' ').trim();
+          // An empty name would leave the card with no label and the code with
+          // the fallback slug, so it is treated as a cancelled edit.
+          if (save && v && v !== was) {
+            saveState();
+            ph.name = v;
+            autoSave();
+          }
+          renderAll();
+        }
+        input.onblur = function () { finish(true); };
+        input.onkeydown = function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+          else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        };
+        // The card itself selects a trial and drags; neither should happen
+        // while the name is being typed.
+        ['click', 'dblclick', 'mousedown', 'dragstart'].forEach(function (ev) {
+          input.addEventListener(ev, function (e) { e.stopPropagation(); });
+        });
+      }
       function _deviceLabel(d) {
         if (!d) return '';
         var icon = d.icon || '';
@@ -974,7 +1023,8 @@ function _applyI18n() {
             ph.color +
             '">' +
             (i + 1) +
-            '</span><span style="font-weight:700;font-size:0.82rem">' +
+            '</span><span class="phase-name" data-phase="' + ph.id + '" title="' +
+            _phaseRenameTitle(ph, _mode) + '">' +
             _phaseLabel(ph) +
             '</span><span class="phase-mode' + (_mode && _mode.factored ? ' factored' : '') +
             '" title="' + _phaseModeTitle(_mode) + '">' +
@@ -1295,6 +1345,12 @@ function _applyI18n() {
           btn.onclick = function (e) {
             e.stopPropagation();
             deletePhase(this.getAttribute('data-phase'));
+          };
+        });
+        document.querySelectorAll('.phase-name').forEach(function (el) {
+          el.ondblclick = function (e) {
+            e.stopPropagation();
+            _startPhaseRename(this);
           };
         });
         document.querySelectorAll('.phase-settings-btn').forEach(function (btn) {
@@ -3933,7 +3989,7 @@ function _applyI18n() {
           // it is noted rather than emitted as an empty `timeline: []`.
           if (phaseParts.length === 0) {
             code += '// (this phase holds no trials, so it adds nothing to the timeline)\n\n';
-            _phaseModes.push({id: ph.id, trials: 0, factored: false});
+            _phaseModes.push({id: ph.id, trials: 0, factored: false, slug: phaseSlug});
             return;
           }
           if (!phaseParts.some(function (p) { return p.kind !== 'skip'; })) {
@@ -3941,7 +3997,7 @@ function _applyI18n() {
             code += '// (this phase adds nothing to the timeline)\n\n';
             _phaseModes.push({id: ph.id, trials: ph.timeline.length, factored: false,
                               uniform: false, mode: ph.conditions ? 'conditions' : 'trials',
-                              empty: phaseParts.length, emitted: 0});
+                              empty: phaseParts.length, emitted: 0, slug: phaseSlug});
             return;
           }
           var nodeName = phaseSlug + '_timeline';
@@ -3964,7 +4020,8 @@ function _applyI18n() {
           }).length;
           _phaseModes.push({id: ph.id, trials: ph.timeline.length, factored: !!factored,
                             uniform: !!uniform, mode: ph.conditions ? 'conditions' : 'trials',
-                            empty: emptyCount, emitted: ph.timeline.length - emptyCount});
+                            empty: emptyCount, emitted: ph.timeline.length - emptyCount,
+                            slug: phaseSlug});
 
           if (factored) {
             var varName = phaseSlug + '_variables';

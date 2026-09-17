@@ -241,6 +241,32 @@
       .phase-index.f {
         background: var(--green);
       }
+      /* The phase's name, which is also where every generated name in the code
+         comes from. Editable in place, so it has to look editable. */
+      .phase-name {
+        font-weight: 700;
+        font-size: 0.82rem;
+        cursor: text;
+        border-bottom: 1px dashed transparent;
+        border-radius: 3px;
+        padding: 1px 2px;
+      }
+      .phase-name:hover {
+        border-bottom-color: var(--border);
+        background: rgba(0, 0, 0, 0.03);
+      }
+      .phase-name-input {
+        font-family: inherit;
+        font-weight: 700;
+        font-size: 0.82rem;
+        color: var(--text);
+        background: #fff;
+        border: 1px solid var(--accent);
+        border-radius: 4px;
+        padding: 1px 4px;
+        outline: none;
+        min-width: 90px;
+      }
       /* How the phase's trials compiled. A factored phase — one procedure run
          once per condition — is the case worth spotting, so it is the one that
          gets colour; plain trials stay quiet text. */
