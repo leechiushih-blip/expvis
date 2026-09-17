@@ -285,11 +285,10 @@
             gap: 8px;
           "
         >
-          <button class="btn btn-outline" style="font-size: 0.72rem" onclick="addPhase('instructions')">
-            + Instructions Phase
-          </button>
-          <button class="btn btn-outline" style="font-size: 0.72rem" onclick="addPhase('trials')">+ Trials Phase</button>
-          <button class="btn btn-outline" style="font-size: 0.72rem" onclick="addPhase('feedback')">+ Feedback Phase</button>
+          <!-- One button. Phases are the researcher's to name and to add as many
+               of as they like; which icon it carries is a detail of the card,
+               set in its ⚙ settings. -->
+          <button class="btn btn-outline" style="font-size: 0.72rem" onclick="addPhase()">+ Phase</button>
           <button
             class="btn btn-outline"
             style="font-size: 0.72rem; background: #f0fdf4; border-color: rgba(34, 197, 94, 0.3); color: #16a34a"

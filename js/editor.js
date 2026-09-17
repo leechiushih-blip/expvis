@@ -204,9 +204,6 @@ var _i18n = {
   'comp.delay':       {en:'Delay', zh:'延迟'},
   'comp.delay.desc':  {en:'Insert Wait (ms)', zh:'插入等待 ms'},
   // --- Toolbar ---
-  'toolbar.add_instructions': {en:'+ Instructions Phase', zh:'+ 指导语阶段'},
-  'toolbar.add_trials':       {en:'+ Trials Phase', zh:'+ 实验阶段'},
-  'toolbar.add_feedback':     {en:'+ Feedback Phase', zh:'+ 反馈阶段'},
   'toolbar.quick_layout':     {en:'⚡ Quick Layout', zh:'⚡ 快速布局'},
   'toolbar.ai_generate':      {en:'🤖 AI Generate', zh:'🤖 AI 生成'},
   'toolbar.hint':             {en:'Drop components onto nodes above', zh:'拖入组件到节点上方释放'},
@@ -524,7 +521,12 @@ function _applyI18n() {
         if (hi && document.activeElement !== hi) hi.value = d.h;
       }
 
+      // `type` is a UI category — which icon and colour the card carries — not
+      // a structural fact, so a new phase defaults to the generic one and the
+      // rest is set on the card. Templates still pass it explicitly so their
+      // phases arrive labelled.
       function addPhase(type) {
+        type = type || 'trials';
         var labels = {instructions: 'Instructions', trials: 'Trials', feedback: 'Feedback'};
         saveState();
         editor.phases.push({
@@ -4263,6 +4265,7 @@ function _applyI18n() {
         var n = ph.timeline.length;
         var sample = ph.sample || {};
         var draft = {
+          kind: ph.type || 'trials',
           mode: ph.conditions ? 'conditions' : 'trials',
           repetitions: Number(ph.repetitions) > 1 ? Number(ph.repetitions) : 1,
           sampleType: factored ? (sample.type || '') : '',
@@ -4304,6 +4307,27 @@ function _applyI18n() {
           var asConditions = draft.mode === 'conditions';
           var canFactor = factored || (mode && mode.uniform);
           var h = '<div style="padding:14px 20px">';
+
+          // Which icon the card carries. This is all `type` ever meant — a UI
+          // category, not part of the experiment — and it lives here because the
+          // toolbar no longer asks for it when the phase is created.
+          h += '<div style="' + ROW + '"><div style="' + LBL + '">Kind</div><div>' +
+            '<div style="display:flex;gap:6px">';
+          [['instructions', '\ud83d\udcd6', 'Instructions'],
+           ['trials', '\ud83e\uddea', 'Trials'],
+           ['feedback', '\ud83d\udcca', 'Feedback']].forEach(function (k) {
+            var on = draft.kind === k[0];
+            h += '<button type="button" data-kind="' + k[0] + '" title="' + k[2] +
+              '" style="padding:5px 11px;border-radius:7px;font-family:inherit;' +
+              'font-size:0.75rem;cursor:pointer;border:1px solid ' +
+              (on ? 'var(--accent)' : 'var(--border)') + ';background:' +
+              (on ? 'rgba(99,102,241,0.1)' : '#fff') + ';color:' +
+              (on ? 'var(--accent)' : 'var(--text)') + '">' + k[1] + ' ' + k[2] + '</button>';
+          });
+          h += '</div><div style="' + HINT + '">Only the card\u2019s icon and colour. ' +
+            'It does not affect the generated code \u2014 the name is what the code uses.' +
+            '</div></div></div>';
+          h += '<div style="border-top:1px solid var(--border);margin:10px 0 4px"></div>';
 
           // The compiler cannot tell two conditions of one procedure from two
           // trials that happen to look alike, so it does not guess. This is the
@@ -4492,6 +4516,9 @@ function _applyI18n() {
 
           var t = document.getElementById('ps-type');
           if (t) t.onchange = function () { readFields(); draft.sampleType = t.value; repaint(); };
+          box.querySelectorAll('button[data-kind]').forEach(function (el) {
+            el.onclick = function () { readFields(); draft.kind = el.getAttribute('data-kind'); repaint(); };
+          });
           box.querySelectorAll('input[name=ps-mode]').forEach(function (el) {
             el.onchange = function () { readFields(); draft.mode = el.value; repaint(); };
           });
@@ -4535,6 +4562,16 @@ function _applyI18n() {
             }
           }
           saveState();
+          // The icon and the name should not contradict each other. A name the
+          // researcher has not touched still belongs to the old kind, so it
+          // follows; one they chose themselves is left alone.
+          var _defaults = {instructions: 'Instructions', trials: 'Trials', feedback: 'Feedback'};
+          if (_stripEmoji(ph.name) === _defaults[ph.type || 'trials']) {
+            ph.name = _defaults[draft.kind];
+          }
+          ph.type = draft.kind;
+          ph.color = draft.kind === 'instructions' ? 'i'
+                   : draft.kind === 'feedback' ? 'f' : 't';
           ph.conditions = asConditions || undefined;
           if (!asConditions) {
             // The mode is the reason these existed; leaving them behind would be
