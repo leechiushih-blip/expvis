@@ -2165,7 +2165,7 @@ function _applyI18n() {
       // plugin can run — while initJsPsych and jsPsych are stubs, so evaluating
       // the experiment captures its timeline instead of running it.
       function _trialObjectFor(t) {
-        var code = _compileExperiment({only: t.id}).code;
+        var code = _compileExperiment({only: t.id, inlineAssets: true}).code;
         var captured = null;
         var stub = {
           run: function (tl) { captured = tl; },
@@ -2201,7 +2201,7 @@ function _applyI18n() {
       var _liveInstance = null;
       function _renderTrialWithPlugin(t, cb) {
         var used;
-        try { used = _compileExperiment({only: t.id}).usedPlugins; }
+        try { used = _compileExperiment({only: t.id, inlineAssets: true}).usedPlugins; }
         catch (e) { cb(null, e); return; }
         _ensureJsPsych(used).then(function (ok) {
           if (!ok) { cb(null, new Error('jsPsych or one of its plugins did not load')); return; }
