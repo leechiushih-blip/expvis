@@ -25,6 +25,7 @@
     var jsPsych = initJsPsych({
       on_finish: function() {
         jsPsych.data.displayData();
+        jsPsych.data.get().localSave('csv', 'experiment_' + Date.now() + '.csv');
       }
     });
 

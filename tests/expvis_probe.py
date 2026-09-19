@@ -284,6 +284,21 @@ function phaseCases() {
       acceptsArrow: !errArrow
     };
   })();
+  // The run has to leave a durable record. displayData() only draws a table;
+  // the export used to end there, so closing the tab discarded everything.
+  (function () {
+    var code = _compileExperiment({}).code;
+    // localSave lives on DataCollection: jsPsych.data.get().localSave(...)
+    var call = (code.match(/jsPsych\\.data\\.get\\(\\)\\.localSave\\(([^\\n]*)/) || [])[1] || '';
+    out['data is saved'] = {
+      factored: false, uniform: false, trialsPerNode: [], forbiddenParams: [],
+      noTokens: true,
+      callsLocalSave: !!call,
+      // format first: localSave(format, filename), not the other way round
+      formatFirst: /^\\s*'csv'\\s*,/.test(call),
+      hasFilename: /\\.csv'/.test(call)
+    };
+  })();
   // Two conditions whose fixations jitter over different ranges. The jittered
   // duration is a value spanning several lines, and a table row is one line, so
   // factoring used to emit `{trial_duration: trial_duration: function () { …`
@@ -1017,6 +1032,10 @@ def cmd_check():
                                 ("acceptsArrow", True)):
                     if c[k] != want:
                         broken_cases.append(f"phase case {name}: {k}={c[k]}, expected {want}")
+            if name == "data is saved":
+                for k in ("callsLocalSave", "formatFirst", "hasFilename"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
             if c.get("writesReserved"):
                 broken_cases.append(
                     f"phase case {name}: writes a field jsPsych reserves "

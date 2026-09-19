@@ -3341,7 +3341,18 @@ function _applyI18n() {
           });
         }
         var code = '';
-        var onFinishBody = opts.onFinish || 'jsPsych.data.displayData();';
+        // The data has to leave the browser, or it is gone when the tab closes.
+        // `displayData()` only draws a table; the run ends and everything the
+        // participant did goes with it. localSave downloads a file — the only
+        // durable record available to a page with no server behind it — and the
+        // filename carries a timestamp so two sessions cannot overwrite each
+        // other. Note the argument order: format first.
+        var _saveName = (editor.projectName || 'experiment').replace(/[^a-zA-Z0-9_-]/g, '_');
+        var onFinishBody = opts.onFinish || (
+          'jsPsych.data.displayData();\n' +
+          // localSave lives on DataCollection, not on JsPsychData — it is
+          // `jsPsych.data.get().localSave(...)`.
+          "jsPsych.data.get().localSave('csv', '" + _saveName + "_' + Date.now() + '.csv');");
         code += 'var jsPsych = initJsPsych({\n';
         if (opts.displayElement) {
           code += "  display_element: '" + opts.displayElement + "',\n";
@@ -5487,8 +5498,9 @@ function _applyI18n() {
           ? 'Experiment downloaded as a ZIP.\n\nUnzip it and open index.html — the ' + _n +
             ' asset' + (_n === 1 ? '' : 's') + ' it needs are in the folders beside it. ' +
             'Keep the layout: the code refers to them by path.\n\n' +
-            'Data is collected in the browser and stored in localStorage.'
-          : 'Experiment file downloaded.\n\nOpen it in a browser to run the experiment.\nData is collected in the browser and stored in localStorage.');
+            'When the experiment finishes it saves the data as a CSV file.'
+          : 'Experiment file downloaded.\n\nOpen it in a browser to run the experiment.\n' +
+            'When the experiment finishes it saves the data as a CSV file.');
       }
 
       function showPublishConfig(callback) {
