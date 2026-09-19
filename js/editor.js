@@ -291,7 +291,6 @@ function _applyI18n() {
  *   Section 1:  State & Core CRUD
  *   Section 2:  Drag & Drop System
  *   Section 3:  Flow Canvas Rendering
- *   Section 4:  Unified Trial Renderer (renderTrialHTML)
  *   Section 5:  Inspector Panel
  *   Section 6:  Preview System (inline + visual editor + fullscreen)
  *   Section 7:  Undo & Quick Layout
@@ -2066,71 +2065,7 @@ function _applyI18n() {
         return s;
       }
 
-      // The button group exactly as jsPsychHtmlButtonResponse builds it, so the
-      // preview and the exported experiment agree by construction. The grid
-      // maths is copied from the plugin's own source:
-      //   n_cols = grid_columns === null ? ceil(n / grid_rows) : grid_columns
-      //   n_rows = grid_rows    === null ? ceil(n / grid_columns) : grid_rows
-      // `.jspsych-btn-group-grid` (jspsych.css) uses max-content columns, which
-      // is also what stops many buttons from overflowing the way a plain flex
-      // row did.
-      function _previewButtonGroup(c) {
-        var choices = Array.isArray(c.choices) ? c.choices : [];
-        var n = choices.length || 1;
-        var isFlex = (c.button_layout || 'grid') === 'flex';
-        var cls = isFlex ? 'jspsych-btn-group-flex' : 'jspsych-btn-group-grid';
-        var groupStyle = '';
-        if (!isFlex) {
-          var rows = Number(c.grid_rows) || 1;        // jsPsych default: 1
-          var cols = Number(c.grid_columns) || null;  // jsPsych default: null
-          var nCols = cols === null ? Math.ceil(n / rows) : cols;
-          var nRows = cols === null ? rows : Math.ceil(n / cols);
-          groupStyle = 'grid-template-columns:repeat(' + nCols + ',1fr);' +
-                       'grid-template-rows:repeat(' + nRows + ',1fr);';
-        }
-        // The default button_html inserts the choice as markup, unescaped — match it.
-        var html = '<div data-cid="' + c.id + '" class="' + cls + '" style="' + groupStyle + '">' +
-          choices.map(function (label, i) {
-            return '<button type="button" class="jspsych-btn" data-choice="' + i + '">' +
-              label + '</button>';
-          }).join('') + '</div>';
-        if (c.prompt) html += '<div style="text-align:center">' + c.prompt + '</div>';
-        return html;
-      }
 
-      // The slider widget exactly as jsPsychHtmlSliderResponse builds it. The
-      // label positioning maths (including the half-thumb-width correction) is
-      // copied from the plugin's dist/index.js so the preview matches the output.
-      function _previewSlider(c) {
-        var min = c.min == null ? 0 : c.min;
-        var max = c.max == null ? 100 : c.max;
-        var step = c.step || 1;
-        var start = c.slider_start == null ? 50 : c.slider_start;
-        var labels = (Array.isArray(c.labels) ? c.labels : [])
-          .filter(function (x) { return x !== ''; });
-        var width = Number(c.slider_width) || 0;
-        var html = '<div data-cid="' + c.id + '" class="jspsych-html-slider-response-container" ' +
-          'style="position:relative;margin:0 auto 3em auto;' +
-          (width ? 'width:' + width + 'px;' : 'width:auto;') + '">' +
-          '<input type="range" class="jspsych-slider" id="jspsych-html-slider-response-response" ' +
-          'value="' + start + '" min="' + min + '" max="' + max + '" step="' + step + '">' +
-          '<div>';
-        for (var j = 0; j < labels.length; j++) {
-          var per = 100 / (labels.length - 1);
-          var at = j * per;
-          var off = ((at - 50) / 50) * 100 * 7.5 / 100;
-          html += '<div style="border:1px solid transparent;display:inline-block;position:absolute;' +
-            'left:calc(' + at + '% - (' + per + '% / 2) - ' + off + 'px);' +
-            'text-align:center;width:' + per + '%;">' +
-            '<span style="text-align:center;font-size:80%;">' + labels[j] + '</span></div>';
-        }
-        html += '</div></div>';
-        if (c.prompt) html += '<div style="text-align:center">' + c.prompt + '</div>';
-        var reqMove = (c.require_movement === true || c.require_movement === 'true');
-        html += '<button type="button" id="jspsych-html-slider-response-next" class="jspsych-btn"' +
-          (reqMove ? ' disabled' : '') + '>' + (c.button_label || 'Continue') + '</button>';
-        return html;
-      }
 
       // The animation preview shows the first frame plus what the sequence will
       // do — the plugin plays one frame at a time over the whole display, so
@@ -2181,173 +2116,161 @@ function _applyI18n() {
       }
 
       // Unified trial content renderer — used by all previews
-      function renderTrialHTML(t, opts) {
-        opts = opts || {};
-        var s = opts.scale || 1;
-        var h = '';
-        // With randomize(pick-one) only ONE variant is shown per trial, so the
-        // preview must render a single variant too — otherwise every variant stacks
-        // up in the flow layout and the preview misrepresents the experiment.
-        var _rnd = null;
-        for (var _ri = 0; _ri < t.components.length; _ri++) {
-          if (t.components[_ri].type === 'randomize') { _rnd = t.components[_ri]; break; }
-        }
-        var _variantStart = -1, _variantShown = -1;
-        if (_rnd && _rnd.mode !== 'shuffle') {
-          var _rndIdx = t.components.indexOf(_rnd);
-          for (var _k = _rndIdx + 1; _k < t.components.length; _k++) {
-            var _cc = t.components[_k];
-            if (_cc.cat === 's' && ['text','shape','image','audio','video','fixation'].indexOf(_cc.type) >= 0) {
-              if (_variantStart < 0) { _variantStart = _k; _variantShown = _k; }
-            }
+      // ---- Rendering a trial with its real plugin -------------------------
+      // The previews used to hand-build each plugin's DOM — class names copied
+      // from the plugin source. That is a second implementation of the very
+      // thing this project generates, and it drifted more than once: the
+      // slider's labels were drawn in the preview and never emitted, the image
+      // width was hardcoded at 260px. They now run the plugin itself.
+      var _loadedScripts = {};
+
+      function _loadScript(src) {
+        if (_loadedScripts[src]) return Promise.resolve(_loadedScripts[src] === true);
+        return new Promise(function (resolve) {
+          var el = document.createElement('script');
+          el.src = src;
+          el.onload = function () { _loadedScripts[src] = true; resolve(true); };
+          // A plugin that will not load must not hang the preview; the caller
+          // says so instead.
+          el.onerror = function () { _loadedScripts[src] = 'failed'; resolve(false); };
+          document.head.appendChild(el);
+        });
+      }
+
+      // jsPsych and only the plugins this experiment uses — the same list the
+      // generated file loads, from the same table, so the preview cannot need a
+      // plugin the export does not have.
+      function _ensureJsPsych(usedPlugins) {
+        var plugins = Object.keys(_jspsychPluginCDN)
+          .filter(function (n) { return usedPlugins && usedPlugins[n]; })
+          .map(function (n) {
+            var p = _jspsychPluginCDN[n];
+            return 'https://unpkg.com/' + p.pkg + '@' + p.ver;
+          });
+        // Order matters, and for the same reason the generated file pins it: a
+        // plugin reads the global `jsPsychModule` while it is being parsed, so
+        // the core has to have run first. Loaded together they race, the plugin
+        // evaluates to undefined, and every trial object ends up with no plugin.
+        return _loadScript('https://unpkg.com/jspsych@' + _JSPsychVersion).then(function (ok) {
+          if (!ok) return false;
+          return Promise.all(plugins.map(_loadScript)).then(function (rs) {
+            return rs.every(Boolean);
+          });
+        });
+      }
+
+      // The trial object the export contains for this trial, taken from the
+      // compiler. The plugin globals are real — the object has to be one a
+      // plugin can run — while initJsPsych and jsPsych are stubs, so evaluating
+      // the experiment captures its timeline instead of running it.
+      function _trialObjectFor(t) {
+        var code = _compileExperiment({only: t.id}).code;
+        var captured = null;
+        var stub = {
+          run: function (tl) { captured = tl; },
+          data: {displayData: function () {}},
+          randomization: {sampleWithoutReplacement: function (a, n) { return a.slice(0, n); }},
+          pluginAPI: {compareKeys: function () { return false; }},
+          timelineVariable: function () { return ''; }
+        };
+        var names = Object.keys(_jspsychPluginCDN);
+        var args = ['jsPsych', 'initJsPsych'].concat(names);
+        var vals = [stub, function () { return stub; }]
+          .concat(names.map(function (n) { return window[n]; }));
+        new Function(args.join(','), code).apply(null, vals);
+        if (!captured) return null;
+        // A node's last entry is the screen a response rides on; a bare trial is
+        // itself.
+        for (var i = captured.length - 1; i >= 0; i--) {
+          var entry = captured[i];
+          if (!entry || typeof entry !== 'object') continue;
+          var inner = Array.isArray(entry.timeline) ? entry.timeline : [entry];
+          for (var j = inner.length - 1; j >= 0; j--) {
+            var cand = inner[j];
+            if (!cand || typeof cand !== 'object') continue;
+            if (Array.isArray(cand.timeline)) continue;
+            return cand;
           }
         }
-        var _compIdx = -1;
-        // jsPsychAnimation clears the display element on every frame, so when a
-        // trial contains one, the animation is all the participant will see.
-        var _animTrial = t.components.some(function (c) { return c.type === 'animation'; });
-        t.components.forEach(function (c) {
-          _compIdx++;
-          if (_animTrial && c.type !== 'animation') return;
-          // in pick-one, skip every variant but the first
-          if (_variantStart >= 0 && _compIdx > _variantStart &&
-              c.cat === 's' && ['text','shape','image','audio','video','fixation'].indexOf(c.type) >= 0) {
+        return null;
+      }
+
+      // Render that trial with its plugin into a hidden container and hand back
+      // the DOM it produced. `cb(html, err)`.
+      var _liveInstance = null;
+      function _renderTrialWithPlugin(t, cb) {
+        var used;
+        try { used = _compileExperiment({only: t.id}).usedPlugins; }
+        catch (e) { cb(null, e); return; }
+        _ensureJsPsych(used).then(function (ok) {
+          if (!ok) { cb(null, new Error('jsPsych or one of its plugins did not load')); return; }
+          var obj;
+          try { obj = _trialObjectFor(t); }
+          catch (e) { cb(null, e); return; }
+          if (!obj) { cb(null, new Error('this trial produced no jsPsych trial')); return; }
+          var dev = editor.device || {w: 1280, h: 720};
+          var host = document.createElement('div');
+          host.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + dev.w + 'px';
+          document.body.appendChild(host);
+          var done = false;
+          var priorOnLoad = obj.on_load;
+          obj.on_load = function () {
+            if (typeof priorOnLoad === 'function') { try { priorOnLoad(); } catch (e) {} }
+            if (done) return;
+            done = true;
+            // The plugin has written its DOM by the time on_load runs. Stopping
+            // the instance afterwards means a click in the preview cannot end a
+            // trial nobody is taking.
+            setTimeout(function () {
+              var html = host.innerHTML;
+              try { if (_liveInstance) _liveInstance.abortExperiment(); } catch (e) {}
+              _liveInstance = null;
+              if (host.parentNode) host.remove();
+              cb(html, null);
+            }, 0);
+          };
+          try {
+            _liveInstance = initJsPsych({display_element: host});
+            _liveInstance.run([obj]);
+          } catch (e) {
+            if (host.parentNode) host.remove();
+            cb(null, e);
+          }
+        });
+      }
+
+      // A placeholder the real plugin's DOM is written into once it arrives.
+      // The previews are synchronous today; making them wait would mean either a
+      // blank panel or a spinner on every repaint, so the frame is drawn first
+      // and the stage is filled a tick later.
+      var _stageSeq = 0;
+      function _livePreviewStage(t) {
+        var id = 'live-stage-' + (++_stageSeq);
+        setTimeout(function () {
+          var el = document.getElementById(id);
+          if (el) _fillPreviewStage(el, t);
+        }, 0);
+        return '<div id="' + id + '" style="display:flex;flex-direction:column;' +
+          'justify-content:center;align-items:center;gap:0.9em;width:100%"></div>';
+      }
+      function _fillPreviewStage(el, t) {
+        el.innerHTML = '<span style="color:var(--text2);font-size:0.7rem">loading plugin…</span>';
+        _renderTrialWithPlugin(t, function (html, err) {
+          if (!el.parentNode) return;                 // the panel was repainted
+          if (err) {
+            el.innerHTML = '<span style="color:var(--text2);font-size:0.7rem;' +
+              'text-align:center;display:block;padding:12px">Could not render this trial ' +
+              'with its plugin:<br>' + _escHtml(err.message) + '</span>';
             return;
           }
-          var al = c.position === 'left' ? 'flex-start' : c.position === 'right' ? 'flex-end' : 'center';
-          var ta = c.position === 'left' ? 'left' : c.position === 'right' ? 'right' : 'center';
-          var px = '';
-          var wrapperW = 'width:100%;';
-          if (c.type === 'text') {
-            var fs = Math.round(c.fontSize * s);
-            h +=
-              '<div data-cid="' +
-              c.id +
-              '" style="' +
-              px +
-              'display:flex;justify-content:' +
-              al +
-              ';' +
-              wrapperW +
-              '"><span style="font-size:' +
-              fs +
-              'px;color:' +
-              c.color +
-              ';font-weight:' +
-              (c.fontWeight || 'bold') +
-              ';text-align:' +
-              ta +
-              ';line-height:1.5;max-width:800px;word-wrap:break-word;overflow-wrap:break-word;display:inline-block">' +
-              (c.content || '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/\n/g, '<br>') +
-              '</span></div>';
-          } else if (c.type === 'shape') {
-            h +=
-              '<div data-cid="' +
-              c.id +
-              '" style="' +
-              px +
-              'display:flex;justify-content:' +
-              al +
-              ';' +
-              wrapperW +
-              '"><div style="width:' +
-              Math.round(c.size * s) +
-              'px;height:' +
-              Math.round(c.size * s) +
-              'px;background:' +
-              c.color +
-              ';' +
-              getShapeCSS(c.shape, c.color) +
-              '"></div></div>';
-          } else if (c.type === 'fixation')
-            h +=
-              '<div data-cid="' +
-              c.id +
-              '" style="' +
-              px +
-              'font-size:' +
-              Math.round(40 * s) +
-              'px;color:#ccc;font-weight:300">+</div>';
-          else if (c.type === 'image') {
-            if (c.fileData)
-              h +=
-                '<div data-cid="' +
-                c.id +
-                '" style="' +
-                px +
-                'display:flex;justify-content:' +
-                al +
-                ';' +
-                wrapperW +
-                '"><img src="' +
-                c.fileData +
-                // show it at the width the trial will actually use
-                '" style="max-width:' +
-                Math.round((c.stimulus_width || 200) * s) +
-                'px;max-height:' +
-                Math.round(300 * s) +
-                'px;border-radius:8px;object-fit:contain"></div>';
-          } else if (c.type === 'audio') {
-            if (c.fileData)
-              h +=
-                '<div data-cid="' +
-                c.id +
-                '" style="' +
-                px +
-                'display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:#f5f5fa;border-radius:10px;border:1px solid #e0e0e8"><span style="font-size:' +
-                Math.round(22 * s) +
-                'px;cursor:pointer" onclick="var a=this.nextElementSibling;a.paused?a.play():a.pause();this.textContent=a.paused?\'▶️\':\'⏸️\'">▶️</span><audio src="' +
-                c.fileData +
-                '" style="display:none"></audio><span style="font-size:' +
-                Math.round(11 * s) +
-                'px;color:var(--text2)">' +
-                (c.fileName || 'Audio') +
-                '</span></div>';
-            else h += '<span style="color:#aaa">🎵 Audio</span>';
-          } else if (c.type === 'video') {
-            if (c.fileData)
-              h +=
-                '<video controls src="' +
-                c.fileData +
-                '" style="max-width:' +
-                Math.round(360 * s) +
-                'px;max-height:' +
-                Math.round(280 * s) +
-                'px;border-radius:8px"></video>';
-            else h += '<span style="color:#aaa">🎬 Video</span>';
-          } else if (c.type === 'keyboard') {
-            h += '<div data-cid="' + c.id + '" style="' + px + 'display:flex;flex-direction:column;align-items:center;gap:' + Math.round(6 * s) + 'px">';
-            if (c.prompt) h += '<span style="font-size:' + Math.round(13 * s) + 'px;color:#888">' + c.prompt + '</span>';
-            h += '<div style="display:flex;gap:' + Math.round(8 * s) + 'px;justify-content:center">';
-            var keyList = Array.isArray(c.choices) ? c.choices : [];
-            // An empty list is ALL_KEYS, so say so rather than drawing nothing.
-            if (!keyList.length) keyList = ['any key'];
-            keyList.forEach(function (k) {
-              var displayKey = String(k).trim() || 'space';
-              h += '<span style="padding:' + Math.round(10 * s) + 'px ' + Math.round(22 * s) + 'px;border-radius:' + Math.round(10 * s) + 'px;background:#fff7ed;border:2px solid rgba(245,158,11,0.15);color:#f97316;font-weight:700;font-size:' + Math.round(15 * s) + 'px;box-shadow:0 2px 6px rgba(0,0,0,0.05)">' + displayKey + '</span>';
-            });
-            h += '</div></div>';
-          } else if (c.type === 'button')
-            // Mirrors the DOM jsPsychHtmlButtonResponse builds, so what the
-            // preview shows is what the exported experiment renders. The grid
-            // row/column maths is copied from the plugin's own source.
-            h += _previewButtonGroup(c);
-          else if (c.type === 'slider')
-            // Mirrors the DOM jsPsychHtmlSliderResponse builds, so the preview and
-            // the exported experiment agree — including the plugin's label maths.
-            h += _previewSlider(c);
-          else if (c.type === 'animation') h += _previewAnimation(c);
-          else if (c.type === 'textInput') h += _previewSurveyText(c);
-          // NB: delay has no branch here on purpose. It generates its own jsPsych
-          // trial (trial_duration), so it is not part of the stimulus the
-          // participant sees and must not appear in the preview either.
+          el.innerHTML = html;
         });
-        return h;
       }
+      function _escHtml(v) {
+        return String(v == null ? '' : v)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
 
       function renderPreview() {
         var pc = document.getElementById('preview-content');
@@ -2432,8 +2355,11 @@ function _applyI18n() {
           'px;overflow:hidden;background:#fff;border-radius:' +
           screenR +
           'px">';
+        // The stage starts empty and is filled by the real plugin. It is the
+        // plugin's own DOM, so the frame has to scroll rather than the preview
+        // guessing a size.
         h += '<div style="' + innerStyle + 'display:flex;flex-direction:column;justify-content:center;align-items:center;gap:0.9em;padding:1.2em;box-sizing:border-box;overflow:auto">' +
-             renderTrialHTML(t, {scale: 1}) + '</div>';
+             _livePreviewStage(t) + '</div>';
         h += '</div>';
         if (isPhone)
           h +=
@@ -2507,7 +2433,8 @@ function _applyI18n() {
         overlay.appendChild(box);
         document.body.appendChild(overlay);
 
-        document.getElementById('exp-prev-stage').innerHTML = renderTrialHTML(t, {scale: 1});
+        var stage = document.getElementById('exp-prev-stage');
+        _fillPreviewStage(stage, t);
         document.getElementById('exp-prev-close').onclick = function () { overlay.remove(); };
         overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
       }
@@ -3379,7 +3306,9 @@ function _applyI18n() {
           return name;
         }
 
-        // Build styled stimulus HTML for a component (mirrors renderTrialHTML style)
+        // Build styled stimulus HTML for a component. This is what the generated
+        // file contains; the previews render the real plugin instead, so nothing
+        // here has to imitate a plugin's DOM.
         // ---- Self-rendered response controls -------------------------------
         // jsPsych's *-button / *-slider / survey-text plugins render their controls
         // *below* the stimulus, which is why a positioned control ended up
@@ -3677,6 +3606,11 @@ function _applyI18n() {
           // with different values (see _factorPhase) or just trials.
           var phaseParts = [];
           ph.timeline.forEach(function (t, ti) {
+            // The previews render one trial. Compiling just that one — through
+            // the same compiler, so the object is the one the export contains —
+            // rather than rebuilding it by hand, which is the drift this whole
+            // path was rewritten to remove.
+            if (opts.only && t.id !== opts.only) return;
                   // --- Classify components ---
       var stims = [],
         respType = null,
