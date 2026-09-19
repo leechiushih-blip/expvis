@@ -135,7 +135,11 @@ function phaseCases() {
       // `type` selects the plugin and is read when the trial is instantiated,
       // before any timeline variable has a value. Whatever the phase, the plugin
       // must never have been hoisted into the table.
-      variablePlugin: /timelineVariable\\('type'\\)/.test(code)
+      variablePlugin: /timelineVariable\\('type'\\)/.test(code),
+      // The four fields jsPsych writes on every row. ExpVis must not write them
+      // itself — `data: {trial_index: …}` collides with a reserved field, which
+      // is why the provenance field was renamed trial_in_phase.
+      writesReserved: /^\\s*(trial_type|trial_index|time_elapsed|plugin_version):/m.test(code)
     };
   }
   // Two trials that share a shape are STILL two trials. The compiler cannot
@@ -1013,6 +1017,10 @@ def cmd_check():
                                 ("acceptsArrow", True)):
                     if c[k] != want:
                         broken_cases.append(f"phase case {name}: {k}={c[k]}, expected {want}")
+            if c.get("writesReserved"):
+                broken_cases.append(
+                    f"phase case {name}: writes a field jsPsych reserves "
+                    f"(trial_type / trial_index / time_elapsed / plugin_version)")
             if c.get("variablePlugin"):
                 broken_cases.append(
                     f"phase case {name}: the plugin became a timeline variable — "

@@ -1472,6 +1472,12 @@ function _applyI18n() {
           inputHTML + '</div>';
       }
 
+      // Every row jsPsych writes carries these four, whatever the plugin. Read
+      // off a real run of each plugin rather than off the source: the overview
+      // page lists three of them and omits plugin_version.
+      var _UNIVERSAL_DATA = 'Every trial records trial_type, trial_index, time_elapsed ' +
+        'and plugin_version whatever the plugin — jsPsych writes those, not ExpVis.';
+
       function _renderTrialSettings(insp) {
         var t = findTrial(editor.selectedTrial);
         if (!t) { insp.innerHTML = ''; return; }
@@ -1480,6 +1486,8 @@ function _applyI18n() {
         h += '<div style="font-weight:700;font-size:0.85rem">Trial Settings</div>';
         h += '<div style="font-size:0.66rem;color:var(--text2);margin-top:3px;line-height:1.5">' +
              'Parameters of this jsPsych trial. Leave a field empty to remove it.</div>';
+        h += '<div style="font-size:0.66rem;color:var(--text2);line-height:1.5;margin-top:6px">' +
+             _UNIVERSAL_DATA + '</div>';
         h += '</div>';
         // A real jsPsych parameter. A response component with its own
         // trial_duration takes precedence — they are the same parameter.
@@ -1718,14 +1726,14 @@ function _applyI18n() {
             stimulus_height: 'Image height in px. 0 = work it out from the width.',
             maintain_aspect_ratio: 'true = scale by width without distorting. Only used by the image plugins.',
             render_on_canvas: 'true = draw the image to a canvas. Only used by the image plugins.',
-            animation: 'Runs on the jsPsych animation plugin — a flipbook of frames played at a fixed rate. The trial ends on its own after sequence_reps, and every key pressed during playback is recorded. It takes over the whole screen, so it cannot share a trial with other components.',
+            animation: 'Runs on the jsPsych animation plugin — a flipbook of frames played at a fixed rate. The trial ends on its own after sequence_reps, and every key pressed during playback is recorded. It takes over the whole screen, so it cannot share a trial with other components. Data records response as an ARRAY of {stimulus, rt, key_press} — one entry per frame, so there is no single rt — plus animation_sequence and plugin_version, and NOT stimulus: the plugin records the frames it played instead.',
             audio: 'Upload MP3/WAV audio (≤16MB). Playable in fullscreen preview. Ideal for auditory stimulus experiments.',
             video: 'Upload MP4/WebM video (≤64MB). Playable in fullscreen preview.',
             fixation: 'Cross fixation point. duration(ms) controls display time. In fullscreen preview, the fixation appears first then auto-disappears after duration.',
-            keyboard: 'Runs on the jsPsych html-keyboard-response plugin. choices is the list of allowed keys — leave it empty for any key. correctKey scores the trial. Data records response as the key character, plus rt.',
-            button: 'Runs on the jsPsych html-button-response plugin — every field here maps to a parameter of the same name in the official docs. choices is the list of button labels. Data records response as the button\'s 0-based INDEX (0 = first choice), not its label.',
-            slider: 'Runs on the jsPsych html-slider-response plugin — every field here maps to a parameter of the same name in the official docs. Data records response as a number, plus rt and slider_start.',
-            textInput: 'Runs on the jsPsych survey-text plugin — a free-text question with its own submit button. There is no right answer and no trial_duration; the trial ends when the participant submits. Data records response as an object keyed by Data Name, e.g. {Q0: "..."}, plus rt.',
+            keyboard: 'Runs on the jsPsych html-keyboard-response plugin. choices is the list of allowed keys — leave it empty for any key. correctKey scores the trial. Data records response as the key character, plus rt, stimulus (the whole rendered screen, as HTML), rt_key_duration and plugin_version.',
+            button: 'Runs on the jsPsych html-button-response plugin — every field here maps to a parameter of the same name in the official docs. choices is the list of button labels. Data records response as the button\'s 0-based INDEX (0 = first choice), not its label, plus rt, stimulus and plugin_version.',
+            slider: 'Runs on the jsPsych html-slider-response plugin — every field here maps to a parameter of the same name in the official docs. Data records response as a number, plus rt, slider_start (where the handle began), stimulus and plugin_version.',
+            textInput: 'Runs on the jsPsych survey-text plugin — a free-text question with its own submit button. There is no right answer and no trial_duration; the trial ends when the participant submits. Data records response as an object keyed by Data Name, e.g. {Q0: "..."}, plus rt and plugin_version — but NOT stimulus: survey-text is the one plugin that does not record what was on screen, so the preamble is not in the data.',
           };
           // The panel has two levels — a trial's settings, and a component's
           // properties — and only one of them was reachable from inside the
