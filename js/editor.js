@@ -1025,11 +1025,12 @@ function _applyI18n() {
             _phaseModeLabel(_mode) +
             '</span><button data-phase="' +
             ph.id +
-            '" class="phase-settings-btn" style="margin-left:auto;background:none;border:none;' +
-            'color:var(--text2);cursor:pointer;font-size:0.72rem;opacity:0.5;padding:2px 8px;' +
-            'border-radius:4px" title="Repetitions, sampling and randomisation for this phase' +
+            '" class="phase-settings-btn' +
+            (ph.sample || Number(ph.repetitions) > 1 ? ' configured' : '') +
+            '" style="margin-left:auto" title="Repetitions, sampling and randomisation for this phase' +
             (ph.sample || Number(ph.repetitions) > 1 ? ' — configured' : '') + '">⚙' +
-            (ph.sample || Number(ph.repetitions) > 1 ? ' <span style="color:var(--accent)">•</span>' : '') +
+            (ph.sample || Number(ph.repetitions) > 1
+              ? '<span class="phase-settings-dot"></span>' : '') +
             '</button><button data-phase="' +
             ph.id +
             '" class="phase-delete-btn" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;padding:2px 8px;border-radius:4px" title="Delete this phase">✕ Delete</button>';

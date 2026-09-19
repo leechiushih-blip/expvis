@@ -258,6 +258,36 @@
         outline: none;
         min-width: 90px;
       }
+      /* The phase's settings. It was 0.72rem at half opacity, which is smaller
+         than the text around it and easy to miss entirely — the gear has to be
+         legible before it can be found. */
+      .phase-settings-btn {
+        background: none;
+        border: none;
+        color: var(--text2);
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 1.05rem;
+        line-height: 1;
+        padding: 3px 8px;
+        border-radius: 6px;
+        transition: background 0.12s, color 0.12s;
+      }
+      .phase-settings-btn:hover {
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--accent);
+      }
+      /* "This phase has settings worth opening." A drawn dot rather than a •
+         glyph, which renders at whatever size the font happens to give it. */
+      .phase-settings-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin-left: 3px;
+        border-radius: 50%;
+        background: var(--accent);
+        vertical-align: 0.35em;
+      }
       /* How the phase's trials compiled. A factored phase — one procedure run
          once per condition — is the case worth spotting, so it is the one that
          gets colour; plain trials stay quiet text. */
