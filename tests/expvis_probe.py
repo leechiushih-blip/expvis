@@ -171,6 +171,14 @@ function phaseCases() {
     frames: [{fileData: 'data:image/png;base64,AAAA', fileName: 'f1.png'}],
     frame_time: 100
   }]]]);
+  // Two conditions whose fixations jitter over different ranges. The jittered
+  // duration is a value spanning several lines, and a table row is one line, so
+  // factoring used to emit `{trial_duration: trial_duration: function () { …`
+  // — JavaScript that does not parse, from an experiment the GUI accepts.
+  run('jittered fixations, run as one procedure', [
+    [['fixation', {trial_duration: 500, durationMin: 500, durationMax: 900, durationStep: 200}]],
+    [['fixation', {trial_duration: 600, durationMin: 600, durationMax: 1000, durationStep: 200}]]
+  ], {conditions: true});
 
   // Node-level parameters, set the way the phase settings dialog sets them.
   // `nodeParams` is the exact text emitted between `timeline` and the closing
@@ -816,7 +824,9 @@ def cmd_check():
                 # Asked for, but the trials do not share a shape
                 "ragged, run as one procedure": False,
                 "identical, run as one procedure": False,
-                "one trial, run as one procedure": False}
+                "one trial, run as one procedure": False,
+                # asked for, but a multi-line value cannot go in a table row
+                "jittered fixations, run as one procedure": False}
         broken_cases = [
             f"phase case {name}: factored={cases[name]['factored']}, expected {want}"
             for name, want in WANT.items()

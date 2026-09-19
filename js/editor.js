@@ -3373,6 +3373,18 @@ function _applyI18n() {
           });
           if (!varies.length) return null;
 
+          // A value that spans lines cannot go in a table row. A row is one
+          // line, so pasting a block into it produces
+          //
+          //     {trial_duration:       trial_duration: function () { …
+          //
+          // which is not JavaScript. Two conditions whose fixations jitter over
+          // different ranges did exactly that. Falling back to plain trials is
+          // both valid and what the researcher would have written by hand.
+          if (varies.some(function (i) {
+            return String(parts[0].slots[i].val).indexOf('\n') >= 0;
+          })) return null;
+
           // Name each one after the property itself. `timing.0.stimulus` gets
           // that path only when a bare `stimulus` is already taken, so the
           // common case — the response trial's stimulus varying — reads as
