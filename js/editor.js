@@ -3719,7 +3719,10 @@ function _applyI18n() {
               // jsPsychAnimation owns the display element, so it is emitted as a
               // whole trial with no properties to lift into a variable table —
               // a phase of animations never factors.
-              phaseParts.push({kind: 'raw', text: _out});
+              // `name` matters as much as `text`: the node collects its trials by
+              // name, and without one the declaration below is emitted and never
+              // referenced — the animation is declared and never runs.
+              phaseParts.push({kind: 'raw', text: _out, name: trialName});
               return; // this trial is complete
             }
 
@@ -4048,7 +4051,10 @@ function _applyI18n() {
             // Said out loud rather than dropped in silence: the canvas shows this
             // trial, so its absence from the file needs an explanation.
             if (p.kind === 'skip') { code += p.note + '\n'; return; }
-            if (p.kind === 'raw') { code += p.text; return; }
+            // A raw part is a whole trial written out in one go (an animation).
+            // It joins the node like any other, or the node's timeline never
+            // mentions it.
+            if (p.kind === 'raw') { code += p.text; phaseTrials.push(p.name); return; }
             p.hints.forEach(function (h) { code += h + '\n'; });
             code += p.lines.join('\n') + '\n\n';
             phaseTrials.push(p.name);
