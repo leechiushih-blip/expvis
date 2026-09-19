@@ -9,6 +9,7 @@ byte-identical output to what came before.
     tests/expvis_probe.py save            # capture tests/golden/*.html
     tests/expvis_probe.py check           # compare against them
     tests/expvis_probe.py dump stroop     # print one template's output
+    tests/expvis_probe.py coverage        # write docs/JSPsych_TIMELINE_COVERAGE.md
 """
 
 import html
@@ -489,24 +490,28 @@ function timelineDocCases() {
   var shape = nodeShape(rich);
   var NODE_KEYS = ['randomize_order', 'repetitions', 'sample', 'timeline', 'timeline_variables'];
 
-  function check(id, label, present, test, why) {
-    out[id] = {label: label, expected: present ? 'present' : 'absent',
-               found: !!test, why: why || ''};
+  var section = '';
+  // `selfCheck` marks a case that tests one of the checks above rather than a
+  // mechanism on the page. It is asserted like any other and kept out of the
+  // generated coverage table, which is about jsPsych, not about this file.
+  function check(id, label, present, test, why, selfCheck) {
+    out[id] = {label: label, section: section, expected: present ? 'present' : 'absent',
+               found: !!test, why: why || '', self: !!selfCheck};
   }
 
-  // --- 一、创建实验 ---
+  section = '创建实验 · 时间线';
   check('run', 'timeline array + jsPsych.run', true,
     /var timeline = \\[\\];[\\s\\S]*jsPsych\\.run\\(timeline\\);/.test(all));
   check('type', 'type selects the plugin', true, /type: jsPsych/.test(all));
-  // --- 二、单个试次 ---
+  section = '单个试次';
   check('trial', 'a trial is an object', true, /var \\w+ = \\{/.test(all));
   check('params', 'plugin parameters (stimulus …)', true, /stimulus:/.test(all));
-  // --- 三、多个试次 ---
+  section = '多个试次';
   check('pushtrials', 'multiple trials as successive timeline.push()', false,
     /timeline\\.push\\(\\w*_trial_\\d+\\)/.test(all),
     'ExpVis collects each phase into one node and pushes the node; pushing trials ' +
     'individually is the same experiment written differently');
-  // --- 四、嵌套时间线 ---
+  section = '嵌套时间线';
   check('nested', 'an object with its own timeline', true, /timeline: \\[/.test(all));
   function carriesSharedParam(code) {
     return nodeShape(code).nodeKeys.some(function (k) {
@@ -522,13 +527,13 @@ function timelineDocCases() {
   check('inherit-detector', 'the inheritance check spots a shared parameter', true,
     carriesSharedParam('var x = { timeline: [{ type: jsPsychHtmlKeyboardResponse, ' +
       'stimulus: "a" }], prompt: "shared" };\\nvar timeline = [x];\\njsPsych.run(timeline);'),
-    'self-check for the line above');
+    'self-check for the line above', true);
   check('override', 'a child overriding an inherited value', false, false,
     'nothing is inherited, so there is nothing to override');
   check('depth', 'nesting any number of levels deep', false, shape.deepestTimeline > 2,
     'two levels: the phase node, and the timed segments inside one trial');
 
-  // --- 五、时间线变量 ---
+  section = '时间线变量';
   check('tv', 'timeline_variables', true, /timeline_variables: \\w+/.test(all));
   check('tvref', "jsPsych.timelineVariable('name')", true,
     /jsPsych\\.timelineVariable\\('/.test(all));
@@ -539,9 +544,9 @@ function timelineDocCases() {
   check('dynamic', 'dynamic parameters (a function on a parameter)', false,
     /_dynamic_never_matches_/.test(all),
     'expresses a function only as the sample.fn the researcher types');
-  // --- 六、随机 ---
+  section = '试次顺序随机';
   check('randomize', 'randomize_order', true, /randomize_order: true/.test(all));
-  // --- 七、抽样 ---
+  section = '抽样 sample';
   check('sample', 'sample', true, /sample: \\{type: '/.test(all));
   check('withrepl', 'sample with-replacement', true,
     /sample: \\{type: 'with-replacement'/.test(all));
@@ -554,7 +559,7 @@ function timelineDocCases() {
     /sample: \\{type: 'alternate-groups', groups: \\[/.test(all) &&
     /randomize_group_order: (true|false)/.test(all));
   check('customfn', 'sample custom + fn', true, /sample: \\{type: 'custom', fn: /.test(all));
-  // --- 八、重复 ---
+  section = '重复一系列试次';
   check('reps', 'repetitions', true, /repetitions: 4/.test(all));
   check('repsvar', 'repetitions alongside timeline_variables', true,
     /timeline_variables: \\w+[\\s\\S]{0,200}repetitions: 4/.test(rich));
@@ -562,23 +567,23 @@ function timelineDocCases() {
     /repetitions: \\d[\\s\\S]{0,80}loop_function/.test(all), 'no loop_function');
   check('repscond', 'repetitions alongside conditional_function', false,
     /repetitions: \\d[\\s\\S]{0,80}conditional_function/.test(all), 'no conditional_function');
-  // --- 九 / 十、循环与条件 ---
+  section = '循环与条件时间线';
   check('loopfn', 'loop_function', false, /loop_function/.test(all),
     'needs a function; the GUI has nowhere to put one');
   check('condfn', 'conditional_function', false, /conditional_function/.test(all),
     'needs a predicate; the GUI has nowhere to put one');
-  // --- 十一、运行时修改时间线 ---
+  section = '在运行时修改时间线';
   check('runtimepush', 'on_finish pushing onto the timeline', false,
     /addNodeToEndOfTimeline|main_timeline\\.push/.test(all),
     'on_finish is emitted only to score a trial');
   check('runtimepop', 'main_timeline.pop()', false, /main_timeline\\.pop/.test(all),
     'same');
-  // --- 十二、开始/结束回调 ---
+  section = '时间线开始/结束回调';
   check('tlstart', 'on_timeline_start', false, /on_timeline_start/.test(all),
     'needs a function');
   check('tlfinish', 'on_timeline_finish', false, /on_timeline_finish/.test(all),
     'needs a function');
-  // --- 十三、其它 API ---
+  section = '文档示例里的其它 API';
   check('init', 'initJsPsych()', true, /initJsPsych\\(/.test(all));
   check('comparekeys', 'jsPsych.pluginAPI.compareKeys()', true,
     /jsPsych\\.pluginAPI\\.compareKeys\\(/.test(all));
@@ -793,8 +798,10 @@ def cmd_check():
                 verb = "missing" if c["expected"] == "present" else "was emitted"
                 broken_doc.append(f"timeline {cid} ({c['label']}): {verb}"
                                   + (f" — {c['why']}" if c["why"] else ""))
-    n_present = sum(1 for c in doc.values() if "expected" in c and c["expected"] == "present")
-    n_absent = sum(1 for c in doc.values() if "expected" in c and c["expected"] == "absent")
+    n_present = sum(1 for c in doc.values()
+                    if c.get("expected") == "present" and not c.get("self"))
+    n_absent = sum(1 for c in doc.values()
+                   if c.get("expected") == "absent" and not c.get("self"))
 
     cases = res.get("cases", {})
     if "error" in cases:
@@ -910,6 +917,67 @@ def cmd_check():
     sys.exit(f"{bad} template(s) differ from the baseline" if bad else None)
 
 
+def cmd_coverage():
+    """Write the coverage table, from the probe's own results.
+
+    Generated rather than written by hand: a table maintained separately from
+    the assertions it describes drifts, and then the document is wrong in the
+    direction of optimism.
+    """
+    res = run_probe()
+    doc = res.get("timeline", {})
+    if "error" in doc:
+        sys.exit("the probe errored: " + doc["error"])
+    present = [c for c in doc.values() if c["expected"] == "present" and not c.get("self")]
+    absent = [c for c in doc.values() if c["expected"] == "absent" and not c.get("self")]
+    lines = [
+        "# jsPsych 时间线页 × ExpVis 实现现状",
+        "",
+        "> **本文件是生成物** —— `python3 tests/expvis_probe.py coverage` 重写它。",
+        "> 数字来自探针的**实际运行结果**,不是手写的。改这里会被下次生成覆盖;",
+        "> 要改结论就改 `tests/expvis_probe.py` 里的 `timelineDocCases()`。",
+        "",
+        "来源: <https://shaobin-jiang.github.io/jsPsych-Chinese-Documentation/v8/overview/timeline/>",
+        "",
+        f"**{len(present)} 条已实现 · {len(absent)} 条刻意不做 · "
+        f"{len(present) + len(absent)} 条合计。**",
+        "",
+        "「刻意不做」都带理由 —— 它们是「可视化编辑器不该假装能做的事」,不是疏漏。",
+        "",
+    ]
+    page = {k: c for k, c in doc.items() if not c.get("self")}
+    seen = []
+    for c in page.values():
+        if c.get("section") not in seen:
+            seen.append(c.get("section"))
+    for sec in seen:
+        lines += [f"## {sec}", "", "| 功能点 | ExpVis | 说明 |", "|---|---|---|"]
+        for c in page.values():
+            if c.get("section") != sec:
+                continue
+            mark = "✅ 有" if c["expected"] == "present" else "❌ 不做"
+            note = c.get("why", "") or ""
+            if c["found"] != (c["expected"] == "present"):
+                mark += " ⚠️ **与断言不符**"
+            lines.append(f"| {c['label']} | {mark} | {note} |")
+        lines.append("")
+    lines += [
+        "## 怎么用这张表",
+        "",
+        "- **验证**:`python3 tests/expvis_probe.py check` —— 有的一定在,不做的一定不在",
+        "- **改结论**:改 `timelineDocCases()`,然后重跑 `coverage`",
+        "",
+        "有两条写不成正则,改成把产物在 jsPsych 桩上求值后看结构(`nodeShape()`):",
+        "节点是否携带共享的试次参数、以及 `timeline` 最深嵌套几层。",
+        "",
+    ]
+    out = os.path.join(ROOT, "docs", "JSPsych_TIMELINE_COVERAGE.md")
+    with open(out, "w") as fh:
+        fh.write("\n".join(lines))
+    print(f"wrote {os.path.relpath(out, ROOT)}  "
+          f"({len(present)} present / {len(absent)} absent)")
+
+
 def cmd_dump(name):
     res = run_probe()
     t = res["templates"].get(name)
@@ -924,6 +992,8 @@ if __name__ == "__main__":
         cmd_save()
     elif cmd == "check":
         cmd_check()
+    elif cmd == "coverage":
+        cmd_coverage()
     elif cmd == "dump":
         cmd_dump(sys.argv[2] if len(sys.argv) > 2 else "stroop")
     else:
