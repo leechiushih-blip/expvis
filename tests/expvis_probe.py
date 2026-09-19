@@ -171,6 +171,50 @@ function phaseCases() {
     frames: [{fileData: 'data:image/png;base64,AAAA', fileName: 'f1.png'}],
     frame_time: 100
   }]]]);
+  // A custom parameter the researcher wrote as JavaScript. It must REPLACE the
+  // property the compiler would have written, not sit beside it: two `stimulus:`
+  // keys in one object literal is valid JavaScript that keeps the last one.
+  (function () {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    addComponent(t.id, 'text', 's');
+    addComponent(t.id, 'keyboard', 'r');
+    t.custom = [{name: 'stimulus',
+      src: "function () {\\n  return '<p>' + jsPsych.evaluateTimelineVariable('name') + '</p>';\\n}"}];
+    var code = _compileExperiment({}).code;
+    out['custom parameter (replace)'] = {
+      factored: false,
+      uniform: false,
+      trialsPerNode: inspectStructure(code).trialsPerNode,
+      forbiddenParams: [],
+      noTokens: code.indexOf('@@') < 0,
+      replacesGenerated: code.indexOf("stimulus: '<div") < 0,
+      emitsTheSource: code.indexOf('evaluateTimelineVariable') >= 0,
+      // one `stimulus:` key, not two
+      stimulusKeys: (code.match(/^\\s*stimulus:/gm) || []).length,
+      stillParses: true
+    };
+  })();
+  // A custom parameter the compiler would NOT have written is appended.
+  (function () {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    addComponent(t.id, 'text', 's');
+    t.custom = [{name: 'on_load', src: 'function () { console.log("loaded"); }'}];
+    var code = _compileExperiment({}).code;
+    out['custom parameter (append)'] = {
+      factored: false, uniform: false,
+      trialsPerNode: inspectStructure(code).trialsPerNode,
+      forbiddenParams: [], noTokens: code.indexOf('@@') < 0,
+      emitsTheSource: code.indexOf('console.log("loaded")') >= 0,
+      stimulusKeys: (code.match(/^\\s*stimulus:/gm) || []).length,
+      stillParses: true
+    };
+  })();
   // Two conditions whose fixations jitter over different ranges. The jittered
   // duration is a value spanning several lines, and a table row is one line, so
   // factoring used to emit `{trial_duration: trial_duration: function () { …`
@@ -545,13 +589,17 @@ function timelineDocCases() {
   check('tv', 'timeline_variables', true, /timeline_variables: \\w+/.test(all));
   check('tvref', "jsPsych.timelineVariable('name')", true,
     /jsPsych\\.timelineVariable\\('/.test(all));
+  // Both of these are now reachable by writing a custom parameter (Trial
+  // Settings); what the editor does not do is write one for you.
   check('tveval', 'jsPsych.evaluateTimelineVariable()', false,
     /evaluateTimelineVariable/.test(all),
-    'it is for reading a variable inside a function, and the GUI has no place to ' +
-    'put one');
+    'the editor never writes it. Reachable by hand: a custom parameter is a ' +
+    'JavaScript expression emitted in place of a generated one');
   check('dynamic', 'dynamic parameters (a function on a parameter)', false,
-    /_dynamic_never_matches_/.test(all),
-    'expresses a function only as the sample.fn the researcher types');
+    /stimulus: function/.test(all),
+    'the editor never writes one. Addressable with a custom parameter, or the ' +
+    'two places it already writes a function itself: jittered fixation duration ' +
+    'and sample.fn');
   section = '试次顺序随机';
   check('randomize', 'randomize_order', true, /randomize_order: true/.test(all));
   section = '抽样 sample';
@@ -875,6 +923,22 @@ def cmd_check():
             # failure this case exists for is the declaration going unreferenced:
             # the trial is written out, the node's timeline never names it, and
             # the animation silently never runs.
+            # A custom parameter must replace, not duplicate. Two `stimulus:`
+            # keys is valid JavaScript that keeps the last, so the check that
+            # matters is the count.
+            if name.startswith("custom parameter"):
+                if not c.get("emitsTheSource"):
+                    broken_cases.append(f"phase case {name}: the source was not emitted")
+                if name.endswith("(replace)"):
+                    if not c.get("replacesGenerated"):
+                        broken_cases.append(
+                            f"phase case {name}: the generated stimulus is still there")
+                    if c["stimulusKeys"] != 1:
+                        broken_cases.append(
+                            f"phase case {name}: {c['stimulusKeys']} stimulus keys, expected 1")
+                elif c["stimulusKeys"] != 1:
+                    broken_cases.append(
+                        f"phase case {name}: {c['stimulusKeys']} stimulus keys, expected 1")
             # (the null entries are the preload trial, which is a bare trial
             # rather than a node — the animation's frames are media)
             anim_nodes = [n for n in c["trialsPerNode"] if n is not None]

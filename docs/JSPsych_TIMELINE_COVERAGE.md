@@ -45,8 +45,8 @@
 |---|---|---|
 | timeline_variables | ✅ 有 |  |
 | jsPsych.timelineVariable('name') | ✅ 有 |  |
-| jsPsych.evaluateTimelineVariable() | ❌ 不做 | it is for reading a variable inside a function, and the GUI has no place to put one |
-| dynamic parameters (a function on a parameter) | ❌ 不做 | expresses a function only as the sample.fn the researcher types |
+| jsPsych.evaluateTimelineVariable() | ❌ 不做 | the editor never writes it. Reachable by hand: a custom parameter is a JavaScript expression emitted in place of a generated one |
+| dynamic parameters (a function on a parameter) | ❌ 不做 | the editor never writes one. Addressable with a custom parameter, or the two places it already writes a function itself: jittered fixation duration and sample.fn |
 
 ## 试次顺序随机
 

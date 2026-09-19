@@ -1298,6 +1298,31 @@ function _applyI18n() {
 
             }
 
+            // A custom parameter means part of this trial is not something the
+            // canvas can draw. Said on the row, because a canvas that quietly
+            // stops matching the experiment is worse than one that admits it.
+            if (Array.isArray(t.custom) && t.custom.length) {
+              var names = t.custom.map(function (x) { return x.name; })
+                .filter(function (x) { return x; });
+              var overridesStimulus = names.indexOf('stimulus') >= 0;
+              var cust = document.createElement('div');
+              cust.textContent = overridesStimulus
+                ? 'ƒ custom stimulus — the steps above are not what runs'
+                : 'ƒ custom: ' + names.join(', ');
+              cust.title = overridesStimulus
+                ? 'A custom `stimulus` parameter replaces the screen built here, so the steps ' +
+                  'above no longer match the generated code. Edit it in Trial Settings ' +
+                  '(click the step number).'
+                : 'Parameters written as JavaScript, emitted in place of the generated ones: ' +
+                  names.join(', ');
+              cust.style.cssText = 'align-self:flex-end;font-size:0.62rem;padding:2px 8px;' +
+                'border-radius:999px;cursor:help;' +
+                (overridesStimulus
+                  ? 'color:#9a3412;background:#fff7ed;border:1px solid rgba(249,115,22,0.35)'
+                  : 'color:var(--text2);background:#f5f5fa;border:1px solid var(--border)');
+              row.appendChild(cust);
+            }
+
             // Action buttons
             var del = document.createElement('button');
             // The trial container is a column now, so pin this to the right edge
@@ -1310,6 +1335,19 @@ function _applyI18n() {
               removeTrial(t.id);
             };
             row.appendChild(del);
+
+            // Selecting the trial itself. Clicking a component selects the
+            // component (and stops propagation), so this only fires on the row
+            // around them — the gutter, the step rows, the blank space. Without
+            // it Trial Settings was a one-way door: the only thing wired to
+            // selectTrial() was the Empty Trial placeholder, which disappears the
+            // moment a trial has anything in it.
+            // stopPropagation: the phase card has its own click handler that
+            // selects its first trial's first component, and it is an ancestor of
+            // this row. Without this the card would overwrite what the click just
+            // selected — the panel would show Trial Settings while the state said
+            // a component was selected.
+            row.onclick = function (e) { e.stopPropagation(); selectTrial(t.id); };
 
             cardBody.appendChild(row);
           });
@@ -1442,7 +1480,96 @@ function _applyI18n() {
         h += _settingRow('Trial Duration', 'jsPsych trial_duration (ms)',
           '<input type="number" min="0" style="' + _SET_INPUT_CSS + '" value="' + (t.trial_duration || '') +
           '" placeholder="e.g. 1200" onchange="_setTrialField(\'' + t.id + '\',\'trial_duration\',this.value)">');
+
+        // --- parameters written as JavaScript ---
+        // The one place the researcher writes code. Everything else here is a
+        // field; this is for the parameters no field can express — a dynamic
+        // stimulus, an on_load hook, a value that reads a timeline variable.
+        var rows = Array.isArray(t.custom) ? t.custom : [];
+        h += '<div style="padding-bottom:8px;border-bottom:1px solid var(--border);margin:14px 0 10px;' +
+          'display:flex;align-items:center;justify-content:space-between">' +
+          '<span style="font-size:0.66rem;text-transform:uppercase;letter-spacing:0.05em;' +
+          'color:var(--text2);font-weight:700">Custom Parameters</span>' +
+          '<button onclick="_addCustom(\'' + t.id + '\')" style="background:none;border:1px solid ' +
+          'var(--border);color:var(--accent);cursor:pointer;font-size:0.66rem;padding:2px 8px;' +
+          'border-radius:4px;font-family:inherit">+ Add</button></div>';
+        if (!rows.length) {
+          h += '<p style="font-size:0.66rem;color:var(--text2);line-height:1.5;margin:0 0 4px">' +
+            'For parameters a field cannot express — a <code>stimulus</code> built at run time, ' +
+            'an <code>on_load</code> hook, anything reading ' +
+            '<code>jsPsych.timelineVariable()</code>. A parameter written here <b>replaces</b> ' +
+            'the one the editor would generate.</p>';
+        }
+        rows.forEach(function (row, i) {
+          h += '<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:8px;padding:8px">';
+          h += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">' +
+            '<input value="' + _escAttr(row.name || '') + '" placeholder="parameter name" ' +
+            'onchange="_setCustom(\'' + t.id + '\',' + i + ',\'name\',this.value)" ' +
+            'style="' + _SET_INPUT_CSS + ';flex:1;font-family:ui-monospace,Menlo,monospace">' +
+            '<button onclick="_removeCustom(\'' + t.id + '\',' + i + ')" title="Remove" ' +
+            'style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;' +
+            'opacity:0.5;padding:0 4px">✕</button></div>';
+          h += '<textarea spellcheck="false" placeholder="function () { … }" ' +
+            'onchange="_setCustom(\'' + t.id + '\',' + i + ',\'src\',this.value)" ' +
+            'style="width:100%;height:76px;padding:6px 8px;border:1px solid var(--border);' +
+            'border-radius:6px;font-family:ui-monospace,Menlo,monospace;font-size:0.7rem;' +
+            'line-height:1.5;box-sizing:border-box;resize:vertical;background:#fbfbfe">' +
+            _escAttr(row.src || '') + '</textarea></div>';
+        });
         insp.innerHTML = h;
+      }
+
+      // Custom parameters are stored as an ordered list because the name is
+      // editable, and renaming a key would mean rebuilding an object.
+      function _addCustom(tid) {
+        var t = findTrial(tid);
+        if (!t) return;
+        saveState();
+        if (!Array.isArray(t.custom)) t.custom = [];
+        t.custom.push({name: '', src: ''});
+        renderAll();
+      }
+      function _setCustom(tid, i, field, value) {
+        var t = findTrial(tid);
+        if (!t || !Array.isArray(t.custom) || !t.custom[i]) return;
+        var row = t.custom[i];
+        if (field === 'name') {
+          // A parameter name has to be a JavaScript identifier, or the emitted
+          // object has a key that is not one.
+          var v = String(value).trim();
+          if (v && !/^[A-Za-z_$][\w$]*$/.test(v)) {
+            alert('A parameter name has to be a JavaScript identifier:\n\n' + value);
+            renderAll();
+            return;
+          }
+          row.name = v;
+        } else {
+          var src = String(value);
+          if (src.trim()) {
+            // Refuse code that will not parse rather than writing it into the
+            // experiment: the error would otherwise surface in the participant's
+            // browser at run time, as a blank screen. Same guard as sample.fn.
+            try {
+              new Function('return (' + src + ');');
+            } catch (e) {
+              alert('That is not a JavaScript expression:\n\n' + e.message);
+              renderAll();
+              return;
+            }
+          }
+          row.src = src;
+        }
+        saveState();
+        autoSave();
+      }
+      function _removeCustom(tid, i) {
+        var t = findTrial(tid);
+        if (!t || !Array.isArray(t.custom)) return;
+        saveState();
+        t.custom.splice(i, 1);
+        if (!t.custom.length) delete t.custom;
+        autoSave();
+        renderAll();
       }
 
       // Create / update / remove the logic component backing a trial setting.
@@ -3981,6 +4108,34 @@ function _applyI18n() {
                 L(indent, '},');
               });
             }
+            // --- custom parameters ---
+            // Values the researcher wrote as JavaScript, emitted under the name
+            // they chose. An override REPLACES the property the compiler would
+            // have written rather than being emitted beside it: two `stimulus:`
+            // keys in one object literal is valid JavaScript that keeps the last
+            // one, so the experiment would quietly run something other than what
+            // the file appears to say.
+            if (Array.isArray(t.custom)) {
+              t.custom.forEach(function (entry) {
+                var key = String((entry && entry.name) || '').trim();
+                var src = String(entry && entry.src == null ? '' : entry.src).trim();
+                if (!key || !src || !/^[A-Za-z_$][\w$]*$/.test(key)) return;
+                var hit = null;
+                slots.forEach(function (sl) { if (sl.key === key) hit = sl; });
+                if (hit) {
+                  for (var i = hit.from + 1; i < hit.to; i++) lines[i] = null;
+                  lines[hit.from] = '  '.repeat(hit.indent) + key + ': ' + src + ',';
+                  hit.val = src;
+                } else {
+                  lines.push('  '.repeat(indent) + key + ': ' + src + ',');
+                  slots.push({path: _slotPrefix ? _slotPrefix + '.' + key : key, key: key,
+                              indent: indent, from: lines.length - 1, to: lines.length,
+                              val: src});
+                }
+              });
+              lines = lines.filter(function (l) { return l !== null; });
+            }
+
             // strip the trial's trailing property comma, then close the entry
             var last = lines[lines.length - 1];
             if (last.slice(-1) === ',') lines[lines.length - 1] = last.slice(0, -1);
