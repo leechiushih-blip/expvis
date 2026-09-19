@@ -1028,7 +1028,7 @@ function _applyI18n() {
             '" class="phase-settings-btn' +
             (ph.sample || Number(ph.repetitions) > 1 ? ' configured' : '') +
             '" style="margin-left:auto" title="Repetitions, sampling and randomisation for this phase' +
-            (ph.sample || Number(ph.repetitions) > 1 ? ' — configured' : '') + '">⚙' +
+            (ph.sample || Number(ph.repetitions) > 1 ? ' — configured' : '') + '">Settings' +
             (ph.sample || Number(ph.repetitions) > 1
               ? '<span class="phase-settings-dot"></span>' : '') +
             '</button><button data-phase="' +
