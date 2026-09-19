@@ -131,7 +131,11 @@ function phaseCases() {
       // a factored node holds the one procedure, not one entry per condition
       trialsPerNode: st.trialsPerNode,
       forbiddenParams: st.forbiddenParams,
-      noTokens: code.indexOf('@@') < 0
+      noTokens: code.indexOf('@@') < 0,
+      // `type` selects the plugin and is read when the trial is instantiated,
+      // before any timeline variable has a value. Whatever the phase, the plugin
+      // must never have been hoisted into the table.
+      variablePlugin: /timelineVariable\\('type'\\)/.test(code)
     };
   }
   // Two trials that share a shape are STILL two trials. The compiler cannot
@@ -215,6 +219,18 @@ function phaseCases() {
       stillParses: true
     };
   })();
+  // Two trials whose properties match but whose PLUGINS differ. The image-only
+  // one runs on the image plugin, the one with a caption on the HTML plugin, and
+  // because stimulus_width is 0 the two emit the same set of properties — so the
+  // signature matches and they were hoisted, producing
+  // `type: jsPsych.timelineVariable('type')`, which cannot resolve to anything.
+  run('different plugins, run as one procedure', [
+    [['image', {fileData: 'data:image/png;base64,AAAA', fileName: 'p1.png',
+                stimulus_width: 0}], ['keyboard', {choices: ['a', 'l']}]],
+    [['image', {fileData: 'data:image/png;base64,BBBB', fileName: 'p2.png',
+                stimulus_width: 0}], ['text', {content: 'caption'}],
+     ['keyboard', {choices: ['a', 'l']}]]
+  ], {conditions: true});
   // Two conditions whose fixations jitter over different ranges. The jittered
   // duration is a value spanning several lines, and a table row is one line, so
   // factoring used to emit `{trial_duration: trial_duration: function () { …`
@@ -874,7 +890,9 @@ def cmd_check():
                 "identical, run as one procedure": False,
                 "one trial, run as one procedure": False,
                 # asked for, but a multi-line value cannot go in a table row
-                "jittered fixations, run as one procedure": False}
+                "jittered fixations, run as one procedure": False,
+                # the properties match, the plugin does not — still two procedures
+                "different plugins, run as one procedure": False}
         broken_cases = [
             f"phase case {name}: factored={cases[name]['factored']}, expected {want}"
             for name, want in WANT.items()
@@ -919,6 +937,10 @@ def cmd_check():
                 broken_cases.append(f"phase case {name}: {c['forbiddenParams']}")
             if not c["noTokens"]:
                 broken_cases.append(f"phase case {name}: an @@TOKEN@@ survived")
+            if c.get("variablePlugin"):
+                broken_cases.append(
+                    f"phase case {name}: the plugin became a timeline variable — "
+                    "`type` is read before any variable has a value")
             # An animation trial must reach the node it is declared in. The
             # failure this case exists for is the declaration going unreferenced:
             # the trial is written out, the node's timeline never names it, and

@@ -3512,6 +3512,21 @@ function _applyI18n() {
           });
           if (!varies.length) return null;
 
+          // `type` selects the plugin, and jsPsych reads it when the trial is
+          // instantiated — before any timeline variable has a value. Two trials
+          // with the same properties but different plugins are two different
+          // procedures, not one procedure with a variable plugin. Hoisting them
+          // produced `type: jsPsych.timelineVariable('type')`, which cannot
+          // resolve to anything. Their property lists match, so the signature
+          // check above does not catch it.
+          var typeOf = function (p) {
+            var found = null;
+            p.slots.forEach(function (s) { if (s.key === 'type') found = s.val; });
+            return found;
+          };
+          var firstType = typeOf(parts[0]);
+          if (!parts.every(function (p) { return typeOf(p) === firstType; })) return null;
+
           // A value that spans lines cannot go in a table row. A row is one
           // line, so pasting a block into it produces
           //
