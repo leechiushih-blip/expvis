@@ -67,6 +67,35 @@ function inspectStructure(code) {
   };
 }
 
+// The two things a regex over the generated text cannot check: which properties
+// a node actually carries, and how deep the `timeline` nesting goes. Evaluate it
+// and look.
+function nodeShape(code) {
+  var stub = {
+    run: function (tl) { stub._timeline = tl; },
+    data: {displayData: function () {}},
+    randomization: {sampleWithoutReplacement: function (a, n) { return a.slice(0, n); }},
+    pluginAPI: {compareKeys: function () { return false; }},
+    timelineVariable: function (n) { return '__TV__' + n; }
+  };
+  var src = 'var initJsPsych = function () { return __stub; };\\nvar jsPsych = __stub;\\n' +
+    __PLUGINS.map(function (p) { return 'var ' + p + ' = {};'; }).join('\\n') + '\\n' + code;
+  new Function('__stub', src)(stub);
+  var tl = stub._timeline || [];
+  function depth(n) {
+    if (!n || !Array.isArray(n.timeline)) return 0;
+    var d = 0;
+    n.timeline.forEach(function (c) { d = Math.max(d, depth(c)); });
+    return 1 + d;
+  }
+  return {
+    // own properties of each top-level node; null where the entry is a bare
+    // trial rather than a node (the preload trial, for instance)
+    nodeKeys: tl.map(function (n) { return n && n.timeline ? Object.keys(n).sort() : null; }),
+    deepestTimeline: tl.reduce(function (m, n) { return Math.max(m, depth(n)); }, 0)
+  };
+}
+
 // Phase factoring (one procedure + a timeline_variables table) needs a phase
 // whose trials are structurally identical, which none of the five built-in
 // templates has — they are all heterogeneous or single-trial, so nothing in
@@ -133,6 +162,14 @@ function phaseCases() {
   ], {conditions: true});
   run('one trial, run as one procedure', [[['text', {content: 'ONLY'}]]],
     {conditions: true});
+  // An animation is emitted as a whole trial rather than as properties, so it
+  // leaves the compiler by a path of its own — and nothing covered that path.
+  // It was silently broken: the trial was declared, the node's timeline never
+  // named it, and the animation never ran.
+  run('animation trial', [[['animation', {
+    frames: [{fileData: 'data:image/png;base64,AAAA', fileName: 'f1.png'}],
+    frame_time: 100
+  }]]]);
 
   // Node-level parameters, set the way the phase settings dialog sets them.
   // `nodeParams` is the exact text emitted between `timeline` and the closing
@@ -403,8 +440,157 @@ function contentlessCases() {
   return out;
 }
 
+// Every mechanism on the jsPsych timeline page, checked as present or as
+// deliberately absent. "ExpVis does not do this" is then an executable fact
+// rather than a sentence in a document, and adding one by accident fails here.
+//
+// https://shaobin-jiang.github.io/jsPsych-Chinese-Documentation/v8/overview/timeline/
+//
+// The `why` on an absent case is the reason it is absent, so the assertion is
+// not mistaken later for an oversight.
+function timelineDocCases() {
+  var out = {};
+  function build(setup) { resetEditor(); eval(setup); return _compileExperiment({}).code; }
+
+  // A phase of two homogeneous trials run as one procedure, with every node
+  // parameter ExpVis can set. Exercises the timeline_variables half of the page.
+  function sampled(sample, extra) {
+    return build(
+      "addPhase('Trials');" +
+      "['RED','BLUE'].forEach(function (w, i) {" +
+      "  addTrial(editor.phases[0].id);" +
+      "  var t=findTrial(editor.selectedTrial);" +
+      "  addComponent(t.id,'text','s'); addComponent(t.id,'keyboard','r');" +
+      "  t.components[0].content=w; t.components[1].choices=['a','l'];" +
+      "  t.components[1].correctKey='a'; t.weight=i+1;" +
+      "});" +
+      "editor.phases[0].conditions = true;" +
+      (sample ? "editor.phases[0].sample = " + sample + ";" : "") +
+      (extra || ""));
+  }
+  var rich = sampled("{type:'with-replacement', size:1}",
+    "editor.phases[0].randomize_order=true; editor.phases[0].repetitions=4;");
+  var withoutReplacement = sampled("{type:'without-replacement', size:2}");
+  var fixedReps = sampled("{type:'fixed-repetitions', size:3}");
+  var custom = sampled("{type:'custom', fn:'function (order) { return order; }'}");
+  var alternate = sampled("{type:'alternate-groups', randomizeGroupOrder:true}");
+  // A fixation with jitter — the one dynamic parameter ExpVis emits.
+  var jitter = build(
+    "addPhase('Trials'); addTrial(editor.phases[0].id);" +
+    "var t=findTrial(editor.selectedTrial); addComponent(t.id,'fixation','s');" +
+    "t.components[0].trial_duration=500; t.components[0].durationMin=500;" +
+    "t.components[0].durationMax=900; t.components[0].durationStep=200;" +
+    "addComponent(t.id,'text','s');");
+  var plain = build("addPhase('Trials'); addTrial(editor.phases[0].id);" +
+    "var t=findTrial(editor.selectedTrial); addComponent(t.id,'text','s');" +
+    "addComponent(t.id,'keyboard','r');");
+
+  var all = [rich, withoutReplacement, fixedReps, custom, alternate, jitter, plain].join('\\n');
+  var shape = nodeShape(rich);
+  var NODE_KEYS = ['randomize_order', 'repetitions', 'sample', 'timeline', 'timeline_variables'];
+
+  function check(id, label, present, test, why) {
+    out[id] = {label: label, expected: present ? 'present' : 'absent',
+               found: !!test, why: why || ''};
+  }
+
+  // --- 一、创建实验 ---
+  check('run', 'timeline array + jsPsych.run', true,
+    /var timeline = \\[\\];[\\s\\S]*jsPsych\\.run\\(timeline\\);/.test(all));
+  check('type', 'type selects the plugin', true, /type: jsPsych/.test(all));
+  // --- 二、单个试次 ---
+  check('trial', 'a trial is an object', true, /var \\w+ = \\{/.test(all));
+  check('params', 'plugin parameters (stimulus …)', true, /stimulus:/.test(all));
+  // --- 三、多个试次 ---
+  check('pushtrials', 'multiple trials as successive timeline.push()', false,
+    /timeline\\.push\\(\\w*_trial_\\d+\\)/.test(all),
+    'ExpVis collects each phase into one node and pushes the node; pushing trials ' +
+    'individually is the same experiment written differently');
+  // --- 四、嵌套时间线 ---
+  check('nested', 'an object with its own timeline', true, /timeline: \\[/.test(all));
+  function carriesSharedParam(code) {
+    return nodeShape(code).nodeKeys.some(function (k) {
+      return k && k.some(function (x) { return NODE_KEYS.indexOf(x) < 0; });
+    });
+  }
+  check('inherit', 'a node\\'s parameters inherited by its children', false,
+    carriesSharedParam(rich),
+    'ExpVis writes every parameter on each trial rather than lifting shared ones ' +
+    'to the node. Same output; it just repeats itself');
+  // …and that check must be able to see one, or it passes by being blind. This
+  // is what #7 would look like if ExpVis ever started doing it.
+  check('inherit-detector', 'the inheritance check spots a shared parameter', true,
+    carriesSharedParam('var x = { timeline: [{ type: jsPsychHtmlKeyboardResponse, ' +
+      'stimulus: "a" }], prompt: "shared" };\\nvar timeline = [x];\\njsPsych.run(timeline);'),
+    'self-check for the line above');
+  check('override', 'a child overriding an inherited value', false, false,
+    'nothing is inherited, so there is nothing to override');
+  check('depth', 'nesting any number of levels deep', false, shape.deepestTimeline > 2,
+    'two levels: the phase node, and the timed segments inside one trial');
+
+  // --- 五、时间线变量 ---
+  check('tv', 'timeline_variables', true, /timeline_variables: \\w+/.test(all));
+  check('tvref', "jsPsych.timelineVariable('name')", true,
+    /jsPsych\\.timelineVariable\\('/.test(all));
+  check('tveval', 'jsPsych.evaluateTimelineVariable()', false,
+    /evaluateTimelineVariable/.test(all),
+    'it is for reading a variable inside a function, and the GUI has no place to ' +
+    'put one');
+  check('dynamic', 'dynamic parameters (a function on a parameter)', false,
+    /_dynamic_never_matches_/.test(all),
+    'expresses a function only as the sample.fn the researcher types');
+  // --- 六、随机 ---
+  check('randomize', 'randomize_order', true, /randomize_order: true/.test(all));
+  // --- 七、抽样 ---
+  check('sample', 'sample', true, /sample: \\{type: '/.test(all));
+  check('withrepl', 'sample with-replacement', true,
+    /sample: \\{type: 'with-replacement'/.test(all));
+  check('weights', 'weights', true, /weights: \\[/.test(all));
+  check('withoutrepl', 'sample without-replacement', true,
+    /sample: \\{type: 'without-replacement'/.test(all));
+  check('fixedreps', 'sample fixed-repetitions', true,
+    /sample: \\{type: 'fixed-repetitions'/.test(all));
+  check('altgroups', 'sample alternate-groups', true,
+    /sample: \\{type: 'alternate-groups', groups: \\[/.test(all) &&
+    /randomize_group_order: (true|false)/.test(all));
+  check('customfn', 'sample custom + fn', true, /sample: \\{type: 'custom', fn: /.test(all));
+  // --- 八、重复 ---
+  check('reps', 'repetitions', true, /repetitions: 4/.test(all));
+  check('repsvar', 'repetitions alongside timeline_variables', true,
+    /timeline_variables: \\w+[\\s\\S]{0,200}repetitions: 4/.test(rich));
+  check('repsloop', 'repetitions alongside loop_function', false,
+    /repetitions: \\d[\\s\\S]{0,80}loop_function/.test(all), 'no loop_function');
+  check('repscond', 'repetitions alongside conditional_function', false,
+    /repetitions: \\d[\\s\\S]{0,80}conditional_function/.test(all), 'no conditional_function');
+  // --- 九 / 十、循环与条件 ---
+  check('loopfn', 'loop_function', false, /loop_function/.test(all),
+    'needs a function; the GUI has nowhere to put one');
+  check('condfn', 'conditional_function', false, /conditional_function/.test(all),
+    'needs a predicate; the GUI has nowhere to put one');
+  // --- 十一、运行时修改时间线 ---
+  check('runtimepush', 'on_finish pushing onto the timeline', false,
+    /addNodeToEndOfTimeline|main_timeline\\.push/.test(all),
+    'on_finish is emitted only to score a trial');
+  check('runtimepop', 'main_timeline.pop()', false, /main_timeline\\.pop/.test(all),
+    'same');
+  // --- 十二、开始/结束回调 ---
+  check('tlstart', 'on_timeline_start', false, /on_timeline_start/.test(all),
+    'needs a function');
+  check('tlfinish', 'on_timeline_finish', false, /on_timeline_finish/.test(all),
+    'needs a function');
+  // --- 十三、其它 API ---
+  check('init', 'initJsPsych()', true, /initJsPsych\\(/.test(all));
+  check('comparekeys', 'jsPsych.pluginAPI.compareKeys()', true,
+    /jsPsych\\.pluginAPI\\.compareKeys\\(/.test(all));
+  check('lookback', 'jsPsych.data.get().last(1).values()[0]', false,
+    /data\\.get\\(\\)\\.last\\(/.test(all),
+    'that is how a branch reads the previous trial; ExpVis has no branching');
+  return out;
+}
+
 window.addEventListener('load', function () {
-  var out = { ok: true, templates: {}, cases: {}, media: {}, contentless: {}, errors: [] };
+  var out = { ok: true, templates: {}, cases: {}, media: {}, contentless: {}, timeline: {},
+              errors: [] };
   window.addEventListener('error', function (e) { out.errors.push(String(e.message)); });
   try {
     localStorage.clear();
@@ -446,6 +632,12 @@ window.addEventListener('load', function () {
     } catch (e) {
       out.ok = false;
       out.contentless = { error: String(e.message) + ' @ ' + String(e.stack).split('\\n')[1] };
+    }
+    try {
+      out.timeline = timelineDocCases();
+    } catch (e) {
+      out.ok = false;
+      out.timeline = { error: String(e.message) + ' @ ' + String(e.stack).split('\\n')[1] };
     }
   } catch (e) {
     out.ok = false;
@@ -588,6 +780,22 @@ def cmd_check():
                 broken_contentless.append(
                     f"contentless case {name}: prompt {c['prompt']}, expected {want['prompt']}")
 
+    # Every mechanism on the jsPsych timeline page: present ones must be there,
+    # absent ones must stay absent.
+    doc = res.get("timeline", {})
+    if "error" in doc:
+        broken_doc = [f"timeline doc cases threw: {doc['error']}"]
+    else:
+        broken_doc = []
+        for cid, c in doc.items():
+            ok = c["found"] if c["expected"] == "present" else not c["found"]
+            if not ok:
+                verb = "missing" if c["expected"] == "present" else "was emitted"
+                broken_doc.append(f"timeline {cid} ({c['label']}): {verb}"
+                                  + (f" — {c['why']}" if c["why"] else ""))
+    n_present = sum(1 for c in doc.values() if "expected" in c and c["expected"] == "present")
+    n_absent = sum(1 for c in doc.values() if "expected" in c and c["expected"] == "absent")
+
     cases = res.get("cases", {})
     if "error" in cases:
         broken_cases = [f"phase cases threw: {cases['error']}"]
@@ -646,6 +854,17 @@ def cmd_check():
                 broken_cases.append(f"phase case {name}: {c['forbiddenParams']}")
             if not c["noTokens"]:
                 broken_cases.append(f"phase case {name}: an @@TOKEN@@ survived")
+            # An animation trial must reach the node it is declared in. The
+            # failure this case exists for is the declaration going unreferenced:
+            # the trial is written out, the node's timeline never names it, and
+            # the animation silently never runs.
+            # (the null entries are the preload trial, which is a bare trial
+            # rather than a node — the animation's frames are media)
+            anim_nodes = [n for n in c["trialsPerNode"] if n is not None]
+            if name == "animation trial" and anim_nodes != [1]:
+                broken_cases.append(
+                    f"phase case animation trial: node collects {anim_nodes}, "
+                    f"expected [1] — the trial would be declared and never run")
             # A factored node holds the one procedure, not one entry per
             # condition. Keyed on the case's own result: `want` above is the
             # last value of a different loop.
@@ -655,7 +874,8 @@ def cmd_check():
                     f"got {c['trialsPerNode']}")
 
     bad = 0
-    broken = list(broken_cases) + list(broken_media) + list(broken_contentless)
+    broken = (list(broken_cases) + list(broken_media) + list(broken_contentless)
+              + list(broken_doc))
     for name, t in res["templates"].items():
         struct = t["structure"]
         # Invariants that must hold whatever the bytes are.
@@ -679,6 +899,9 @@ def cmd_check():
         print(f"  {'OK  ' if same else 'DIFF'} {name:16s} "
               f"{len(want)} -> {len(normalise(t['code']))} chars   "
               f"phases={struct['trialsPerNode']}")
+    if doc and "error" not in doc:
+        print(f"\n  jsPsych timeline page: {n_present} present, {n_absent} deliberately "
+              f"absent, {len(broken_doc)} wrong")
     if broken:
         print()
         for b in broken:
