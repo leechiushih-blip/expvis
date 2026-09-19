@@ -593,8 +593,13 @@ function timelineDocCases() {
   // `selfCheck` marks a case that tests one of the checks above rather than a
   // mechanism on the page. It is asserted like any other and kept out of the
   // generated coverage table, which is about jsPsych, not about this file.
+  // `present` may be true, false, or 'byhand' — the editor does not write it,
+  // but the researcher can, by writing a parameter. It asserts like `false`
+  // (the editor must not emit it on its own) and renders differently: calling a
+  // reachable mechanism "not done" understates what the tool can express.
   function check(id, label, present, test, why, selfCheck) {
-    out[id] = {label: label, section: section, expected: present ? 'present' : 'absent',
+    var kind = present === 'byhand' ? 'byhand' : (present ? 'present' : 'absent');
+    out[id] = {label: label, section: section, expected: kind,
                found: !!test, why: why || '', self: !!selfCheck};
   }
 
@@ -617,7 +622,7 @@ function timelineDocCases() {
       return k && k.some(function (x) { return NODE_KEYS.indexOf(x) < 0; });
     });
   }
-  check('inherit', 'a node\\'s parameters inherited by its children', false,
+  check('inherit', 'a node\\'s parameters inherited by its children', 'byhand',
     carriesSharedParam(rich),
     'ExpVis writes every parameter on each trial rather than lifting shared ones ' +
     'to the node. Same output; it just repeats itself');
@@ -627,8 +632,9 @@ function timelineDocCases() {
     carriesSharedParam('var x = { timeline: [{ type: jsPsychHtmlKeyboardResponse, ' +
       'stimulus: "a" }], prompt: "shared" };\\nvar timeline = [x];\\njsPsych.run(timeline);'),
     'self-check for the line above', true);
-  check('override', 'a child overriding an inherited value', false, false,
-    'nothing is inherited, so there is nothing to override');
+  check('override', 'a child overriding an inherited value', 'byhand', false,
+    'the editor inherits nothing, so there is nothing for it to override. A node ' +
+    'parameter is how a researcher inherits one — and then a child trial overrides it');
   check('depth', 'nesting any number of levels deep', false, shape.deepestTimeline > 2,
     'two levels: the phase node, and the timed segments inside one trial');
 
@@ -638,11 +644,11 @@ function timelineDocCases() {
     /jsPsych\\.timelineVariable\\('/.test(all));
   // Both of these are now reachable by writing a custom parameter (Trial
   // Settings); what the editor does not do is write one for you.
-  check('tveval', 'jsPsych.evaluateTimelineVariable()', false,
+  check('tveval', 'jsPsych.evaluateTimelineVariable()', 'byhand',
     /evaluateTimelineVariable/.test(all),
     'the editor never writes it. Reachable by hand: a custom parameter is a ' +
     'JavaScript expression emitted in place of a generated one');
-  check('dynamic', 'dynamic parameters (a function on a parameter)', false,
+  check('dynamic', 'dynamic parameters (a function on a parameter)', 'byhand',
     /stimulus: function/.test(all),
     'the editor never writes one. Addressable with a custom parameter, or the ' +
     'two places it already writes a function itself: jittered fixation duration ' +
@@ -666,9 +672,9 @@ function timelineDocCases() {
   check('reps', 'repetitions', true, /repetitions: 4/.test(all));
   check('repsvar', 'repetitions alongside timeline_variables', true,
     /timeline_variables: \\w+[\\s\\S]{0,200}repetitions: 4/.test(rich));
-  check('repsloop', 'repetitions alongside loop_function', false,
+  check('repsloop', 'repetitions alongside loop_function', 'byhand',
     /repetitions: \\d[\\s\\S]{0,80}loop_function/.test(all), 'no loop_function');
-  check('repscond', 'repetitions alongside conditional_function', false,
+  check('repscond', 'repetitions alongside conditional_function', 'byhand',
     /repetitions: \\d[\\s\\S]{0,80}conditional_function/.test(all), 'no conditional_function');
   section = '循环与条件时间线';
   check('loopfn', 'loop_function', false, /loop_function/.test(all),
@@ -677,7 +683,7 @@ function timelineDocCases() {
   check('condfn', 'conditional_function', false, /conditional_function/.test(all),
     'same — a node parameter in the phase settings');
   section = '在运行时修改时间线';
-  check('runtimepush', 'on_finish pushing onto the timeline', false,
+  check('runtimepush', 'on_finish pushing onto the timeline', 'byhand',
     /addNodeToEndOfTimeline|main_timeline\\.push/.test(all),
     'on_finish is emitted only to score a trial; a node parameter can add more');
   check('runtimepop', 'main_timeline.pop()', false, /main_timeline\\.pop/.test(all),
@@ -691,7 +697,7 @@ function timelineDocCases() {
   check('init', 'initJsPsych()', true, /initJsPsych\\(/.test(all));
   check('comparekeys', 'jsPsych.pluginAPI.compareKeys()', true,
     /jsPsych\\.pluginAPI\\.compareKeys\\(/.test(all));
-  check('lookback', 'jsPsych.data.get().last(1).values()[0]', false,
+  check('lookback', 'jsPsych.data.get().last(1).values()[0]', 'byhand',
     /data\\.get\\(\\)\\.last\\(/.test(all),
     'that is how a branch reads the previous trial; ExpVis has no branching');
   return out;
@@ -906,6 +912,8 @@ def cmd_check():
                                   + (f" — {c['why']}" if c["why"] else ""))
     n_present = sum(1 for c in doc.values()
                     if c.get("expected") == "present" and not c.get("self"))
+    n_byhand = sum(1 for c in doc.values()
+                   if c.get("expected") == "byhand" and not c.get("self"))
     n_absent = sum(1 for c in doc.values()
                    if c.get("expected") == "absent" and not c.get("self"))
 
@@ -1048,8 +1056,8 @@ def cmd_check():
               f"{len(want)} -> {len(normalise(t['code']))} chars   "
               f"phases={struct['trialsPerNode']}")
     if doc and "error" not in doc:
-        print(f"\n  jsPsych timeline page: {n_present} present, {n_absent} deliberately "
-              f"absent, {len(broken_doc)} wrong")
+        print(f"\n  jsPsych timeline page: {n_present} present, {n_byhand} reachable by "
+              f"hand, {n_absent} not expressible, {len(broken_doc)} wrong")
     if broken:
         print()
         for b in broken:
@@ -1071,6 +1079,7 @@ def cmd_coverage():
         sys.exit("the probe errored: " + doc["error"])
     present = [c for c in doc.values() if c["expected"] == "present" and not c.get("self")]
     absent = [c for c in doc.values() if c["expected"] == "absent" and not c.get("self")]
+    byhand = [c for c in doc.values() if c["expected"] == "byhand" and not c.get("self")]
     lines = [
         "# jsPsych 时间线页 × ExpVis 实现现状",
         "",
@@ -1080,10 +1089,12 @@ def cmd_coverage():
         "",
         "来源: <https://shaobin-jiang.github.io/jsPsych-Chinese-Documentation/v8/overview/timeline/>",
         "",
-        f"**{len(present)} 条已实现 · {len(absent)} 条刻意不做 · "
-        f"{len(present) + len(absent)} 条合计。**",
+        f"**{len(present)} 条已实现 · {len(byhand)} 条手写可达 · {len(absent)} 条做不到 · "
+        f"{len(present) + len(byhand) + len(absent)} 条合计。**",
         "",
-        "「刻意不做」都带理由 —— 它们是「可视化编辑器不该假装能做的事」,不是疏漏。",
+        "**✍️ 手写可达** = 编辑器不会自己写,但研究者可以 —— 在试次或节点上写一条自定义参数。",
+        "**❌ 做不到** = 怎么都表达不了。",
+        "",
         "",
     ]
     page = {k: c for k, c in doc.items() if not c.get("self")}
@@ -1096,7 +1107,8 @@ def cmd_coverage():
         for c in page.values():
             if c.get("section") != sec:
                 continue
-            mark = "✅ 有" if c["expected"] == "present" else "❌ 不做"
+            mark = {"present": "✅ 有", "byhand": "✍️ 手写可达",
+                    "absent": "❌ 做不到"}[c["expected"]]
             note = c.get("why", "") or ""
             if c["found"] != (c["expected"] == "present"):
                 mark += " ⚠️ **与断言不符**"

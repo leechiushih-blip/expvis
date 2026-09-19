@@ -6,9 +6,11 @@
 
 来源: <https://shaobin-jiang.github.io/jsPsych-Chinese-Documentation/v8/overview/timeline/>
 
-**19 条已实现 · 15 条刻意不做 · 34 条合计。**
+**19 条已实现 · 8 条手写可达 · 7 条做不到 · 34 条合计。**
 
-「刻意不做」都带理由 —— 它们是「可视化编辑器不该假装能做的事」,不是疏漏。
+**✍️ 手写可达** = 编辑器不会自己写,但研究者可以 —— 在试次或节点上写一条自定义参数。
+**❌ 做不到** = 怎么都表达不了。
+
 
 ## 创建实验 · 时间线
 
@@ -28,16 +30,16 @@
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| multiple trials as successive timeline.push() | ❌ 不做 | ExpVis collects each phase into one node and pushes the node; pushing trials individually is the same experiment written differently |
+| multiple trials as successive timeline.push() | ❌ 做不到 | ExpVis collects each phase into one node and pushes the node; pushing trials individually is the same experiment written differently |
 
 ## 嵌套时间线
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
 | an object with its own timeline | ✅ 有 |  |
-| a node's parameters inherited by its children | ❌ 不做 | ExpVis writes every parameter on each trial rather than lifting shared ones to the node. Same output; it just repeats itself |
-| a child overriding an inherited value | ❌ 不做 | nothing is inherited, so there is nothing to override |
-| nesting any number of levels deep | ❌ 不做 | two levels: the phase node, and the timed segments inside one trial |
+| a node's parameters inherited by its children | ✍️ 手写可达 | ExpVis writes every parameter on each trial rather than lifting shared ones to the node. Same output; it just repeats itself |
+| a child overriding an inherited value | ✍️ 手写可达 | the editor inherits nothing, so there is nothing for it to override. A node parameter is how a researcher inherits one — and then a child trial overrides it |
+| nesting any number of levels deep | ❌ 做不到 | two levels: the phase node, and the timed segments inside one trial |
 
 ## 时间线变量
 
@@ -45,8 +47,8 @@
 |---|---|---|
 | timeline_variables | ✅ 有 |  |
 | jsPsych.timelineVariable('name') | ✅ 有 |  |
-| jsPsych.evaluateTimelineVariable() | ❌ 不做 | the editor never writes it. Reachable by hand: a custom parameter is a JavaScript expression emitted in place of a generated one |
-| dynamic parameters (a function on a parameter) | ❌ 不做 | the editor never writes one. Addressable with a custom parameter, or the two places it already writes a function itself: jittered fixation duration and sample.fn |
+| jsPsych.evaluateTimelineVariable() | ✍️ 手写可达 | the editor never writes it. Reachable by hand: a custom parameter is a JavaScript expression emitted in place of a generated one |
+| dynamic parameters (a function on a parameter) | ✍️ 手写可达 | the editor never writes one. Addressable with a custom parameter, or the two places it already writes a function itself: jittered fixation duration and sample.fn |
 
 ## 试次顺序随机
 
@@ -72,29 +74,29 @@
 |---|---|---|
 | repetitions | ✅ 有 |  |
 | repetitions alongside timeline_variables | ✅ 有 |  |
-| repetitions alongside loop_function | ❌ 不做 | no loop_function |
-| repetitions alongside conditional_function | ❌ 不做 | no conditional_function |
+| repetitions alongside loop_function | ✍️ 手写可达 | no loop_function |
+| repetitions alongside conditional_function | ✍️ 手写可达 | no conditional_function |
 
 ## 循环与条件时间线
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| loop_function | ❌ 不做 | the editor never writes one. Reachable by hand: node parameters in the phase settings take a JavaScript expression |
-| conditional_function | ❌ 不做 | same — a node parameter in the phase settings |
+| loop_function | ❌ 做不到 | the editor never writes one. Reachable by hand: node parameters in the phase settings take a JavaScript expression |
+| conditional_function | ❌ 做不到 | same — a node parameter in the phase settings |
 
 ## 在运行时修改时间线
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| on_finish pushing onto the timeline | ❌ 不做 | on_finish is emitted only to score a trial; a node parameter can add more |
-| main_timeline.pop() | ❌ 不做 | same |
+| on_finish pushing onto the timeline | ✍️ 手写可达 | on_finish is emitted only to score a trial; a node parameter can add more |
+| main_timeline.pop() | ❌ 做不到 | same |
 
 ## 时间线开始/结束回调
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| on_timeline_start | ❌ 不做 | a node parameter; write one in the phase settings |
-| on_timeline_finish | ❌ 不做 | same |
+| on_timeline_start | ❌ 做不到 | a node parameter; write one in the phase settings |
+| on_timeline_finish | ❌ 做不到 | same |
 
 ## 文档示例里的其它 API
 
@@ -102,7 +104,7 @@
 |---|---|---|
 | initJsPsych() | ✅ 有 |  |
 | jsPsych.pluginAPI.compareKeys() | ✅ 有 |  |
-| jsPsych.data.get().last(1).values()[0] | ❌ 不做 | that is how a branch reads the previous trial; ExpVis has no branching |
+| jsPsych.data.get().last(1).values()[0] | ✍️ 手写可达 | that is how a branch reads the previous trial; ExpVis has no branching |
 
 ## 怎么用这张表
 
