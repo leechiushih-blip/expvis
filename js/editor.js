@@ -1273,6 +1273,7 @@ function _applyI18n() {
                 num.textContent = _stepNo;
                 num.title = 'Presentation step ' + _stepNo +
                   (_perTrial ? ' of this condition' : ' of this phase') +
+                  ' \u00b7 click for trial settings' +
                   (step.simul && step.comps.length > 1
                     ? ' — ' + step.comps.length + ' components shown together on one screen'
                     : '');
@@ -1348,6 +1349,11 @@ function _applyI18n() {
             // selected — the panel would show Trial Settings while the state said
             // a component was selected.
             row.onclick = function (e) { e.stopPropagation(); selectTrial(t.id); };
+            // Clicking the row opens the trial's own settings. Nothing said so:
+            // the row carried no hint, the cursor stayed `auto`, and the gutter
+            // tooltip only described the step number.
+            row.style.cursor = 'pointer';
+            row.title = 'Click for this trial\'s settings';
 
             cardBody.appendChild(row);
           });
@@ -1651,6 +1657,12 @@ function _applyI18n() {
             slider: 'Runs on the jsPsych html-slider-response plugin — every field here maps to a parameter of the same name in the official docs. Data records response as a number, plus rt and slider_start.',
             textInput: 'Runs on the jsPsych survey-text plugin — a free-text question with its own submit button. There is no right answer and no trial_duration; the trial ends when the participant submits. Data records response as an object keyed by Data Name, e.g. {Q0: "..."}, plus rt.',
           };
+          // The panel has two levels — a trial's settings, and a component's
+          // properties — and only one of them was reachable from inside the
+          // other. A back link is how the second level announces the first.
+          h += '<button onclick="selectTrial(\'' + t.id + '\')" style="background:none;' +
+            'border:none;color:var(--accent);cursor:pointer;font-family:inherit;font-size:0.68rem;' +
+            'padding:0 0 8px;text-align:left">\u2039 Trial Settings</button>';
           h +=
             '<div class="prop-section"><div class="prop-section-title">' +
             (icons[c.type] || '?') +
