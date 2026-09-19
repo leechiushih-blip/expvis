@@ -1568,6 +1568,59 @@ function _applyI18n() {
         saveState();
         autoSave();
       }
+      // The phase dialog is an overlay, so renderAll() does not repaint it.
+      // These handlers need the dialog's own repaint, which it registers here.
+      var _repaintPhaseSettings = null;
+      function _addNodeCustom(pid) {
+        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+        if (!ph) return;
+        saveState();
+        if (!Array.isArray(ph.custom)) ph.custom = [];
+        ph.custom.push({name: '', src: ''});
+        autoSave();
+        if (_repaintPhaseSettings) _repaintPhaseSettings();
+      }
+      function _setNodeCustom(pid, i, field, value) {
+        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+        if (!ph || !Array.isArray(ph.custom) || !ph.custom[i]) return;
+        var row = ph.custom[i];
+        if (field === 'name') {
+          var v = String(value).trim();
+          if (v && !/^[A-Za-z_$][\w$]*$/.test(v)) {
+            alert('A parameter name has to be a JavaScript identifier:\n\n' + value);
+            if (_repaintPhaseSettings) _repaintPhaseSettings();
+            return;
+          }
+          row.name = v;
+        } else {
+          var src = String(value);
+          if (src.trim()) {
+            // Refuse code that will not parse rather than writing it into the
+            // experiment: the error would surface in the participant's browser,
+            // at run time, as a blank screen.
+            try {
+              new Function('return (' + src + ');');
+            } catch (e) {
+              alert('That is not a JavaScript expression:\n\n' + e.message);
+              if (_repaintPhaseSettings) _repaintPhaseSettings();
+              return;
+            }
+          }
+          row.src = src;
+        }
+        saveState();
+        autoSave();
+      }
+      function _removeNodeCustom(pid, i) {
+        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+        if (!ph || !Array.isArray(ph.custom)) return;
+        saveState();
+        ph.custom.splice(i, 1);
+        if (!ph.custom.length) delete ph.custom;
+        autoSave();
+        if (_repaintPhaseSettings) _repaintPhaseSettings();
+      }
+
       function _removeCustom(tid, i) {
         var t = findTrial(tid);
         if (!t || !Array.isArray(t.custom)) return;
@@ -3616,6 +3669,27 @@ function _applyI18n() {
           return out;
         }
 
+        // A custom node parameter REPLACES the generated one of the same name.
+        // Two keys in one object literal is valid JavaScript that keeps the
+        // last, so a `loop_function` written by hand must overwrite the emitted
+        // `repetitions` rather than sit beside it and quietly win.
+        function _applyCustomProps(props, list) {
+          if (!Array.isArray(list)) return props;
+          var out = props.slice();
+          list.forEach(function (e) {
+            var key = String((e && e.name) || '').trim();
+            var src = String(e && e.src == null ? '' : e.src).trim();
+            if (!key || !src || !/^[A-Za-z_$][\w$]*$/.test(key)) return;
+            var hit = -1;
+            out.forEach(function (prop, i) {
+              if (prop.length && prop[0].replace(/^\s+/, '').indexOf(key + ':') === 0) hit = i;
+            });
+            if (hit >= 0) out[hit] = ['  ' + key + ': ' + src];
+            else out.push(['  ' + key + ': ' + src]);
+          });
+          return out;
+        }
+
         // The phase settings as emitted properties, indented.
         function _nodeParamProps(ph, factored) {
           return _phaseNodeParams(ph, factored).map(function (p) { return ['  ' + p]; });
@@ -4209,9 +4283,9 @@ function _applyI18n() {
               }).join(', ') + '}' + (i < factored.table.length - 1 ? ',' : '') + '\n';
             });
             code += '];\n\n';
-            _emitNode(nodeName, [_timelineProp(factored.entries),
-                                ['  timeline_variables: ' + varName]]
-              .concat(_nodeParamProps(ph, true)));
+            _emitNode(nodeName, _applyCustomProps(
+              [_timelineProp(factored.entries), ['  timeline_variables: ' + varName]]
+                .concat(_nodeParamProps(ph, true)), ph.custom));
             return;
           }
 
@@ -4240,7 +4314,8 @@ function _applyI18n() {
             code += p.lines.join('\n') + '\n\n';
             blocks.push(['    ' + p.name]);
           });
-          _emitNode(nodeName, [_timelineProp(blocks)].concat(_nodeParamProps(ph, false)));
+          _emitNode(nodeName, _applyCustomProps(
+            [_timelineProp(blocks)].concat(_nodeParamProps(ph, false)), ph.custom));
         });
 
         code += 'jsPsych.run(timeline);\n';
@@ -4567,6 +4642,45 @@ function _applyI18n() {
             'condition list when nothing is sampled. Separate from sampling, not instead ' +
             'of it — jsPsych applies both.</div></div></div>';
 
+          // --- node parameters written as JavaScript ---
+          // The same control the trial has, one level up. loop_function and
+          // conditional_function are NODE parameters: a trial is not a node, so
+          // they have nowhere to live in Trial Settings.
+          var nodeRows = Array.isArray(ph.custom) ? ph.custom : [];
+          h += '<div style="border-top:1px solid var(--border);margin:12px 0 4px"></div>';
+          h += '<div style="padding-bottom:8px;display:flex;align-items:center;' +
+            'justify-content:space-between">' +
+            '<span style="font-size:0.66rem;text-transform:uppercase;letter-spacing:0.05em;' +
+            'color:var(--text2);font-weight:700">Node Parameters</span>' +
+            '<button type="button" onclick="_addNodeCustom(\'' + ph.id + '\')" ' +
+            'style="background:none;border:1px solid var(--border);color:var(--accent);' +
+            'cursor:pointer;font-size:0.66rem;padding:2px 8px;border-radius:4px;' +
+            'font-family:inherit">+ Add</button></div>';
+          if (!nodeRows.length) {
+            h += '<p style="font-size:0.66rem;color:var(--text2);line-height:1.5;margin:0">' +
+              'Parameters of this node rather than of a trial — <code>loop_function</code> ' +
+              'to repeat the block while a condition holds, <code>conditional_function</code> ' +
+              'to skip it, <code>on_timeline_start</code> / <code>on_timeline_finish</code> ' +
+              'for hooks. A name written here replaces the one the editor generates.</p>';
+          }
+          nodeRows.forEach(function (row, i) {
+            h += '<div style="margin-top:8px;border:1px solid var(--border);border-radius:8px;' +
+              'padding:8px">';
+            h += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">' +
+              '<input value="' + _escAttr(row.name || '') + '" placeholder="loop_function" ' +
+              'onchange="_setNodeCustom(\'' + ph.id + '\',' + i + ',\'name\',this.value)" ' +
+              'style="' + _SET_INPUT_CSS + ';flex:1;font-family:ui-monospace,Menlo,monospace">' +
+              '<button type="button" onclick="_removeNodeCustom(\'' + ph.id + '\',' + i + ')" ' +
+              'title="Remove" style="background:none;border:none;color:var(--red);' +
+              'cursor:pointer;font-size:0.7rem;opacity:0.5;padding:0 4px">✕</button></div>';
+            h += '<textarea spellcheck="false" placeholder="function (data) { … }" ' +
+              'onchange="_setNodeCustom(\'' + ph.id + '\',' + i + ',\'src\',this.value)" ' +
+              'style="width:100%;height:76px;padding:6px 8px;border:1px solid var(--border);' +
+              'border-radius:6px;font-family:ui-monospace,Menlo,monospace;font-size:0.7rem;' +
+              'line-height:1.5;box-sizing:border-box;resize:vertical;background:#fbfbfe">' +
+              _escAttr(row.src || '') + '</textarea></div>';
+          });
+
           if (asConditions && n) {
             var groups = _groupCounts(draft.groups);
             var showGroup = draft.sampleType === 'alternate-groups';
@@ -4627,6 +4741,7 @@ function _applyI18n() {
         }
 
         function repaint() {
+          _repaintPhaseSettings = repaint;
           box.innerHTML = head() +
             '<div style="flex:1;overflow-y:auto">' + body() + '</div>' +
             '<div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;' +
@@ -4662,11 +4777,15 @@ function _applyI18n() {
           if (el) el.innerHTML = notes();
         }
 
+        function close() {
+          _repaintPhaseSettings = null;   // the dialog is gone; do not call into it
+          overlay.remove();
+        }
         function wire() {
-          document.getElementById('ps-close').onclick = function () { overlay.remove(); };
-          document.getElementById('ps-cancel').onclick = function () { overlay.remove(); };
+          document.getElementById('ps-close').onclick = close;
+          document.getElementById('ps-cancel').onclick = close;
           document.getElementById('ps-apply').onclick = function () { apply(); };
-          overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
+          overlay.onclick = function (e) { if (e.target === overlay) close(); };
 
           var t = document.getElementById('ps-type');
           if (t) t.onchange = function () { readFields(); draft.sampleType = t.value; repaint(); };
@@ -4742,7 +4861,7 @@ function _applyI18n() {
               else delete tr.weight;
             });
           }
-          overlay.remove();
+          close();
           autoSave();
           renderAll();
         }

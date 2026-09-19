@@ -231,6 +231,34 @@ function phaseCases() {
                 stimulus_width: 0}], ['text', {content: 'caption'}],
      ['keyboard', {choices: ['a', 'l']}]]
   ], {conditions: true});
+  // A custom NODE parameter — the level the trial's custom parameters cannot
+  // reach. loop_function and conditional_function belong to the node, so this is
+  // where they become expressible. Same rule: it REPLACES the generated
+  // parameter of the same name, because two keys in one object literal is valid
+  // JavaScript that keeps the last one.
+  (function () {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    addComponent(editor.selectedTrial, 'text', 's');
+    editor.phases[0].repetitions = 4;
+    editor.phases[0].custom = [
+      {name: 'loop_function', src: 'function (data) { return false; }'},
+      {name: 'repetitions', src: '2'}
+    ];
+    var code = _compileExperiment({}).code;
+    out['custom node parameter'] = {
+      factored: false, uniform: false,
+      trialsPerNode: inspectStructure(code).trialsPerNode,
+      // declared on purpose, so the forbidden-parameter sweep is told to skip it
+      forbiddenParams: [],
+      noTokens: code.indexOf('@@') < 0,
+      // trailing comma off, and sorted: the point is which keys exist and what
+      // they say, not the order the node happens to list them in
+      emitted: (code.match(/^\\s*(loop_function|repetitions):.*$/gm) || [])
+        .map(function (x) { return x.trim().replace(/,$/, ''); }).sort()
+    };
+  })();
   // Two conditions whose fixations jitter over different ranges. The jittered
   // duration is a value spanning several lines, and a table row is one line, so
   // factoring used to emit `{trial_duration: trial_duration: function () { …`
@@ -644,20 +672,21 @@ function timelineDocCases() {
     /repetitions: \\d[\\s\\S]{0,80}conditional_function/.test(all), 'no conditional_function');
   section = '循环与条件时间线';
   check('loopfn', 'loop_function', false, /loop_function/.test(all),
-    'needs a function; the GUI has nowhere to put one');
+    'the editor never writes one. Reachable by hand: node parameters in the phase ' +
+    'settings take a JavaScript expression');
   check('condfn', 'conditional_function', false, /conditional_function/.test(all),
-    'needs a predicate; the GUI has nowhere to put one');
+    'same — a node parameter in the phase settings');
   section = '在运行时修改时间线';
   check('runtimepush', 'on_finish pushing onto the timeline', false,
     /addNodeToEndOfTimeline|main_timeline\\.push/.test(all),
-    'on_finish is emitted only to score a trial');
+    'on_finish is emitted only to score a trial; a node parameter can add more');
   check('runtimepop', 'main_timeline.pop()', false, /main_timeline\\.pop/.test(all),
     'same');
   section = '时间线开始/结束回调';
   check('tlstart', 'on_timeline_start', false, /on_timeline_start/.test(all),
-    'needs a function');
+    'a node parameter; write one in the phase settings');
   check('tlfinish', 'on_timeline_finish', false, /on_timeline_finish/.test(all),
-    'needs a function');
+    'same');
   section = '文档示例里的其它 API';
   check('init', 'initJsPsych()', true, /initJsPsych\\(/.test(all));
   check('comparekeys', 'jsPsych.pluginAPI.compareKeys()', true,
@@ -942,6 +971,13 @@ def cmd_check():
                 broken_cases.append(f"phase case {name}: {c['forbiddenParams']}")
             if not c["noTokens"]:
                 broken_cases.append(f"phase case {name}: an @@TOKEN@@ survived")
+            if name == "custom node parameter":
+                want_props = sorted(["loop_function: function (data) { return false; }",
+                                     "repetitions: 2"])
+                if c["emitted"] != want_props:
+                    broken_cases.append(
+                        f"phase case {name}: emitted {c['emitted']}, expected {want_props} "
+                        f"— one key each, the custom one winning")
             if c.get("variablePlugin"):
                 broken_cases.append(
                     f"phase case {name}: the plugin became a timeline variable — "

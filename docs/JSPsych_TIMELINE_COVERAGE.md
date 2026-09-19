@@ -79,22 +79,22 @@
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| loop_function | ❌ 不做 | needs a function; the GUI has nowhere to put one |
-| conditional_function | ❌ 不做 | needs a predicate; the GUI has nowhere to put one |
+| loop_function | ❌ 不做 | the editor never writes one. Reachable by hand: node parameters in the phase settings take a JavaScript expression |
+| conditional_function | ❌ 不做 | same — a node parameter in the phase settings |
 
 ## 在运行时修改时间线
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| on_finish pushing onto the timeline | ❌ 不做 | on_finish is emitted only to score a trial |
+| on_finish pushing onto the timeline | ❌ 不做 | on_finish is emitted only to score a trial; a node parameter can add more |
 | main_timeline.pop() | ❌ 不做 | same |
 
 ## 时间线开始/结束回调
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| on_timeline_start | ❌ 不做 | needs a function |
-| on_timeline_finish | ❌ 不做 | needs a function |
+| on_timeline_start | ❌ 不做 | a node parameter; write one in the phase settings |
+| on_timeline_finish | ❌ 不做 | same |
 
 ## 文档示例里的其它 API
 
