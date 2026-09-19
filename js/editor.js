@@ -5184,6 +5184,9 @@ function _applyI18n() {
 
             resetEditor();
             editor.phases = exp.phases;
+            // Migrate first: the loop below reads `ph.timeline`, and an import in
+            // the older shape has `trials` until migratePos() renames it.
+            migratePos();
             editor.pc = 0; editor.tc = 0; editor.cc = 0;
             editor.phases.forEach(function (ph) {
               ph.id = 'ph' + ++editor.pc;
@@ -5195,7 +5198,6 @@ function _applyI18n() {
                 });
               });
             });
-            migratePos();
             // Ensure 3-phase structure
             if (editor.phases.length === 0 || editor.phases[0].name !== i18n('phase.instructions')) {
               var instrPh = { id:'ph_ai_inst', name: i18n('phase.instructions'), timeline:[{ id:'t_ai_inst', components:[ { id:'c_ai_txt', type:'text', content:'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize:20, color:'#333333', position:'center', fontWeight:'bold', cat:'s' }, { id:'c_ai_btn', type:'button', choices:['Start Experiment'], prompt:'', button_layout:'grid', grid_rows:1, grid_columns:0, trial_duration:0, stimulus_duration:0, response_ends_trial:true, enable_button_after:0, cat:'r' } ] }] };
@@ -5457,6 +5459,7 @@ function showVersionHistory() {
             var v = editor.versions[parseInt(btn.getAttribute('data-vi'))];
             saveState();
             editor.phases = JSON.parse(JSON.stringify(v.phases));
+            migratePos();
             editor.selectedTrial = v.selectedTrial;
             editor.selComp = v.selComp;
             editor.tc = v.tc;
