@@ -259,6 +259,27 @@ function phaseCases() {
         .map(function (x) { return x.trim().replace(/,$/, ''); }).sort()
     };
   })();
+  // The custom-parameter controls take an expression, and the common mistake is
+  // a statement. The message has to name it: "Unexpected token 'if'" is what the
+  // engine says, not what the researcher needs to hear.
+  (function () {
+    var said = null;
+    var realAlert = window.alert;
+    window.alert = function (m) { said = String(m); };
+    var errStatement = _jsExpressionError('if (x) { return true; }', 'loop_function');
+    var errFunction = _jsExpressionError('function (data) { return false; }', 'loop_function');
+    var errArrow = _jsExpressionError('(data) => data.values().length < 3', 'loop_function');
+    window.alert = realAlert;
+    out['expression validation'] = {
+      factored: false, uniform: false, trialsPerNode: [], forbiddenParams: [],
+      noTokens: true,
+      rejectsStatement: !!errStatement,
+      namesTheValue: !!errStatement && errStatement.indexOf('loop_function: <your text>') >= 0,
+      suggestsAFunction: !!errStatement && errStatement.indexOf('function (data)') >= 0,
+      acceptsFunction: !errFunction,
+      acceptsArrow: !errArrow
+    };
+  })();
   // Two conditions whose fixations jitter over different ranges. The jittered
   // duration is a value spanning several lines, and a table row is one line, so
   // factoring used to emit `{trial_duration: trial_duration: function () { …`
@@ -986,6 +1007,12 @@ def cmd_check():
                     broken_cases.append(
                         f"phase case {name}: emitted {c['emitted']}, expected {want_props} "
                         f"— one key each, the custom one winning")
+            if name == "expression validation":
+                for k, want in (("rejectsStatement", True), ("namesTheValue", True),
+                                ("suggestsAFunction", True), ("acceptsFunction", True),
+                                ("acceptsArrow", True)):
+                    if c[k] != want:
+                        broken_cases.append(f"phase case {name}: {k}={c[k]}, expected {want}")
             if c.get("variablePlugin"):
                 broken_cases.append(
                     f"phase case {name}: the plugin became a timeline variable — "

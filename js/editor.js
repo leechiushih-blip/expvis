@@ -1555,10 +1555,9 @@ function _applyI18n() {
             // Refuse code that will not parse rather than writing it into the
             // experiment: the error would otherwise surface in the participant's
             // browser at run time, as a blank screen. Same guard as sample.fn.
-            try {
-              new Function('return (' + src + ');');
-            } catch (e) {
-              alert('That is not a JavaScript expression:\n\n' + e.message);
+            var err2 = _jsExpressionError(src, row.name || 'this parameter');
+            if (err2) {
+              alert(err2);
               renderAll();
               return;
             }
@@ -1571,6 +1570,25 @@ function _applyI18n() {
       // The phase dialog is an overlay, so renderAll() does not repaint it.
       // These handlers need the dialog's own repaint, which it registers here.
       var _repaintPhaseSettings = null;
+      // Both custom-parameter controls take an EXPRESSION, because the value is
+      // emitted as `key: <text>`. The mistake people make is a statement — an
+      // `if (…) { … }`, a bare `return` — and "Unexpected token 'if'" does not
+      // say that, or what to write instead. Returns null when it parses.
+      function _jsExpressionError(src, name) {
+        try {
+          new Function('return (' + src + ');');
+          return null;
+        } catch (e) {
+          return 'That is not a JavaScript expression:\n\n' + e.message +
+            '\n\nThe text becomes:\n' +
+            '    ' + name + ': <your text>\n\n' +
+            'so it has to be an expression — usually a function literal:\n\n' +
+            '    function (data) { return data.values().length < 3; }\n\n' +
+            'A statement such as `if (…) { … }` or a bare `return` is not an ' +
+            'expression. Put it inside a function.';
+        }
+      }
+
       function _addNodeCustom(pid) {
         var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
         if (!ph) return;
@@ -1598,10 +1616,9 @@ function _applyI18n() {
             // Refuse code that will not parse rather than writing it into the
             // experiment: the error would surface in the participant's browser,
             // at run time, as a blank screen.
-            try {
-              new Function('return (' + src + ');');
-            } catch (e) {
-              alert('That is not a JavaScript expression:\n\n' + e.message);
+            var err = _jsExpressionError(src, row.name || 'this parameter');
+            if (err) {
+              alert(err);
               if (_repaintPhaseSettings) _repaintPhaseSettings();
               return;
             }
