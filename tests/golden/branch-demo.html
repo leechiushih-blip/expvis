@@ -44,8 +44,21 @@
     timeline.push(instructions_timeline);
 
     // ── Trials (2/3) ──
-    var trials_trial_1 = {
+    var trials_trial_2 = {
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press A for RED text</div></div>',
+      trial_duration: 1500
+    };
+
+    var trials_trial_4 = {
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press L for BLUE text</div></div>',
+      trial_duration: 1500
+    };
+
+    var trials_timeline = {
       timeline: [
+        // Trial 1
         {
           type: jsPsychHtmlKeyboardResponse,
           stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:60px;color:#ccc">+</div></div>',
@@ -61,18 +74,9 @@
           on_finish: function(data) {
             data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);
           }
-        }
-      ]
-    };
-
-    var trials_trial_2 = {
-      type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press A for RED text</div></div>',
-      trial_duration: 1500
-    };
-
-    var trials_trial_3 = {
-      timeline: [
+        },
+        trials_trial_2,
+        // Trial 3
         {
           type: jsPsychHtmlKeyboardResponse,
           stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:60px;color:#ccc">+</div></div>',
@@ -88,18 +92,9 @@
           on_finish: function(data) {
             data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);
           }
-        }
+        },
+        trials_trial_4
       ]
-    };
-
-    var trials_trial_4 = {
-      type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press L for BLUE text</div></div>',
-      trial_duration: 1500
-    };
-
-    var trials_timeline = {
-      timeline: [trials_trial_1, trials_trial_2, trials_trial_3, trials_trial_4]
     };
     timeline.push(trials_timeline);
 

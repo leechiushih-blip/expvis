@@ -3493,14 +3493,26 @@ function _applyI18n() {
           });
           for (var k = cursor; k < parts[0].lines.length; k++) procedure.push(parts[0].lines[k]);
 
-          // Drop the `var x = {` and `};` the single-trial emission wrapped it in;
-          // the node supplies its own braces and indentation.
+          // Drop the `var x = {` and `};` the single-trial emission wrapped it in.
           procedure = procedure.slice(1, -1);
-          var last = procedure[procedure.length - 1];
-          if (last.slice(-1) === ',') procedure[procedure.length - 1] = last.slice(0, -1);
+          var target;
+          if (parts[0].plain) {
+            // One trial: it is the node's one entry, so it goes back into braces
+            // at the indent an entry sits at.
+            target = ['    {']
+              .concat(procedure.map(function (l) { return '    ' + l; }))
+              .concat(['    }']);
+          } else {
+            // Several: drop the trial's own `timeline: [` … `]` too. Those
+            // trials ARE the node's timeline entries, not one entry containing
+            // them.
+            target = procedure.slice(1, -1);
+          }
+          var last = target[target.length - 1];
+          if (last.slice(-1) === ',') target[target.length - 1] = last.slice(0, -1);
 
           return {
-            procedure: procedure,
+            entries: [target],
             table: parts.map(function (p) {
               var row = {};
               varies.forEach(function (i) { row[names[i]] = p.slots[i].val; });
@@ -3580,6 +3592,29 @@ function _applyI18n() {
           code += '};\n';
           code += 'timeline.push(' + nodeName + ');\n\n';
         }
+        // One property — `timeline: [...]` — from a list of entry blocks. A
+        // block is the lines of one entry, already at the indent it will sit at
+        // (two levels, inside the node). The comma goes on a block's last line
+        // unless it is the last block.
+        function _timelineProp(blocks) {
+          // The one-line form, when every entry is a bare name: what a phase of
+          // plain trials has always produced. Anything else goes multi-line.
+          if (blocks.every(function (b) { return b.length === 1; })) {
+            var one = '  timeline: [' + blocks.map(function (b) {
+              return b[0].trim();
+            }).join(', ') + ']';
+            if (one.length <= 96) return [one];
+          }
+          var out = ['  timeline: ['];
+          blocks.forEach(function (b, i) {
+            b.forEach(function (l, j) {
+              out.push(l + (i < blocks.length - 1 && j === b.length - 1 ? ',' : ''));
+            });
+          });
+          out.push('  ]');
+          return out;
+        }
+
         // The phase settings as emitted properties, indented.
         function _nodeParamProps(ph, factored) {
           return _phaseNodeParams(ph, factored).map(function (p) { return ['  ' + p]; });
@@ -4112,8 +4147,17 @@ function _applyI18n() {
             if (!_plainNode) L(1, ']');
             L(0, '};');
 
-            phaseParts.push({kind: 'trial', name: trialName, lines: lines,
-                             slots: slots, hints: _trialHints});
+            phaseParts.push({
+              kind: 'trial', name: trialName, lines: lines, slots: slots,
+              hints: _trialHints, plain: _plainNode,
+              // A trial of several jsPsych trials — a fixation then the screen —
+              // contributes those trials directly to the phase's timeline. It
+              // used to be wrapped in a node of its own and referred to by name,
+              // which put a `timeline` inside a `timeline` for no gain: the
+              // wrapper carries no parameter, and jsPsych runs the same trials
+              // in the same order either way.
+              entries: _plainNode ? null : lines.slice(2, -2)   // `  timeline: [` … `  ]` removed
+            });
           });
 
           // Close the phase node. An empty phase contributes nothing to run, so
@@ -4164,39 +4208,38 @@ function _applyI18n() {
               }).join(', ') + '}' + (i < factored.table.length - 1 ? ',' : '') + '\n';
             });
             code += '];\n\n';
-            var procLines = ['  timeline: [', '    {'];
-            factored.procedure.forEach(function (l) { procLines.push('    ' + l); });
-            procLines.push('    }', '  ]');
-            _emitNode(nodeName, [procLines, ['  timeline_variables: ' + varName]]
+            _emitNode(nodeName, [_timelineProp(factored.entries),
+                                ['  timeline_variables: ' + varName]]
               .concat(_nodeParamProps(ph, true)));
             return;
           }
 
           // Plain trials: what the canvas shows, declared in order and then
           // collected into the node.
-          var phaseTrials = [];
+          var blocks = [];
           phaseParts.forEach(function (p) {
             // Said out loud rather than dropped in silence: the canvas shows this
             // trial, so its absence from the file needs an explanation.
             if (p.kind === 'skip') { code += p.note + '\n'; return; }
             // A raw part is a whole trial written out in one go (an animation).
             // It joins the node like any other, or the node's timeline never
-            // mentions it.
-            if (p.kind === 'raw') { code += p.text; phaseTrials.push(p.name); return; }
+            // mentions it. It carries no hints.
+            if (p.kind === 'raw') { code += p.text; blocks.push(['    ' + p.name]); return; }
             p.hints.forEach(function (h) { code += h + '\n'; });
+            // A trial of several jsPsych trials goes in whole, without a wrapper
+            // or a name to refer to it by. Flattening costs the one-to-one
+            // between a canvas trial and a line of code, so the trial gets a
+            // comment where its declaration would have been — otherwise the
+            // numbering appears to skip it.
+            if (p.entries) {
+              var n = /_(\d+)$/.exec(p.name);
+              blocks.push(['    // Trial ' + (n ? n[1] : '')].concat(p.entries));
+              return;
+            }
             code += p.lines.join('\n') + '\n\n';
-            phaseTrials.push(p.name);
+            blocks.push(['    ' + p.name]);
           });
-          var collected = '  timeline: [' + phaseTrials.join(', ') + ']';
-          var tlLines;
-          if (collected.length <= 96) {
-            tlLines = [collected];
-          } else {
-            tlLines = ['  timeline: ['];
-            phaseTrials.forEach(function (n) { tlLines.push('    ' + n); });
-            tlLines.push('  ]');
-          }
-          _emitNode(nodeName, [tlLines].concat(_nodeParamProps(ph, false)));
+          _emitNode(nodeName, [_timelineProp(blocks)].concat(_nodeParamProps(ph, false)));
         });
 
         code += 'jsPsych.run(timeline);\n';

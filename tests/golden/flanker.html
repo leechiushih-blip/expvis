@@ -44,23 +44,6 @@
     timeline.push(instructions_timeline);
 
     // ── Trials (2/3) ──
-    var trials_trial_1 = {
-      timeline: [
-        {
-          type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:60px;color:#ccc">+</div></div>',
-          choices: 'NO_KEYS',
-          trial_duration: 700,
-        },
-        {
-          type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:32px;color:#333333;font-weight:bold">New Text</div><div style="font-size:28px;color:#1a1a2e;font-weight:bold">&lt;&lt;&lt;&lt;&lt;</div><div style="font-size:28px;color:#ef4444;font-weight:bold">&gt;&lt;&gt;&lt;&gt;</div><div style="font-size:28px;color:#1a1a2e;font-weight:bold">&gt;&gt;&gt;&gt;&gt;</div><div style="font-size:28px;color:#ef4444;font-weight:bold">&lt;&gt;&lt;&lt;&gt;</div></div>',
-          choices: ["a","l"],
-          prompt: 'Press a key'
-        }
-      ]
-    };
-
     var trials_trial_2 = {
       type: jsPsychHtmlKeyboardResponse,
       stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:20px;color:#ef4444;font-weight:bold">Press the key according to the rules!</div></div>',
@@ -75,7 +58,23 @@
     };
 
     var trials_timeline = {
-      timeline: [trials_trial_1, trials_trial_2, trials_trial_3]
+      timeline: [
+        // Trial 1
+        {
+          type: jsPsychHtmlKeyboardResponse,
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:60px;color:#ccc">+</div></div>',
+          choices: 'NO_KEYS',
+          trial_duration: 700,
+        },
+        {
+          type: jsPsychHtmlKeyboardResponse,
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:32px;color:#333333;font-weight:bold">New Text</div><div style="font-size:28px;color:#1a1a2e;font-weight:bold">&lt;&lt;&lt;&lt;&lt;</div><div style="font-size:28px;color:#ef4444;font-weight:bold">&gt;&lt;&gt;&lt;&gt;</div><div style="font-size:28px;color:#1a1a2e;font-weight:bold">&gt;&gt;&gt;&gt;&gt;</div><div style="font-size:28px;color:#ef4444;font-weight:bold">&lt;&gt;&lt;&lt;&gt;</div></div>',
+          choices: ["a","l"],
+          prompt: 'Press a key'
+        },
+        trials_trial_2,
+        trials_trial_3
+      ]
     };
     timeline.push(trials_timeline);
 

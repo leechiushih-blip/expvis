@@ -44,8 +44,15 @@
     timeline.push(instructions_timeline);
 
     // ── Trials (2/3) ──
-    var trials_trial_1 = {
+    var trials_trial_2 = {
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#ef4444;font-weight:bold">Press the key for the FONT COLOR!<br>Red=A  Blue=L  Green=K</div></div>',
+      trial_duration: 1200
+    };
+
+    var trials_timeline = {
       timeline: [
+        // Trial 1
         {
           type: jsPsychHtmlKeyboardResponse,
           stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:60px;color:#ccc">+</div></div>',
@@ -57,18 +64,9 @@
           stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:32px;color:#333333;font-weight:bold">New Text</div><div style="font-size:36px;color:#ff0000;font-weight:bold">RED</div><div style="font-size:36px;color:#0000ff;font-weight:bold">RED</div><div style="font-size:36px;color:#00aa00;font-weight:bold">RED</div><div style="font-size:36px;color:#ff0000;font-weight:bold">BLUE</div><div style="font-size:36px;color:#0000ff;font-weight:bold">BLUE</div><div style="font-size:36px;color:#00aa00;font-weight:bold">BLUE</div><div style="font-size:36px;color:#ff0000;font-weight:bold">GREEN</div><div style="font-size:36px;color:#0000ff;font-weight:bold">GREEN</div></div>',
           choices: ["a","l"],
           prompt: 'Press a key'
-        }
+        },
+        trials_trial_2
       ]
-    };
-
-    var trials_trial_2 = {
-      type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#ef4444;font-weight:bold">Press the key for the FONT COLOR!<br>Red=A  Blue=L  Green=K</div></div>',
-      trial_duration: 1200
-    };
-
-    var trials_timeline = {
-      timeline: [trials_trial_1, trials_trial_2]
     };
     timeline.push(trials_timeline);
 

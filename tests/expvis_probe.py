@@ -477,7 +477,10 @@ function contentlessCases() {
     out[label] = {
       // A trial with nothing to show and nothing to ask is left out entirely
       // rather than run as a blank screen.
-      emitted: /var \\w+_trial_\\d+ = \\{/.test(trial),
+      // A trial of several jsPsych trials has no declaration of its own any
+      // more — its segments are spliced into the node's timeline — so what says
+      // it was emitted is that the node holds them.
+      emitted: inspectStructure(code).trialsPerNode.some(function (n) { return n; }),
       // How many jsPsych trials it became: a timed segment is one of its own,
       // and the response trial is another.
       parts: (trial.match(/type: jsPsych/g) || []).length,
@@ -817,6 +820,8 @@ def cmd_check():
         # pins that a fixation is timed rather than a screen.
         WANT = {
             "no components":                       {"emitted": False, "parts": 0},
+            # a fixation-only trial has no response screen: its timed segments
+            # ARE the trial, and they are spliced into the node's timeline
             "fixation only":                       {"emitted": True,  "parts": 1},
             "two fixations":                       {"emitted": True,  "parts": 2},
             "fixation + keyboard, prompt cleared": {"emitted": True,  "parts": 2,
@@ -968,13 +973,17 @@ def cmd_check():
                 broken_cases.append(
                     f"phase case animation trial: node collects {anim_nodes}, "
                     f"expected [1] — the trial would be declared and never run")
-            # A factored node holds the one procedure, not one entry per
-            # condition. Keyed on the case's own result: `want` above is the
-            # last value of a different loop.
-            if c["factored"] and c["trialsPerNode"] != [1]:
-                broken_cases.append(
-                    f"phase case {name}: node should hold the one procedure, "
-                    f"got {c['trialsPerNode']}")
+            # A factored node holds the procedure's ENTRIES, not one entry per
+            # condition. A plain procedure is one; a procedure that opens with a
+            # fixation is two, because that fixation is its own jsPsych trial and
+            # is spliced into the node's timeline rather than wrapped.
+            WANT_NODES = {"fixation, run as one procedure": [2]}
+            if c["factored"]:
+                want_nodes = WANT_NODES.get(name, [1])
+                got_nodes = [n for n in c["trialsPerNode"] if n is not None]
+                if got_nodes != want_nodes:
+                    broken_cases.append(
+                        f"phase case {name}: node holds {got_nodes}, expected {want_nodes}")
 
     bad = 0
     broken = (list(broken_cases) + list(broken_media) + list(broken_contentless)
