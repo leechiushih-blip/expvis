@@ -328,8 +328,9 @@ function phaseCases() {
       condTakesNoArg: /conditional_function: function \\(\\) \\{/.test(both.code),
       condReadsGlobal: /conditional_function:[\\s\\S]*?jsPsych\\.data\\.get\\(\\)/
         .test(both.code),
-      // `>=`, so a cap of ten runs ten rounds and not eleven
-      capIsExact: /if \\(\\+\\+rounds >= 10\\) return false;/.test(both.code)
+      // No cap of ExpVis's: the emitted function is the plain literal the
+      // docs use, and the counting closure that used to wrap it is gone
+      noCapWrapper: both.code.indexOf('rounds') < 0
     };
     // With no cap the output is the plain function literal the docs use.
     var uncapped = buildWith({field: 'correct', op: 'is', value: 'true', cap: 0}, null);
@@ -365,9 +366,11 @@ function phaseCases() {
         };
       }
       var stopsOnCorrect = make(3)(round([{correct: true}])) === false;
+      // Nothing stops it on its own: jsPsych has no limit and neither does the
+      // emitted function. That is the observable consequence of dropping the cap.
       var calls = 0, r = true;
-      var capped = make(3);
-      while (r && calls < 50) { r = capped(round([{correct: false}])); calls++; }
+      var unbounded = make(3);
+      while (r && calls < 50) { r = unbounded(round([{correct: false}])); calls++; }
       // LAST row, not first: a fixation, then the scored response
       var lastRowDecides =
         make(3)(round([{correct: true}, {correct: false}])) === true &&
@@ -377,7 +380,8 @@ function phaseCases() {
         factored: false, uniform: false, trialsPerNode: [],
         observedParams: [], expectParams: [], noTokens: true,
         stopsOnCorrect: stopsOnCorrect,
-        cappedAtThree: r === false && calls === 3,
+        // 50 calls and still saying continue — there is no cap of ExpVis's left
+        noCapOfItsOwn: r === true && calls === 50,
         capCalls: calls,
         lastRowDecides: lastRowDecides,
         emptyRoundSafe: emptyRoundSafe
@@ -680,6 +684,84 @@ function phaseCases() {
                                 /data: \\{correct_response: 'f'\\}/.test(plain),
       // two correct keys: categorize cannot score it, so it is not used
       severalKeysRefuse: /type: jsPsychImageKeyboardResponse/.test(twoKeys),
+    };
+  })();
+  // A plugin parameter written where the plugin does not run was dropped in
+  // silence: a medium sharing the screen with anything else falls back to the
+  // HTML path, which has no `trial_ends_after_audio` / `controls` / `start`.
+  // The researcher filled in a field and the file came back without it. It is
+  // named now — and only when there is something to name, so the two cases
+  // where nothing is lost stay quiet.
+  (function () {
+    function build(spec, setup) {
+      resetEditor();
+      addPhase('trials');
+      addTrial(editor.phases[0].id);
+      var t = findTrial(editor.selectedTrial);
+      spec.forEach(function (s) {
+        addComponent(t.id, s[0], s[1]);
+        var c = t.components[t.components.length - 1];
+        Object.keys(s[2] || {}).forEach(function (k) { c[k] = s[2][k]; });
+      });
+      if (setup) setup(t);
+      return _compileExperiment({}).code;
+    }
+    var KB = ['keyboard', 'r', {choices: ['f', 'j']}];
+    var TXT = ['text', 's', {content: 'listen'}];
+    var AUD = ['audio', 's', {fileData: 'data:audio/wav;base64,AAAA', fileName: 'tone.wav'}];
+    var VID = ['video', 's', {fileData: 'data:video/mp4;base64,AAAA', fileName: 'clip.mp4'}];
+    // alone: the audio plugin takes the parameter, so there is nothing dropped
+    var alone = build([AUD, KB], function (t) {
+      t.components[0].trial_ends_after_audio = true;
+    });
+    // sharing the screen AND the value moved off its default: the loss is real
+    var shared = build([AUD, TXT, KB], function (t) {
+      t.components[0].trial_ends_after_audio = true;
+    });
+    // sharing the screen but nothing was changed: nothing to warn about
+    var untouched = build([AUD, TXT, KB]);
+    var vid = build([VID, TXT, KB], function (t) {
+      t.components[0].controls = true;
+    });
+    out['dropped parameters are named'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      aloneIsSilent: alone.indexOf('does not exist') < 0,
+      untouchedIsSilent: untouched.indexOf('does not exist') < 0,
+      namesTheAudioParam: /shares the screen/.test(shared) &&
+                          /trial_ends_after_audio/.test(shared),
+      namesTheVideoParam: /shares the screen/.test(vid) &&
+                          /controls/.test(vid),
+      namesTheRemedy: /trial of its own/.test(shared),
+      // the warning is a comment, not something the participant ever sees
+      staysAComment: shared.indexOf('// !! This audio') >= 0,
+    };
+  })();
+  // The Inspector skipped `correctKey` entirely, so the field had no GUI path
+  // at all: a project built from scratch could not score anything, and the
+  // feedback chain — which needs exactly one key — was reachable only through
+  // a template or a hand-written parameter. It is an ordinary field now, and
+  // the retired 'Key Hint' label alongside it is gone.
+  (function () {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    addComponent(t.id, 'keyboard', 'r');
+    var kb = t.components[0];
+    kb.choices = ['a', 'l'];
+    editor.selComp = kb.id;
+    renderInspector();
+    var html = document.getElementById('inspector').innerHTML;
+    out['correct key is editable'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      // an input that writes the field back, the way every other field does
+      hasInput: html.indexOf("'" + t.id + "','" + kb.id + "','correctKey'") >= 0,
+      // labelled in words, not by the raw field name
+      labelled: html.indexOf('Correct Key') >= 0,
+      // the retired label is not rendered as a field of its own
+      retiredHintGone: html.indexOf('Key Hint') < 0
     };
   })();
   // The first task plugin. Cloze builds its own page — the text, a field per
@@ -1277,10 +1359,14 @@ function timelineDocCases() {
   check('trial', 'a trial is an object', true, /var \\w+ = \\{/.test(all));
   check('params', 'plugin parameters (stimulus …)', true, /stimulus:/.test(all));
   section = '多个试次';
+  // `false` because the editor genuinely cannot write trials that way — and that
+  // is a difference in how the FILE READS, not in what it runs. The why below
+  // says so, because the label alone would look like a capability gap.
   check('pushtrials', 'multiple trials as successive timeline.push()', false,
     /timeline\\.push\\(\\w*_trial_\\d+\\)/.test(all),
-    'ExpVis collects each phase into one node and pushes the node; pushing trials ' +
-    'individually is the same experiment written differently');
+    'each phase becomes one node and that node is pushed once; pushing the trials ' +
+    'individually describes the same experiment, so this is a difference in how ' +
+    'the file reads rather than in what it runs');
   section = '嵌套时间线';
   check('nested', 'an object with its own timeline', true, /timeline: \\[/.test(all));
   function carriesSharedParam(code) {
@@ -1301,8 +1387,16 @@ function timelineDocCases() {
   check('override', 'a child overriding an inherited value', 'byhand', false,
     'the editor inherits nothing, so there is nothing for it to override. A node ' +
     'parameter is how a researcher inherits one — and then a child trial overrides it');
-  check('depth', 'nesting any number of levels deep', false, shape.deepestTimeline > 2,
-    'two levels: the phase node, and the timed segments inside one trial');
+  // Two levels is what the compiler BUILDS, not the ceiling on what can be
+  // expressed. A custom parameter named `timeline` is matched by key
+  // (_applyCustomProps), so it replaces a node's or a trial's whole list with
+  // any literal — and jsPsych treats an object carrying `timeline` as a node.
+  // Measured: both directions nest one level deeper. Undocumented and
+  // unchecked, but reachable.
+  check('depth', 'nesting any number of levels deep', 'byhand',
+    shape.deepestTimeline > 2,
+    'two levels is the structure the compiler builds; deeper nesting is ' +
+    'reachable by hand through a custom parameter named `timeline`');
 
   section = '时间线变量';
   check('tv', 'timeline_variables', true, /timeline_variables: \\w+/.test(all));
@@ -1703,7 +1797,7 @@ def cmd_check():
                             f"phase case {name}: {why} — {c[field]}")
             if name == "phase conditions":
                 for k in ("loopNegated", "condNotNegated", "loopReadsLastRow",
-                          "condTakesNoArg", "condReadsGlobal", "capIsExact"):
+                          "condTakesNoArg", "condReadsGlobal", "noCapWrapper"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "uncapped loop":
@@ -1713,7 +1807,7 @@ def cmd_check():
                         f"noCounter={c['noCounter']}")
             if name == "loop behaviour":
                 # text can be right while the meaning is inverted, so drive it
-                for k in ("stopsOnCorrect", "cappedAtThree", "lastRowDecides",
+                for k in ("stopsOnCorrect", "noCapOfItsOwn", "lastRowDecides",
                           "emptyRoundSafe"):
                     if not c[k]:
                         broken_cases.append(
@@ -1772,6 +1866,15 @@ def cmd_check():
                 for k in ("imageUsesImagePlugin", "htmlUsesHtmlPlugin", "feedbackEmitted",
                           "keyAnswerEmitted", "pluginDoesTheScoring",
                           "withoutFeedbackUnchanged", "severalKeysRefuse"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "dropped parameters are named":
+                for k in ("aloneIsSilent", "untouchedIsSilent", "namesTheAudioParam",
+                          "namesTheVideoParam", "namesTheRemedy", "staysAComment"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "correct key is editable":
+                for k in ("hasInput", "labelled", "retiredHintGone"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "cloze page":

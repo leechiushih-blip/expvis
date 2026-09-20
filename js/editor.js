@@ -1034,7 +1034,7 @@ function _applyI18n() {
         fontWeight: 'Weight',
         shape: 'Shape',
         size: 'Size',
-        correctKeyHint: 'Key Hint',
+        correctKey: 'Correct Key',
         width: 'Width',
         stimulus_width: 'Stimulus Width',
         stimulus_height: 'Stimulus Height',
@@ -2096,37 +2096,19 @@ function _applyI18n() {
         }
         return '(' + v + ' && ' + expr + ')';
       }
-      // jsPsych puts no limit on loop_function: a condition that never becomes
-      // true repeats the node forever and hangs the session. The cap is
-      // ExpVis's guard, and it is a setting the researcher can see and turn
-      // off rather than one added behind their back — with no cap the output is
-      // the plain function literal the docs use.
+      // A plain function literal, the shape the docs use. It carries NO cap of
+      // ExpVis's: an earlier version wrapped it in a counting closure, which
+      // made the emitted experiment behave differently from the jsPsych it
+      // claims to be — the one place the editor changed what a trial means.
+      // jsPsych has no limit of its own, so a condition that never becomes true
+      // repeats the node forever; the dialog says so instead of quietly
+      // altering the experiment.
       function _loopFunctionSrc(ph) {
         var l = (ph && ph.loop) || {};
-        var cap = Math.round(Number(l.cap) || 0);
-        if (cap <= 0) {
-          return 'function (data) {\n' +
-            '    var last = data.last(1).values()[0];\n' +
-            '    return !' + _condExpr('last', l) + ';\n' +
-            '  }';
-        }
-        // `>=`, not `>`: jsPsych's `do { … } while (t(data))` calls this once
-        // per round, so the call that returns false ends a round that already
-        // ran. `> cap` would let one more through and make "at most 10" mean 11.
-        //
-        // The comment travels into the generated file on purpose: the counter is
-        // not jsPsych's, and a reader who meets it there deserves to know where
-        // it came from and why it is there.
-        return '(function () {\n' +
-          '    // Added by ExpVis, not jsPsych: a loop_function that never\n' +
-          '    // becomes false would repeat this node forever.\n' +
-          '    var rounds = 0;\n' +
-          '    return function (data) {\n' +
-          '      if (++rounds >= ' + cap + ') return false;\n' +
-          '      var last = data.last(1).values()[0];\n' +
-          '      return !' + _condExpr('last', l) + ';\n' +
-          '    };\n' +
-          '  })()';
+        return 'function (data) {\n' +
+          '    var last = data.last(1).values()[0];\n' +
+          '    return !' + _condExpr('last', l) + ';\n' +
+          '  }';
       }
       // No cap here: jsPsych asks this one at most once per node run.
       function _conditionalFunctionSrc(ph) {
@@ -2298,7 +2280,7 @@ function _applyI18n() {
           var hints = {
             choices: 'Comma-separated keys, e.g. a,l. Leave EMPTY for any key (jsPsych ALL_KEYS).',
             wait_for_key_release: 'Measure rt to the key RELEASE instead of the press (also records rt_key_duration).',
-            correctKey: 'Participant must press this key for a correct response. Supports comma-separated values (e.g. a,l). Leave empty if using 🎲 randomize pick-one.',
+            correctKey: 'The key a correct response uses. Comma-separated for several (e.g. a,l). Leave empty for a trial that is not scored — and note that a feedback message needs exactly one key, since jsPsych\'s categorize plugin scores against a single one.',
             trial_duration: 'Trial Duration (ms). 0=no limit. If >0, auto-judges as timeout and records RT when exceeded.',
             choices: 'Comma-separated button labels, e.g. Yes,No. Exported as the jsPsych `choices` array.',
             frames: 'Upload the frames in playback order. They are played as a flipbook, one image at a time.',
@@ -2346,7 +2328,12 @@ function _applyI18n() {
             if (k === 'id' || k === 'cat' || k === 'type' || k === 'fileData' ||
                 k === 'fileName' || k === 'frames' ||   // frames have their own uploader below
                 k === 'questions') return;              // questions have their own list below
-            if (k === 'correctKey' || k === '颜色按键映射' || k === '按键映射' || k === 'correctKeyHint') return;
+            // `correctKey` used to be skipped here, which left no GUI path to it
+            // at all: a project built from scratch could not score anything, and
+            // the feedback chain (which needs one key) was unreachable without a
+            // template or a hand-written parameter. It is an ordinary field.
+            // The other three are retired names and a dead label.
+            if (k === '颜色按键映射' || k === '按键映射' || k === 'correctKeyHint') return;
             var v = c[k];
             var displayLabel = propLabel[k] || k;
             // textInput reuses `name` (variable name) and `prompt` (key prompt) for
@@ -4035,11 +4022,11 @@ function _applyI18n() {
         // Build styled stimulus HTML for a component. This is what the generated
         // file contains; the previews render the real plugin instead, so nothing
         // here has to imitate a plugin's DOM.
-        // ---- Self-rendered response controls -------------------------------
-        // jsPsych's *-button / *-slider / survey-text plugins render their controls
-        // *below* the stimulus, which is why a positioned control ended up
-        // outside the canvas. We draw the controls into the stimulus HTML at their
-        // real coordinates and end the trial ourselves with jsPsych.finishTrial().
+        // There is no self-rendered response path any more. Every response
+        // component runs on its own plugin, and the editor never calls
+        // `finishTrial` itself — the plugins do. This comment used to sit above a
+        // directive to do exactly that, and reading it suggested otherwise.
+        //
         // jsPsych's ParameterType.KEYS takes an ARRAY of key strings, or one of
         // the sentinel strings "ALL_KEYS" / "NO_KEYS". (A comma-separated string
         // is not one of the accepted forms — it falls through to
@@ -4656,6 +4643,36 @@ function _applyI18n() {
               _mediaRef(stims[0])) ? stims[0] : null;
             var mediaPlugin = mediaOnlyComp
               ? (_mediaPlugins[mediaOnlyComp.type][respType] || null) : null;
+            // A medium sharing the screen with anything else falls back to the HTML
+            // path, where its plugin's parameters do not exist. Writing one there
+            // was dropped in silence; the researcher had filled in a field and got
+            // nothing. Say which ones are being ignored, and only when the value
+            // was actually moved off its default.
+            if (!mediaPlugin) {
+              stims.forEach(function (c) {
+                var dropped = [];
+                if (c.type === 'audio') {
+                  if (c.trial_ends_after_audio === true || c.trial_ends_after_audio === 'true')
+                    dropped.push('trial_ends_after_audio');
+                  if (c.response_allowed_while_playing === false ||
+                      c.response_allowed_while_playing === 'false')
+                    dropped.push('response_allowed_while_playing');
+                } else if (c.type === 'video') {
+                  if (c.autoplay === false || c.autoplay === 'false') dropped.push('autoplay');
+                  if (c.controls === true || c.controls === 'true') dropped.push('controls');
+                  if (Number(c.start)) dropped.push('start');
+                  if (Number(c.stop)) dropped.push('stop');
+                } else {
+                  return;
+                }
+                if (dropped.length) {
+                  logic.hints.push('// !! This ' + c.type + ' shares the screen with something ' +
+                    'else, so the trial runs on the HTML path — where ' + dropped.join(', ') +
+                    ' does not exist and is not emitted. Give the ' + c.type +
+                    ' a trial of its own to keep ' + (dropped.length === 1 ? 'it' : 'them') + '.');
+                }
+              });
+            }
 
             // ---- feedback: a filled message moves the trial onto jsPsych's own
             // categorize plugin, which scores the response and shows the answer
@@ -5482,9 +5499,11 @@ function _applyI18n() {
             'the condition reads. It records no response and no score — move the ' +
             'fixation before the stimulus, or the condition will read the wrong row.');
         }
-        if (draft.loop.on && !(Number(draft.loop.cap) > 0)) {
-          out.push('No cap on the loop. jsPsych has none of its own, so a ' +
-            'condition that never comes true hangs the session with no way out.');
+        if (draft.loop.on) {
+          out.push('jsPsych itself puts no limit on a loop: if the condition never ' +
+            'becomes true the block repeats until the session is abandoned. The ' +
+            'exported file is left to behave exactly as jsPsych does, so make sure ' +
+            'the condition can come true.');
         }
         if (draft.cond.on && editor.phases.indexOf(ph) === 0) {
           out.push('This is the first phase, so there is no earlier trial for the ' +
@@ -5526,7 +5545,6 @@ function _applyI18n() {
             field: (ph.loop && ph.loop.field) || 'correct',
             op: (ph.loop && ph.loop.op) || 'is',
             value: ph.loop && ph.loop.value != null ? String(ph.loop.value) : 'true',
-            cap: ph.loop && ph.loop.cap != null ? ph.loop.cap : 10,
           },
           cond: {
             on: !!ph.cond,
@@ -5686,17 +5704,11 @@ function _applyI18n() {
           h += '<div style="border-top:1px solid var(--border);margin:12px 0 0"></div>';
           h += '<datalist id="ps-cond-fields"><option value="correct"></option>' +
             '<option value="response"></option><option value="rt"></option></datalist>';
-          h += _condRow('ps-loop', draft.loop, 'Repeat this block until',
-            (draft.loop.on
-              ? '<span style="font-size:0.76rem">at most</span>' +
-                '<input id="ps-loop-cap" type="number" min="0" value="' +
-                _escAttr(String(draft.loop.cap)) + '" style="' + NUM + '">' +
-                '<span style="font-size:0.76rem">times</span>'
-              : ''),
+          h += _condRow('ps-loop', draft.loop, 'Repeat this block until', '',
             'Repeats while the condition is false, so it reads as “until”. ' +
-            'The cap is what keeps a condition that never comes true from ' +
-            'hanging the session — jsPsych has none of its own. 0 = no cap. ' +
-            'Counted across the node, not once per repetition.');
+            'jsPsych puts no limit on how many times this can happen: a condition ' +
+            'that never becomes true repeats the block until the session is ' +
+            'abandoned. Make sure it can come true.');
           h += _condRow('ps-cond', draft.cond, 'Run this block only when', '',
             'Reads the whole experiment’s data — jsPsych passes this function ' +
             'nothing. A false answer skips the block entirely, including its ' +
@@ -5842,8 +5854,6 @@ function _applyI18n() {
             var v = document.getElementById('ps-' + k + '-value');
             if (v) draft[k].value = v.value;
           });
-          var cap = document.getElementById('ps-loop-cap');
-          if (cap) draft.loop.cap = Math.max(0, Math.round(Number(cap.value) || 0));
         }
         function refreshNotes() {
           var el = document.getElementById('ps-notes');
@@ -5921,7 +5931,7 @@ function _applyI18n() {
           }
           var loopSpec = draft.loop.on ? {
             field: draft.loop.field, op: draft.loop.op,
-            value: draft.loop.value, cap: draft.loop.cap
+            value: draft.loop.value
           } : null;
           var condSpec = draft.cond.on ? {
             field: draft.cond.field, op: draft.cond.op, value: draft.cond.value
@@ -6344,41 +6354,51 @@ function _applyI18n() {
           var sysPrompt =
             'You are an online behavioral experiment builder. Generate a complete experiment structure JSON based on the user\'s description.\n\n' +
             '⚠ IMPORTANT: Output all text content, labels, and instructions in ENGLISH. Use English for all user-facing text.\n\n' +
-            '【Output Format】Strict JSON only - no markdown code blocks, no comments. Must contain 3 phases:\n' +
+            '【Output Format】Strict JSON only - no markdown code blocks, no comments.\n' +
             '{"phases":[\n' +
-            '  {"type":"instructions","color":"i","trials":[{"id":"t1","components":[text(instructions)+button(start)]}]},\n' +
-            '  {"type":"trials","color":"t","trials":[{"id":"t2","components":[fixation+randomize(if needed)+stimulus×N+response+branch(if needed)+loop]}]},\n' +
-            '  {"type":"feedback","color":"f","trials":[{"id":"tN","components":[text(thanks)]}]}\n' +
-            ']}\n\n' +
-            '【Full Component Schema】(cat: s=stimulus r=response l=logic)\n\n' +
-            'text:       {type:"text",content:"text",fontSize:32,color:"#333333",position:"center",fontWeight:"bold",newStep:false,step_duration:500,"映射按键":"a",cat:"s"}\n' +
-            'shape:      {type:"shape",shape:"circle|square|triangle|diamond|star",size:80,color:"#6366f1",position:"center","映射按键":"a",cat:"s"}\n' +
+            '  {"name":"Instructions","timeline":[{"id":"t1","components":[text(instructions)+button(start)]}]},\n' +
+            '  {"name":"Trials","timeline":[{"id":"t2","components":[fixation+stimulus×N+response]}]},\n' +
+            '  {"name":"Feedback","timeline":[{"id":"tN","components":[text(thanks)]}]}\n' +
+            ']}\n' +
+            'A phase has a NAME and a `timeline` of trials. There is no phase type and no colour.\n' +
+            'Instructions and Feedback as above are conventional, not required — use as many phases as the design needs.\n\n' +
+            '【Full Component Schema】(cat: s=stimulus r=response x=owns the whole trial)\n\n' +
+            'text:       {type:"text",content:"text",fontSize:32,color:"#333333",position:"center",fontWeight:"bold",cat:"s"}\n' +
+            'shape:      {type:"shape",shape:"circle|square|triangle|diamond|star",size:80,color:"#6366f1",position:"center",cat:"s"}\n' +
             'fixation:   {type:"fixation",trial_duration:500,durationMin:0,durationMax:0,durationStep:250,cat:"s"}\n' +
-            'image:      {type:"image",fileData:"",fileName:"",stimulus_width:200,stimulus_height:0,maintain_aspect_ratio:true,render_on_canvas:true,"映射按键":"",cat:"s"}\n' +
-            'animation:  {type:"animation",frames:[],frame_time:250,frame_isi:0,sequence_reps:1,choices:[],prompt:"",render_on_canvas:true,cat:"s"}  // OWNS the display; never combine with other components\n' +
-            'audio:      {type:"audio",fileData:"",fileName:"",cat:"s"}\n' +
-            'video:      {type:"video",fileData:"",fileName:"",width:320,cat:"s"}\n' +
+            'image:      {type:"image",fileData:"",fileName:"",stimulus_width:200,stimulus_height:0,maintain_aspect_ratio:true,render_on_canvas:true,cat:"s"}\n' +
+            'animation:  {type:"animation",frames:[],frame_time:250,frame_isi:0,sequence_reps:1,choices:[],prompt:"",render_on_canvas:true,cat:"x"}  // OWNS the trial; never combine with anything\n' +
+            'audio:      {type:"audio",fileData:"",fileName:"",trial_ends_after_audio:false,response_allowed_while_playing:true,cat:"s"}\n' +
+            'video:      {type:"video",fileData:"",fileName:"",width:320,height:0,autoplay:true,controls:false,start:0,stop:0,cat:"s"}\n' +
             'keyboard:   {type:"keyboard",choices:["a","l"],correctKey:"",prompt:"Press a key",trial_duration:0,stimulus_duration:0,response_ends_trial:true,wait_for_key_release:false,cat:"r"}\n' +
             'button:     {type:"button",choices:["Yes","No"],prompt:"",button_layout:"grid",grid_rows:1,grid_columns:0,trial_duration:0,stimulus_duration:0,response_ends_trial:true,enable_button_after:0,cat:"r"}\n' +
             'slider:     {type:"slider",min:0,max:100,step:1,slider_start:50,labels:[],button_label:"Continue",slider_width:0,require_movement:false,prompt:"",trial_duration:0,stimulus_duration:0,response_ends_trial:true,cat:"r"}\n' +
             'textInput:  {type:"textInput",prompt:"",placeholder:"Type here",name:"Q0",required:false,rows:1,columns:40,button_label:"Continue",autocomplete:false,cat:"r"}  // no right answer, no timeout\n' +
-            'loop:       {type:"loop",count:48,cat:"l"}\n' +
-            'branch:     {type:"branch",condition:"correct",matchValue:"",targetFail:"",operator:">=",compareValue:"",cat:"l"}\n' +
-            'randomize:  {type:"randomize",mode:"pick-one",cat:"l"}\n' +
-            'variable:   {type:"variable",name:"score",initial:0,mode:"correct",cat:"l"}\n\n' +
+            'textInput:  {type:"textInput",questions:[{prompt:"",placeholder:"Enter text",required:false}],button_label:"Continue",preamble:"",autocomplete:false,cat:"r"}\n' +
+            'likert:     {type:"likert",questions:[{prompt:"",labels:["Disagree","Neutral","Agree"],required:false}],scale_width:0,randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
+            'multiChoice:{type:"multiChoice",questions:[{prompt:"",options:["A","B"],required:false,horizontal:false}],randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
+            'multiSelect:{type:"multiSelect",questions:[{prompt:"",options:["A","B"],required:false,horizontal:false}],randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
+            'htmlForm:   {type:"htmlForm",html:"<input name=answer type=text>",button_label:"Continue",preamble:"",cat:"r"}\n' +
+            'cloze:      {type:"cloze",text:"The capital of France is %Paris%.",button_text:"OK",check_answers:false,allow_blanks:true,case_sensitivity:true,cat:"x"}  // OWNS the trial\n' +
+            'freeSort:   {type:"freeSort",stimuli:[],stim_width:100,stim_height:100,sort_area_width:700,sort_area_height:700,sort_area_shape:"ellipse",prompt:"",prompt_location:"above",button_label:"Continue",stim_starts_inside:false,cat:"x"}  // OWNS the trial\n\n' +
+            'NOTE: textInput and the four survey-* components all carry a `questions` ARRAY — a page may ask several.\n' +
+            'NOTE: text/shape/image/audio/video carry EMPTY fileData — the researcher uploads the file afterwards.\n\n' +
             '【Color Rules — CRITICAL! Preview background is WHITE #fff】\n' +
             '  Text color must use DARK colors (#333, #1a1a2e, #1e293b). NEVER use #fff/#ffffff/white/light gray!\n' +
             '  Button color: medium-dark (#6366f1, #ef4444, #3b82f6). Do NOT use white!\n' +
             '  Shape color: vivid dark (#ef4444, #22c55e, #3b82f6, #6366f1). Do NOT use white!\n' +
             '  Keyboard: `choices` is an ARRAY of key strings, e.g. ["a","l"]. Write "space" for the spacebar.\n' +
             '    An EMPTY array means any key (jsPsych ALL_KEYS). `correctKey` scores the trial.\n\n' +
-            '【Standard Trial Structure — follow STRICTLY】\n' +
-            '[fixation] → [randomize(if multiple stimuli)] → [stimulus(text/shape)×N] → [response(keyboard/button/slider/textInput)] → [branch(if error feedback needed)] → [loop]\n' +
-            '  ⚠ Every trial MUST end with loop, or it runs only once!\n' +
+            '【Standard Trial Structure】\n' +
+            '[fixation] → [stimulus(text/shape/image/audio/video)×N] → [response(keyboard/button/slider/survey)]\n' +
+            '  ⚠ A trial shows ONE screen, and every visual component in it appears at once.\n' +
+            '    To show A then B, make two trials — or put a fixation between them, which becomes a timed trial of its own.\n' +
             '  ⚠ Set the fixation duration (e.g. 500-700) to control the inter-stimulus interval\n' +
             '  ⚠ For a button trial, `choices` is an ARRAY of button labels, not a comma-separated string\n' +
-            '  ⚠ Multiple stimulus variants MUST be wrapped in randomize, or all display at once!\n' +
-            '  ⚠ Logic components (loop/branch/randomize/variable) have cat="l"\n\n' +
+            '  ⚠ A trial holds at most ONE response component — one plugin runs per trial.\n' +
+            '  ⚠ animation / cloze / freeSort OWN the trial: nothing may sit beside them.\n' +
+            '  ⚠ There is no loop, branch, randomize or variable component. A phase repeats via its own settings\n' +
+            '    (repetitions / sample / randomize_order), not via a component.\n\n' +
             '【Layout】Components stack in document flow — there are NO x/y coordinates.\n' +
             '  `position` is alignment only: "center" (default), "left", or "right".\n' +
             '  Order in the components array IS the vertical order on screen.\n' +
@@ -6392,40 +6412,32 @@ function _applyI18n() {
             '    Small devices (w<500): reduce all sizes by ~30%\n' +
             '    Large screens (w>1500): increase stimuli up to ' + Math.round(dev.h * 0.1) + 'px\n\n' +
             '【ID System】Trials "t1","t2"... Components "c1","c2"... globally sequential across all phases\n\n' +
-            '【randomize + key mapping mechanism】\n' +
-            '  Two modes: pick-one (select 1 variant per loop) and shuffle (show all, random order)\n' +
-            '  Set "映射按键" (key mapping) property on text/shape inside randomize (e.g., "a", "l", "f", "j", " ")\n' +
-            '  When pick-one selects a variant, its mapped key becomes the correct key for keyboard response\n\n' +
-            '【branch — three condition modes】\n' +
-            '  condition:"correct"  → match key correctness: targetFail=target trial on error\n' +
-            '  condition:"response" → match response value: matchValue="v1,v2" comma-separated\n' +
-            '  condition:"variable" → compare variable: matchValue="varName", operator:">=|<=|>|<|==|!=", compareValue:number\n' +
-            '  targetFail = target trial ID. Empty = retry current trial. Branch goes after response\n' +
-            '  ⚠ Error feedback trials must be AFTER the main trial!\n\n' +
-            '【variable — three counting modes】\n' +
-            '  mode:"correct"→+1 on correct  mode:"always"→+1 each time  mode:"manual"→manual control\n' +
-            '  Place at trial start (before fixation). Use name in branch(variable)\n\n' +
+            '【Scoring and feedback】\n' +
+            '  Set `correctKey` on a keyboard component to score it: the exported trial records\n' +
+            '  `correct` per response. Leave it empty for a trial that is not scored.\n' +
+            '  Writing `correct_text` / `incorrect_text` on that keyboard component switches the trial\n' +
+            '  onto jsPsych\'s categorize plugin, which shows the message itself — and then `correctKey`\n' +
+            '  must name exactly ONE key, because that plugin scores against a single one.\n' +
+            '  There is no in-trial branching: to react to a response, score it and use a later trial.\n\n' +
             '【Experiment Patterns】\n' +
-            '  Stroop: texts(different colors/words, each with key mapping a/l/k) → randomize(pick-one) → keyboard(choices:["a","l","k"]) → branch(correct→error page) → loop(48)\n' +
-            '  Simon: shapes(red/green × left/right = 4 variants, each with key mapping a/l) → randomize(pick-one) → keyboard(choices:["a","l"]) → branch(correct→error page) → loop(60)\n' +
-            '  Flanker: 5 arrow text variants with explicit 映射按键 f/j based on MIDDLE arrow direction:\n' +
-            '    "<<<<<" (5 left)   → 映射按键:"f" (middle ←)\n' +
-            '    ">>>>>" (5 right)  → 映射按键:"j" (middle →)\n' +
-            '    "><><>" (conflict, middle >) → 映射按键:"j"\n' +
-            '    "<><<>" (conflict, middle <) → 映射按键:"f"\n' +
-            '    ">>><>" (conflict, middle >) → 映射按键:"j"\n' +
-            '    keyboard(choices:["f","j"],trial_duration:1500) → branch(correct→error page) → loop(80)\n' +
-            '  Memory: variable(name,initial) → randomize(shuffle) → texts → textInput(prompt,placeholder,name) → loop\n' +
-            '  Survey: text(question, top) + textInput(answer key, bottom) + loop\n' +
-            '  Game: text(instructions) + slider(amount,min:0,max:100) + loop\n\n' +
+            '  Stroop: one trial per condition — text(word, coloured) + keyboard(choices, correctKey) — then a phase\n' +
+            '    whose settings repeat it and sample the order. The varying word lives in the phase\'s\n' +
+            '    condition table (one trial per condition, values filled in per condition).\n' +
+            '  Flanker: text("<<<<<") + keyboard(choices:["f","j"], correctKey:"f"), and a trial per arrow direction.\n' +
+            '  Simon: shape(colour, position:"left"|"right") + keyboard(choices:["a","l"], correctKey).\n' +
+            '  Memory / Survey: a single trial with text + textInput(questions:[...]) — several questions on one page.\n' +
+            '  Rating: text(instructions) + slider(min,max,step,labels).\n\n' +
             '【FORBIDDEN — common causes of invalid JSON】\n' +
             '  ❌ text color = #fff/white → invisible on white background\n' +
             '  ❌ Two components expected to overlap → impossible, they stack in flow\n' +
             '  ❌ randomize present but text/shape missing key mapping → keyboard has no correct key\n' +
-            '  ❌ Error feedback trial placed BEFORE main trial → preview shows error first\n' +
-            '  ❌ Trial missing loop → only runs once\n' +
+            '  ❌ A loop / branch / randomize / variable component → they do not exist; a phase repeats through its settings\n' +
+          // `%n%` and `%s%` belong to the cloze and free-sort plugins' own counter text,
+          // not to this prompt — it is not a percent-format.
+            '  ❌ A `step_duration`, `newStep` or "映射按键" field → removed; a trial shows one screen\n' +
             '  ❌ No blank-pause component exists → use the fixation duration instead\n' +
-            '  ❌ Multiple stimuli without randomize → all display simultaneously\n' +
+            '  ❌ Two response components in one trial → only the first is generated\n' +
+            '  ❌ Anything beside an animation / cloze / freeSort → those own the whole trial\n' +
             '  ❌ JSON trailing commas or comments\n' +
             '  ❌ Single quotes instead of double quotes';
 
@@ -6454,17 +6466,16 @@ function _applyI18n() {
                 });
               });
             });
-            // Ensure 3-phase structure
-            if (editor.phases.length === 0 || editor.phases[0].name !== i18n('phase.instructions')) {
-              var instrPh = { id:'ph_ai_inst', name: i18n('phase.instructions'), timeline:[{ id:'t_ai_inst', components:[ { id:'c_ai_txt', type:'text', content:'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize:20, color:'#333333', position:'center', fontWeight:'bold', cat:'s' }, { id:'c_ai_btn', type:'button', choices:['Start Experiment'], prompt:'', button_layout:'grid', grid_rows:1, grid_columns:0, trial_duration:0, stimulus_duration:0, response_ends_trial:true, enable_button_after:0, cat:'r' } ] }] };
-              editor.phases.unshift(instrPh);
-              editor.tc++; editor.cc += 2;
-            }
-            var lastPh = editor.phases[editor.phases.length - 1];
-            if (!lastPh || lastPh.name !== i18n('phase.feedback')) {
-              var fbPh = { id:'ph_ai_fb', name: i18n('phase.feedback'), timeline:[{ id:'t_ai_fb', components:[ { id:'c_ai_fbt', type:'text', content:'Experiment complete!\n\nThank you for your participation.', fontSize:24, color:'#333333', position:'center', fontWeight:'bold', cat:'s' } ] }] };
-              editor.phases.push(fbPh);
-              editor.tc++; editor.cc++;
+            // Fill only a real gap: an answer with no phases at all. This used to
+            // insist on a phase literally named "Instructions" first and
+            // "Feedback" last, and would insert one beside a phase the model had
+            // named differently — a phase may be called anything, so that was
+            // editing a good answer to match a bad assumption.
+            if (editor.phases.length === 0) {
+              editor.phases.push({ name: 'Instructions', timeline: [{ components: [
+                { type: 'text', content: 'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize: 20, color: '#333333', position: 'center', fontWeight: 'bold', cat: 's' },
+                { type: 'button', choices: ['Start Experiment'], prompt: '', button_layout: 'grid', grid_rows: 1, grid_columns: 0, trial_duration: 0, stimulus_duration: 0, response_ends_trial: true, enable_button_after: 0, cat: 'r' }
+              ] }] });
             }
             if (editor.phases.length > 0 && editor.phases[0].timeline.length > 0) {
               editor.selectedTrial = editor.phases[0].timeline[0].id;

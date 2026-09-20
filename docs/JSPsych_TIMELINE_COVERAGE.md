@@ -6,7 +6,7 @@
 
 来源: <https://shaobin-jiang.github.io/jsPsych-Chinese-Documentation/v8/overview/timeline/>
 
-**24 条已实现 · 8 条手写可达 · 2 条做不到 · 34 条合计。**
+**24 条已实现 · 9 条手写可达 · 1 条做不到 · 34 条合计。**
 
 **✍️ 手写可达** = 编辑器不会自己写,但研究者可以 —— 在试次或节点上写一条自定义参数。
 **❌ 做不到** = 怎么都表达不了。
@@ -30,7 +30,7 @@
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| multiple trials as successive timeline.push() | ❌ 做不到 | ExpVis collects each phase into one node and pushes the node; pushing trials individually is the same experiment written differently |
+| multiple trials as successive timeline.push() | ❌ 做不到 | each phase becomes one node and that node is pushed once; pushing the trials individually describes the same experiment, so this is a difference in how the file reads rather than in what it runs |
 
 ## 嵌套时间线
 
@@ -39,7 +39,7 @@
 | an object with its own timeline | ✅ 有 |  |
 | a node's parameters inherited by its children | ✍️ 手写可达 | ExpVis writes every parameter on each trial rather than lifting shared ones to the node. Same output; it just repeats itself |
 | a child overriding an inherited value | ✍️ 手写可达 | the editor inherits nothing, so there is nothing for it to override. A node parameter is how a researcher inherits one — and then a child trial overrides it |
-| nesting any number of levels deep | ❌ 做不到 | two levels: the phase node, and the timed segments inside one trial |
+| nesting any number of levels deep | ✍️ 手写可达 | two levels is the structure the compiler builds; deeper nesting is reachable by hand through a custom parameter named `timeline` |
 
 ## 时间线变量
 
