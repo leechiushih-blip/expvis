@@ -1220,7 +1220,7 @@ function phaseCases() {
 
     // The five phase controls the compiler reads. The prompt has to name the
     // same five, or "repeat this 48 times" has no spelling the model can use.
-    var controls = ['repetitions', 'randomize_order', 'sample', 'loop', 'cond'];
+    var controls = ['repetitions', 'randomize_order', 'sample', 'loop', 'cond', 'conditions'];
     var missingControls = controls.filter(function (c) {
       return sys.indexOf(c) < 0;
     });
@@ -1243,6 +1243,65 @@ function phaseCases() {
       controlsNamed: missingControls.length === 0,
       sampleTypesNamed: missingSample.length === 0,
       operatorsNamed: missingOps.length === 0
+    };
+  })();
+
+  // The prompt now teaches phase settings, so the other half of that promise
+  // has to hold: a phase carrying them must survive the import an AI answer
+  // goes through, and reach the compiler. migratePos runs first on import and
+  // rewrites phases, so this is where they would be lost.
+  (function () {
+    function imported(phase) {
+      resetEditor();
+      editor.phases = [phase];
+      migratePos();
+      return _compileExperiment({}).code;
+    }
+    // TWO trials of one shape, not one: a table of a single row is not a table,
+    // so _factorPhase refuses it and `conditions: true` has nothing to fold.
+    // This is the shape the prompt tells the model to write — one trial per
+    // condition.
+    function trial(word) {
+      return {components: [{type: 'text', content: word, cat: 's'},
+                           {type: 'keyboard', choices: ['a', 'l'], correctKey: 'a', cat: 'r'}]};
+    }
+    var SHAPE = [trial('RED'), trial('BLUE')];
+    function ph(extra) {
+      var p = {name: 'Trials', timeline: JSON.parse(JSON.stringify(SHAPE))};
+      Object.keys(extra).forEach(function (k) { p[k] = extra[k]; });
+      return p;
+    }
+    var reps = imported(ph({repetitions: 48, randomize_order: true, conditions: true}));
+    var samp = imported(ph({sample: {type: 'without-replacement', size: 24}, conditions: true}));
+    var loop = imported(ph({loop: {field: 'correct', op: 'is', value: 'false'}}));
+    var cond = imported(ph({cond: {field: 'correct', op: 'is not', value: 'true'}}));
+    var plain = imported(ph({}));
+    // The gate itself. `sample` and `randomize_order` are only emitted for a
+    // condition table, so a phase that asks for them without `conditions: true`
+    // gets neither — silently. The prompt has to say so, which is why the two
+    // are documented as needing it.
+    var ungated = imported(ph({randomize_order: true,
+                               sample: {type: 'without-replacement', size: 24}}));
+    out['phase settings survive the import'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      repetitionsKept: /repetitions: 48/.test(reps),
+      randomizeOrderKept: /randomize_order: true/.test(reps),
+      sampleKept: /sample: \\{type: 'without-replacement', size: 24\\}/.test(samp),
+      loopKept: /loop_function: function \\(data\\)/.test(loop),
+      condKept: /conditional_function: function \\(\\)/.test(cond),
+      // and a phase that asked for none of them still emits none
+      plainStaysPlain: plain.indexOf('repetitions') < 0 &&
+                       plain.indexOf('randomize_order') < 0 &&
+                       plain.indexOf('loop_function') < 0 &&
+                       plain.indexOf('conditional_function') < 0,
+      // without the opt-in, the two that need a table stay out — the gate the
+      // prompt documents
+      gatedOnConditions: ungated.indexOf('sample') < 0 &&
+                         ungated.indexOf('randomize_order') < 0,
+      // …while the two that do not need one still come through without it
+      loopAndCondUngated: /loop_function: function \\(data\\)/.test(loop) &&
+                          /conditional_function: function \\(\\)/.test(cond)
     };
   })();
 
@@ -2112,6 +2171,12 @@ def cmd_check():
                 if not c["noDrift"]:
                     broken_cases.append(f"phase case {name}: prompt and editor disagree — {c['drift']}")
                 for k in ("controlsNamed", "sampleTypesNamed", "operatorsNamed"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "phase settings survive the import":
+                for k in ("repetitionsKept", "randomizeOrderKept", "sampleKept",
+                          "loopKept", "condKept", "plainStaysPlain",
+                          "gatedOnConditions", "loopAndCondUngated"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "ai provider headers":

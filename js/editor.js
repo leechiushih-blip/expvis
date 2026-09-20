@@ -231,23 +231,32 @@ function _aiSystemPrompt(dev) {
   '  This is how a block repeats and how it orders itself. It is also the ONLY way to\n' +
   '  reach the four things ExpVis used to express as components.\n' +
   '  ⚠ NEVER write the same trial out N times. Write it ONCE and set these.\n\n' +
-  '  repetitions: 48                    run the phase timeline 48 times\n' +
-  '  randomize_order: true              shuffle the trials within each run\n' +
-  '  sample: {type:"without-replacement", size:24}\n' +
-  '        "without-replacement" — draw 24 of them, no repeats\n' +
-  '        "with-replacement"    — draw 24, repeats allowed (also takes weights:[3,1])\n' +
-  '        "fixed-repetitions"   — each trial appears `size` times, then shuffled\n' +
-  '        "alternate-groups"    — cycle groups; also takes groups:[[0,2],[1,3]]\n' +
-  '                                and randomize_group_order:true\n' +
-  '        "custom"              — takes fn: a JS function of the order array\n' +
-  '  loop: {field:"correct", op:"is", value:"false"}\n' +
-  '        Repeat the WHOLE phase while this condition holds (read it as "until").\n' +
-  '  cond: {field:"correct", op:"is not", value:"true"}\n' +
-  '        Run the phase only if this condition holds; otherwise skip it.\n' +
-  '        `op` is one of: "is" | "is not" | "more than" | "at most" | "less than" | "at least"\n' +
-  '        `field` is a column the trials record: "correct" | "response" | "rt", or any other.\n' +
-  '        ⚠ jsPsych puts NO limit on a `loop`, and the editor adds none: a condition that\n' +
-  '          never comes true repeats until the session is abandoned. Make sure it can come true.\n\n' +
+  '  repetitions: 48              run the phase timeline 48 times           (any phase)\n' +
+  '  loop: {field,op,value}       repeat the whole phase while this holds   (any phase)\n' +
+  '  cond: {field,op,value}       run the phase only if this holds          (any phase)\n\n' +
+  '  conditions: true             make this phase a CONDITION TABLE         (needed by the next two)\n' +
+  '  randomize_order: true        shuffle the trials\n' +
+  '  sample: {type:"...", size:N} draw a subset\n\n' +
+  '      A sample or a shuffle means nothing while each trial runs once, so without\n' +
+  '      `conditions: true` those two are INERT. A condition table also requires at\n' +
+  '      least TWO trials, which must be THE SAME SHAPE — the same components in\n' +
+  '      the same order, differing only in their values. That is the normal way to write Stroop or\n' +
+  '      Flanker: one trial per condition, then `conditions: true` together with\n' +
+  '      `repetitions` and `randomize_order` to run and shuffle them.\n\n' +
+  '      sample types:\n' +
+  '        "without-replacement"  draw `size` of them, no repeats\n' +
+  '        "with-replacement"     draw `size`; repeats allowed (also takes weights:[3,1])\n' +
+  '        "fixed-repetitions"    each trial appears `size` times, then shuffled\n' +
+  '        "alternate-groups"     cycle groups; also takes groups:[[0,2],[1,3]]\n' +
+  '                               and randomize_group_order:true\n' +
+  '        "custom"               takes fn: a JS function of the order array\n\n' +
+  '  The `loop` and `cond` conditions:\n' +
+  '      `op`    is one of: "is" | "is not" | "more than" | "at most" | "less than" | "at least"\n' +
+  '      `field` is a column the trials record: "correct" | "response" | "rt", or any other\n' +
+  '      `loop` reads as "until": it repeats while the condition holds.\n' +
+  '      ⚠ jsPsych puts NO limit on a `loop`, and the editor adds none: a condition\n' +
+  '        that never comes true repeats until the session is abandoned. Make sure\n' +
+  '        it can come true.\n\n' +
   '【Full Component Schema】(cat: s=stimulus r=response x=owns the whole trial)\n\n' +
   'text:       {type:"text",content:"text",fontSize:32,color:"#333333",position:"center",fontWeight:"bold",cat:"s"}\n' +
   'shape:      {type:"shape",shape:"circle|square|triangle|diamond|star",size:80,color:"#6366f1",position:"center",cat:"s"}\n' +
