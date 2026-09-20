@@ -240,6 +240,22 @@
               <div class="comp-card-desc">Range · Step · Labels · Movement</div>
             </div>
           </div>
+          <!-- Filed apart from the RT responses on purpose. Its cat is still
+               "r" — it is a response where it counts, one per trial and
+               positionable — but what it collects is an answer object with no
+               rt to score, which is what separates it on the shelf. -->
+          <div
+            style="
+              font-size: 0.65rem;
+              color: var(--text2);
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              padding: 4px 8px;
+              margin-top: 10px;
+            "
+          >
+            📋 Survey
+          </div>
           <div
             class="comp-card"
             draggable="true"
@@ -248,7 +264,7 @@
             ondragstart="dragStart(event)"
             ondragend="dragEnd(event)"
           >
-            <div class="comp-card-icon r">✏️</div>
+            <div class="comp-card-icon l">✏️</div>
             <div>
               <div class="comp-card-name">Survey Text</div>
               <div class="comp-card-desc">Question · Free Text · Required</div>
