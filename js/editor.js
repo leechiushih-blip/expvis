@@ -705,6 +705,25 @@ function _applyI18n() {
           console.warn('[ExpVis] Unknown component type "' + type + '" — nothing was added.');
           return;
         }
+        // One response per trial, because a jsPsych trial runs one response
+        // plugin. A second would produce a trial whose plugin and parameters
+        // come from different components — measured once: a keyboard plugin
+        // carrying the button's `choices`, which no participant can answer, and
+        // the canvas showed nothing wrong. Put it in a trial of its own, which
+        // is what the researcher needs anyway. Every path that adds a component
+        // comes through here — both drops and the inspector's buttons.
+        if (cat === 'r' && t.components.some(function (x) { return x.cat === 'r'; })) {
+          var ph = null;
+          editor.phases.forEach(function (p) {
+            if (p.timeline.indexOf(t) >= 0) ph = p;
+          });
+          if (ph) {
+            var nt = {id: 't' + ++editor.tc, components: []};
+            ph.timeline.splice(ph.timeline.indexOf(t) + 1, 0, nt);
+            t = nt;
+            editor.selectedTrial = nt.id;
+          }
+        }
         var c = JSON.parse(JSON.stringify(defs[type]));
         c.id = 'c' + ++editor.cc;
         c.cat = cat;
@@ -1355,6 +1374,29 @@ function _applyI18n() {
                 row.appendChild(stepRow);
               });
 
+            }
+
+            // A trial saved before one-response-per-trial was enforced can still
+            // hold several response components. The compiler takes the first and
+            // ignores the rest, so the row says which of them is being ignored
+            // rather than dropping them quietly — the same rule the custom-parameter
+            // badge below follows.
+            var respComps = t.components.filter(function (c) {
+              return ['keyboard', 'button', 'slider', 'textInput', 'animation']
+                .indexOf(c.type) >= 0;
+            });
+            if (respComps.length > 1) {
+              var extra = document.createElement('div');
+              extra.textContent = '⚠ ' + (respComps.length - 1) + ' response component' +
+                (respComps.length > 2 ? 's' : '') + ' not generated';
+              extra.title = 'A jsPsych trial runs one response plugin, so only "' +
+                respComps[0].type + '" is generated and the others are ignored. ' +
+                'Delete them and add them to a trial of their own — a trial can only ' +
+                'hold one response.';
+              extra.style.cssText = 'align-self:flex-end;font-size:0.62rem;padding:2px 8px;' +
+                'border-radius:999px;cursor:help;color:#9a3412;' +
+                'background:#fff7ed;border:1px solid rgba(249,115,22,0.35)';
+              row.appendChild(extra);
             }
 
             // A custom parameter means part of this trial is not something the
@@ -3949,6 +3991,17 @@ function _applyI18n() {
       // never emitted.)
       var preTiming = [], postTiming = [], seenVisual = false;
       t.components.forEach(function (c) {
+        // One response plugin per trial, so only the FIRST response component is
+        // compiled. Without this guard the later ones overwrote respInfo field
+        // by field while respType kept the first — a keyboard plugin carrying a
+        // button's `choices`. New trials cannot reach this state any more
+        // (addComponent splits them into their own trial), but a project saved
+        // before that guard can, and silently generating a broken trial from it
+        // is not a thing to leave lying around.
+        if (respType && ['keyboard', 'button', 'slider', 'textInput', 'animation']
+            .indexOf(c.type) >= 0) {
+          return;
+        }
         if (c.type === 'fixation') {
           // Keep the component itself: its own renderer supplies the look
           // (e.g. the fixation cross is 60px #ccc), so a trimmed {kind,duration}

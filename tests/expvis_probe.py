@@ -492,6 +492,40 @@ function phaseCases() {
                                node.lastIndexOf('NO_KEYS') > node.lastIndexOf('#00ff00'),
     };
   })();
+  // A trial holding two response components — the state the reviewer reached
+  // ("a trial that had multiple response types"), and one a project saved
+  // before the one-response guard can still carry. The plugin and its
+  // parameters have to come from the SAME component: the old behaviour let the
+  // later component overwrite respInfo field by field while respType kept the
+  // first, producing a keyboard plugin carrying a button's choices, which no
+  // key can answer.
+  (function () {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    addComponent(t.id, 'text', 's');
+    addComponent(t.id, 'keyboard', 'r');
+    t.components[1].choices = ['a', 'l'];
+    t.components[1].correctKey = 'a';
+    // pushed past addComponent's guard, which is how an old project looks
+    t.components.push({id: 'cx1', type: 'button', cat: 'r', choices: ['Yes', 'No']});
+    var code = _compileExperiment({}).code;
+    var st = inspectStructure(code);
+    var trial = (code.match(/var trials_trial_1 = \\{[\\s\\S]*?\\n\\};/) || [''])[0];
+    out['two response components'] = {
+      factored: false, uniform: false,
+      trialsPerNode: st.trialsPerNode,
+      observedParams: st.observedParams, expectParams: [], noTokens: true,
+      pluginIsTheFirst: /type: jsPsychHtmlKeyboardResponse/.test(trial),
+      // the parameters match that plugin, not the other component
+      choicesAreTheFirsts: /choices: \["a","l"\]/.test(trial),
+      // and the ignored component's parameters do not leak in
+      secondDidNotLeak: trial.indexOf('Yes') < 0 && trial.indexOf('button_layout') < 0,
+      // its scoring key still points at the component that was generated
+      scoresAgainstIt: /correct_response: 'a'/.test(trial),
+    };
+  })();
   // A `data` override must keep the scoring key. The on_finish the editor
   // generates reads data.correct_response; an override that drops it leaves an
   // experiment that runs, writes a `correct` column, and marks every row false.
@@ -1397,6 +1431,13 @@ def cmd_check():
                         broken_cases.append(
                             f"phase case {name}: {k} is false "
                             f"(trialsPerNode={c['trialsPerNode']})")
+            if name == "two response components":
+                for k in ("pluginIsTheFirst", "choicesAreTheFirsts",
+                          "secondDidNotLeak", "scoresAgainstIt"):
+                    if not c[k]:
+                        broken_cases.append(
+                            f"phase case {name}: {k} is false — plugin and parameters "
+                            f"must come from the same component")
             if name == "expression validation":
                 for k, want in (("rejectsStatement", True), ("namesTheValue", True),
                                 ("suggestsAFunction", True), ("acceptsFunction", True),
