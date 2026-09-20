@@ -682,21 +682,62 @@ function _applyI18n() {
             stimulus_duration: 0,
             response_ends_trial: true,
           },
-          // Runs on jsPsychSurveyText. `prompt` is the question text and MUST be
-          // emitted as a string — the plugin renders <p>prompt</p> unconditionally,
-          // so an empty one would print the literal word "undefined".
-          // survey-text has no correctAnswer and no trial_duration: a free-text
-          // question has no right answer and cannot auto-advance.
+          // ---- Survey -------------------------------------------------------
+          // The four that take a `questions` array share one shape: a list of
+          // question objects, each with its own prompt. Every one of these
+          // plugins has always accepted a list — the editor only ever put one
+          // entry in it. Now a page can ask several.
+          //
+          // `prompt` MUST be emitted as a string: the plugin renders <p>prompt</p>
+          // unconditionally, so a missing one would print the literal word
+          // "undefined" on screen.
+          //
+          // None of them has a correctAnswer or a trial_duration: a survey page
+          // has no right answer and cannot auto-advance.
           textInput: {
             type: 'textInput',
-            prompt: '',
-            placeholder: 'Enter text',
-            name: 'Q0',
-            required: false,
-            rows: 1,
-            columns: 40,
+            questions: [{prompt: '', placeholder: 'Enter text', required: false}],
             button_label: 'Continue',
+            preamble: '',
             autocomplete: false,
+          },
+          likert: {
+            type: 'likert',
+            // One set of scale labels, emitted as a single row. The plugin also
+            // accepts several rows (a subscale per row), which the editor does
+            // not offer — the flat case is what a Likert item usually is.
+            questions: [{
+              prompt: '',
+              labels: ['Strongly disagree', 'Neutral', 'Strongly agree'],
+              required: false,
+            }],
+            scale_width: 0,
+            randomize_question_order: false,
+            button_label: 'Continue',
+            preamble: '',
+          },
+          multiChoice: {
+            type: 'multiChoice',
+            questions: [{prompt: '', options: ['Option 1', 'Option 2'], required: false, horizontal: false}],
+            randomize_question_order: false,
+            button_label: 'Continue',
+            preamble: '',
+          },
+          multiSelect: {
+            type: 'multiSelect',
+            questions: [{prompt: '', options: ['Option 1', 'Option 2'], required: false, horizontal: false}],
+            randomize_question_order: false,
+            button_label: 'Continue',
+            preamble: '',
+          },
+          // The odd one out: this plugin takes a block of HTML rather than a
+          // question list, so the researcher writes the form themselves and the
+          // editor only supplies the frame around it.
+          htmlForm: {
+            type: 'htmlForm',
+            html: '<p>Question</p>\n<input name="answer" type="text">',
+            button_label: 'Continue',
+            preamble: '',
           },
         };
         if (!defs[type]) {
@@ -824,6 +865,7 @@ function _applyI18n() {
             'grid_columns',
             'stimulus_duration',
             'enable_button_after',
+            'scale_width',
           ].includes(field)
         )
           value = parseFloat(value) || 0;
@@ -881,7 +923,11 @@ function _applyI18n() {
         keyboard: '⌨️',
         button: '🔘',
         slider: '🎚️',
-        textInput: '📝',
+        textInput: '✏️',
+        likert: '📊',
+        multiChoice: '⚪',
+        multiSelect: '☑️',
+        htmlForm: '🧩',
       };
       var labels = {
         text: 'Text',
@@ -895,6 +941,10 @@ function _applyI18n() {
         button: 'Button',
         slider: 'Slider',
         textInput: 'Survey Text',
+        likert: 'Survey Likert',
+        multiChoice: 'Survey Multiple Choice',
+        multiSelect: 'Survey Multi-Select',
+        htmlForm: 'Survey HTML Form',
       };
       var propLabel = {
         content: 'Content',
@@ -1395,7 +1445,8 @@ function _applyI18n() {
             // rather than dropping them quietly — the same rule the custom-parameter
             // badge below follows.
             var respComps = t.components.filter(function (c) {
-              return ['keyboard', 'button', 'slider', 'textInput'].indexOf(c.type) >= 0;
+              return ['keyboard', 'button', 'slider', 'textInput', 'likert',
+                      'multiChoice', 'multiSelect', 'htmlForm'].indexOf(c.type) >= 0;
             });
             var animComp = t.components.filter(function (c) { return c.type === 'animation'; })[0];
             var clash = null;
@@ -1678,6 +1729,123 @@ function _applyI18n() {
 
       // Custom parameters are stored as an ordered list because the name is
       // editable, and renaming a key would mean rebuilding an object.
+      // ---- Survey question lists ------------------------------------------
+      // The four question-list plugins (text, likert, multi-choice,
+      // multi-select) share this editor. Every control carries the trial id,
+      // the component id and the row index, so one keystroke touches one value
+      // — the same shape `trial.custom` uses above, and for the same reason:
+      // repainting the panel on every keystroke takes the focus with it.
+      var _questionTypes = ['textInput', 'likert', 'multiChoice', 'multiSelect'];
+      function _surveyComp(tid, cid) {
+        var t = findTrial(tid);
+        if (!t) return null;
+        return t.components.filter(function (c) { return c.id === cid; })[0] || null;
+      }
+      // A fresh question, with whatever that plugin's questions carry.
+      function _newQuestion(type) {
+        var q = {prompt: '', required: false};
+        if (type === 'textInput') q.placeholder = 'Enter text';
+        if (type === 'likert') q.labels = ['Strongly disagree', 'Neutral', 'Strongly agree'];
+        if (type === 'multiChoice' || type === 'multiSelect') {
+          q.options = ['Option 1', 'Option 2'];
+          q.horizontal = false;
+        }
+        return q;
+      }
+      function _addQuestion(tid, cid) {
+        var c = _surveyComp(tid, cid);
+        if (!c) return;
+        saveState();
+        if (!Array.isArray(c.questions)) c.questions = [];
+        c.questions.push(_newQuestion(c.type));
+        autoSave();
+        renderAll();          // the list changed shape, so the panel is rebuilt
+      }
+      function _setQuestion(tid, cid, i, field, value) {
+        var c = _surveyComp(tid, cid);
+        if (!c || !Array.isArray(c.questions) || !c.questions[i]) return;
+        var q = c.questions[i];
+        if (field === 'labels' || field === 'options') {
+          // Comma-separated in the panel, an array in the model — the same
+          // conversion `choices` goes through.
+          q[field] = String(value).split(',')
+            .map(function (x) { return x.trim(); })
+            .filter(function (x) { return x !== ''; });
+        } else if (field === 'required' || field === 'horizontal') {
+          q[field] = (value === true || value === 'true');
+        } else {
+          q[field] = String(value);
+        }
+        saveState();
+        autoSave();           // not renderAll(): the input keeps its focus
+      }
+      function _removeQuestion(tid, cid, i) {
+        var c = _surveyComp(tid, cid);
+        if (!c || !Array.isArray(c.questions)) return;
+        saveState();
+        c.questions.splice(i, 1);
+        autoSave();
+        renderAll();
+      }
+      function _qField(t, c, i, field, label, value, hint) {
+        return '<div style="margin-bottom:6px"><div style="font-size:0.62rem;color:var(--text2);' +
+          'margin-bottom:2px">' + label + '</div>' +
+          '<input value="' + _escAttr(value) + '" onchange="_setQuestion(\'' + t.id + '\',\'' +
+          c.id + '\',' + i + ',\'' + field + '\',this.value)" style="' + _SET_INPUT_CSS + '">' +
+          (hint ? '<div style="font-size:0.6rem;color:var(--text2);margin-top:2px">' + hint + '</div>'
+                : '') + '</div>';
+      }
+      function _questionListHTML(t, c) {
+        var qs = Array.isArray(c.questions) ? c.questions : [];
+        var h = '<div style="border-top:1px solid var(--border);margin:12px 0 6px"></div>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;' +
+          'padding-bottom:6px">' +
+          '<span style="font-size:0.66rem;text-transform:uppercase;letter-spacing:0.05em;' +
+          'color:var(--text2);font-weight:700">Questions</span>' +
+          '<button type="button" onclick="_addQuestion(\'' + t.id + '\',\'' + c.id + '\')" ' +
+          'style="background:none;border:1px solid var(--border);color:var(--accent);' +
+          'cursor:pointer;font-size:0.66rem;padding:2px 8px;border-radius:4px;' +
+          'font-family:inherit">+ Add</button></div>';
+        if (!qs.length) {
+          h += '<p style="font-size:0.68rem;color:var(--text2);margin:0;line-height:1.5">' +
+            'No questions yet. The plugin always takes a list — with none in it the page ' +
+            'would have nothing to answer.</p>';
+          return h;
+        }
+        qs.forEach(function (q, i) {
+          h += '<div style="border:1px solid var(--border);border-radius:8px;padding:8px;' +
+            'margin-bottom:8px">';
+          h += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">' +
+            '<span style="font-size:0.62rem;color:var(--text2);font-weight:700">Q' + i + '</span>' +
+            '<button type="button" onclick="_removeQuestion(\'' + t.id + '\',\'' + c.id + '\',' + i +
+            ')" title="Remove this question" style="background:none;border:none;' +
+            'color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.5;padding:0 4px;' +
+            'margin-left:auto">✕</button></div>';
+          h += _qField(t, c, i, 'prompt', 'Question', q.prompt || '');
+          if (c.type === 'textInput') {
+            h += _qField(t, c, i, 'placeholder', 'Placeholder', q.placeholder || '');
+          }
+          if (c.type === 'likert') {
+            h += _qField(t, c, i, 'labels', 'Scale labels', (q.labels || []).join(', '),
+              'Comma-separated, left to right. Leave one blank to leave that point unlabelled.');
+          }
+          if (c.type === 'multiChoice' || c.type === 'multiSelect') {
+            h += _qField(t, c, i, 'options', 'Options', (q.options || []).join(', '),
+              'Comma-separated.');
+            h += '<label style="font-size:0.72rem;display:flex;gap:7px;align-items:center">' +
+              '<input type="checkbox"' + (q.horizontal ? ' checked' : '') +
+              ' onchange="_setQuestion(\'' + t.id + '\',\'' + c.id + '\',' + i +
+              ',\'horizontal\',this.checked)"> Lay the options out horizontally</label>';
+          }
+          h += '<label style="font-size:0.72rem;display:flex;gap:7px;align-items:center;' +
+            'margin-top:6px"><input type="checkbox"' + (q.required ? ' checked' : '') +
+            ' onchange="_setQuestion(\'' + t.id + '\',\'' + c.id + '\',' + i +
+            ',\'required\',this.checked)"> Required</label>';
+          h += '</div>';
+        });
+        return h;
+      }
+
       function _addCustom(tid) {
         var t = findTrial(tid);
         if (!t) return;
@@ -2040,7 +2208,8 @@ function _applyI18n() {
           });
           Object.keys(c).forEach(function (k) {
             if (k === 'id' || k === 'cat' || k === 'type' || k === 'fileData' ||
-                k === 'fileName' || k === 'frames') return; // frames have their own uploader below
+                k === 'fileName' || k === 'frames' ||   // frames have their own uploader below
+                k === 'questions') return;              // questions have their own list below
             if (k === 'correctKey' || k === '颜色按键映射' || k === '按键映射' || k === 'correctKeyHint') return;
             var v = c[k];
             var displayLabel = propLabel[k] || k;
@@ -2139,7 +2308,9 @@ function _applyI18n() {
                 "','" +
                 k +
                 '\',this.value)" style="width:50px">';
-            else if (k === 'content')
+            // `html` is the html-form plugin's whole payload — a block of markup,
+            // so it gets the same multi-line box the text stimulus uses.
+            else if (k === 'content' || k === 'html')
               h +=
                 '<textarea onchange="updateComponent(\'' +
                 t.id +
@@ -2234,6 +2405,12 @@ function _applyI18n() {
               });
               h += '</div>';
             }
+          }
+          // The question list the four question-list survey plugins share. Its
+          // own block rather than a row in the generic loop, because a question
+          // is an object with several fields, not one value.
+          if (_questionTypes.indexOf(c.type) >= 0) {
+            h += _questionListHTML(t, c);
           }
           h +=
             '<button onclick="removeComponent(\'' +
@@ -2899,15 +3076,22 @@ function _applyI18n() {
                 // survey-text has no notion of a right answer, so they go.
                 delete c.correctAnswer;
                 delete c.validation;
+                // This component used to hold ONE question as flat fields, while
+                // the plugin has always taken a list. It holds a list now too, so
+                // an old component becomes a one-question list — the same
+                // experiment it already was, nothing for the researcher to
+                // decide. Idempotent: one that already has questions keeps them.
                 var rebuiltTi = {
                   type: 'textInput',
-                  prompt: c.prompt || '',
-                  placeholder: c.placeholder == null ? 'Enter text' : c.placeholder,
-                  name: c.name || 'Q0',
-                  required: c.required == null ? false : c.required,
-                  rows: c.rows == null ? 1 : c.rows,
-                  columns: c.columns == null ? 40 : c.columns,
+                  questions: Array.isArray(c.questions) && c.questions.length
+                    ? c.questions
+                    : [{
+                        prompt: c.prompt || '',
+                        placeholder: c.placeholder == null ? 'Enter text' : c.placeholder,
+                        required: c.required == null ? false : c.required,
+                      }],
                   button_label: c.button_label || 'Continue',
+                  preamble: c.preamble == null ? '' : c.preamble,
                   autocomplete: c.autocomplete == null ? false : c.autocomplete,
                 };
                 rebuiltTi.id = c.id;
@@ -3619,18 +3803,35 @@ function _applyI18n() {
           slider: 'jsPsychImageSliderResponse',
         };
 
+        // Response type → the plugin that runs it. A table, not a chain: there
+        // are nine of them now, and a chain that long has to be read twice to
+        // tell whether a type is in it at all.
+        // The survey family. They share a `questions` array and a submit button,
+        // none of them takes trial_duration, and their data is a response object
+        // rather than an rt to score. Kept as lists because several checks ask
+        // "is this one of them" and a chain of === gets unreadable.
+        var _surveyTypes = ['textInput', 'likert', 'multiChoice', 'multiSelect', 'htmlForm'];
+        // The two whose questions carry an option list. They emit identically.
+        var _optionTypes = ['multiChoice', 'multiSelect'];
+        var _respPlugins = {
+          keyboard: 'jsPsychHtmlKeyboardResponse',
+          button: 'jsPsychHtmlButtonResponse',
+          slider: 'jsPsychHtmlSliderResponse',
+          textInput: 'jsPsychSurveyText',
+          likert: 'jsPsychSurveyLikert',
+          multiChoice: 'jsPsychSurveyMultiChoice',
+          multiSelect: 'jsPsychSurveyMultiSelect',
+          htmlForm: 'jsPsychSurveyHtmlForm',
+          animation: 'jsPsychAnimation',
+        };
         function pluginName(rt, forImage) {
           if (forImage && _imagePlugins[rt]) {
             _usedPlugins[_imagePlugins[rt]] = true;
             return _imagePlugins[rt];
           }
-          // This is now only the fallback: instructions, feedback and timed
-          // nodes that carry no response component of their own.
-          var name = rt === 'button' ? 'jsPsychHtmlButtonResponse'
-                   : rt === 'slider' ? 'jsPsychHtmlSliderResponse'
-                   : rt === 'animation' ? 'jsPsychAnimation'
-                   : rt === 'textInput' ? 'jsPsychSurveyText'
-                   : 'jsPsychHtmlKeyboardResponse';
+          // Keyboard is the fallback: instructions, feedback and timed nodes
+          // carry no response component of their own.
+          var name = _respPlugins[rt] || 'jsPsychHtmlKeyboardResponse';
           _usedPlugins[name] = true;
           return name;
         }
@@ -4025,7 +4226,8 @@ function _applyI18n() {
         // (addComponent splits them into their own trial), but a project saved
         // before that guard can, and silently generating a broken trial from it
         // is not a thing to leave lying around.
-        if (respType && ['keyboard', 'button', 'slider', 'textInput', 'animation']
+        if (respType && ['keyboard', 'button', 'slider', 'textInput', 'animation',
+                          'likert', 'multiChoice', 'multiSelect', 'htmlForm']
             .indexOf(c.type) >= 0) {
           return;
         }
@@ -4107,22 +4309,46 @@ function _applyI18n() {
           respInfo.stimulusDuration = c.stimulus_duration;
           respInfo.responseEndsTrial = !(c.response_ends_trial === false ||
             c.response_ends_trial === 'false');
-        } else if (c.type === 'textInput') {
-          // Runs on jsPsychSurveyText. The question text lives here rather than
-          // in the stimulus, and the plugin brings its own submit button.
-          if (!respType) respType = 'textInput';
+        } else if (_surveyTypes.indexOf(c.type) >= 0) {
+          // The whole survey family. They run on their own plugins, take a
+          // `questions` array rather than a stimulus, and bring their own submit
+          // button — which is why none of them has a response component's
+          // `choices` or a trial_duration.
+          if (!respType) respType = c.type;
           respInfo = respInfo || {};
-          respInfo.question = {
-            // Always a string: the plugin prints <p>prompt</p> unconditionally.
-            prompt: c.prompt == null ? '' : String(c.prompt),
-            placeholder: c.placeholder == null ? '' : String(c.placeholder),
-            name: c.name ? String(c.name) : 'Q0',
-            required: (c.required === true || c.required === 'true'),
-            rows: Number(c.rows) || 1,
-            columns: Number(c.columns) || 40,
-          };
+          // Every prompt MUST be a string: the plugins render <p>prompt</p>
+          // unconditionally, so a missing one prints the word "undefined".
+          respInfo.questions = (Array.isArray(c.questions) ? c.questions : []).map(function (q) {
+            q = q || {};
+            var out = {
+              prompt: q.prompt == null ? '' : String(q.prompt),
+              required: (q.required === true || q.required === 'true'),
+            };
+            if (c.type === 'textInput') {
+              out.placeholder = q.placeholder == null ? '' : String(q.placeholder);
+            }
+            if (c.type === 'likert') {
+              out.labels = (Array.isArray(q.labels) ? q.labels : [])
+                .map(function (x) { return String(x); })
+                .filter(function (x) { return x !== ''; });
+            }
+            if (_optionTypes.indexOf(c.type) >= 0) {
+              out.options = (Array.isArray(q.options) ? q.options : [])
+                .map(function (x) { return String(x); })
+                .filter(function (x) { return x !== ''; });
+              out.horizontal = (q.horizontal === true || q.horizontal === 'true');
+            }
+            return out;
+          });
           respInfo.buttonLabel = c.button_label || '';
-          respInfo.autocomplete = (c.autocomplete === true || c.autocomplete === 'true');
+          respInfo.preamble = c.preamble == null ? '' : String(c.preamble);
+          respInfo.html = c.html == null ? '' : String(c.html);
+          respInfo.scaleWidth = Number(c.scale_width) || 0;
+          respInfo.randomizeQuestionOrder =
+            (c.randomize_question_order === true || c.randomize_question_order === 'true');
+          if (c.type === 'textInput') {
+            respInfo.autocomplete = (c.autocomplete === true || c.autocomplete === 'true');
+          }
         }
       });
 // Default: any-key to continue (for instructions / feedback / stimulus-only).
@@ -4141,7 +4367,8 @@ function _applyI18n() {
             // several response components can only emit one of them. Say so loudly
             // instead of dropping the rest silently.
             var respComps = t.components.filter(function (c) {
-              return ['keyboard', 'button', 'slider', 'textInput'].indexOf(c.type) >= 0;
+              return ['keyboard', 'button', 'slider', 'textInput', 'likert',
+                      'multiChoice', 'multiSelect', 'htmlForm'].indexOf(c.type) >= 0;
             });
             if (respComps.length > 1) {
               logic.hints.push('// !! This trial has ' + respComps.length +
@@ -4357,9 +4584,9 @@ function _applyI18n() {
             if (!_plainNode) L(ei, '{');
             var indent = _plainNode ? 1 : ei + 1;
             P(indent, 'type', pname);
-            // survey-text has no `stimulus` — its equivalent is `preamble`, the
-            // HTML shown above the questions.
-            var _stimKey = respType === 'textInput' ? 'preamble' : 'stimulus';
+            // No survey plugin takes a `stimulus` — their equivalent is
+            // `preamble`, the HTML shown above the questions.
+            var _stimKey = _surveyTypes.indexOf(respType) >= 0 ? 'preamble' : 'stimulus';
             {
               if (useImagePlugin) {
                 // The picture itself, as the image plugins expect.
@@ -4401,18 +4628,42 @@ function _applyI18n() {
               // fresh respInfo, and `!undefined` would wrongly emit a false here.
               if (respInfo.responseEndsTrial === false) P(indent, 'response_ends_trial', 'false');
             }
-            if (respType === 'textInput') {
-              var _q = respInfo.question;
-              P(indent, 'questions', null, function () {
-                L(indent, 'questions: [{');
-                L(indent + 1, "prompt: '" + _jsStr(_q.prompt) + "',");
-                if (_q.placeholder) L(indent + 1, "placeholder: '" + _jsStr(_q.placeholder) + "',");
-                L(indent + 1, "name: '" + _q.name.replace(/'/g, "\\'") + "',");
-                if (_q.required) L(indent + 1, 'required: true,');
-                if (_q.rows > 1) L(indent + 1, 'rows: ' + _q.rows + ',');
-                if (_q.columns !== 40) L(indent + 1, 'columns: ' + _q.columns + ',');
-                L(indent, '}],');
-              });
+            if (_surveyTypes.indexOf(respType) >= 0) {
+              if (respType === 'htmlForm') {
+                // The odd one out: a block of HTML the researcher wrote, not a
+                // question list. Its inputs come back in `response` by name.
+                P(indent, 'html', "'" + _jsStr(respInfo.html || '') + "'");
+              } else {
+                // One line per question, so a five-question page still reads as
+                // five questions in the file. `name` is written out rather than
+                // left to the plugin's Q0/Q1 default — the data keys should be
+                // visible in the experiment, not implied.
+                P(indent, 'questions', null, function () {
+                  L(indent, 'questions: [');
+                  (respInfo.questions || []).forEach(function (q, i) {
+                    var bits = ["prompt: '" + _jsStr(q.prompt) + "'"];
+                    if (q.placeholder) bits.push("placeholder: '" + _jsStr(q.placeholder) + "'");
+                    if (q.labels && q.labels.length) {
+                      bits.push('labels: [[' + q.labels.map(function (x) {
+                        return "'" + _jsStr(x) + "'";
+                      }).join(', ') + ']]');
+                    }
+                    if (q.options && q.options.length) {
+                      bits.push('options: [' + q.options.map(function (x) {
+                        return "'" + _jsStr(x) + "'";
+                      }).join(', ') + ']');
+                    }
+                    if (q.horizontal) bits.push('horizontal: true');
+                    bits.push("name: 'Q" + i + "'");
+                    if (q.required) bits.push('required: true');
+                    L(indent + 1, '{ ' + bits.join(', ') + ' },');
+                  });
+                  L(indent, '],');
+                });
+                if (respInfo.scaleWidth) P(indent, 'scale_width', String(respInfo.scaleWidth));
+                if (respInfo.randomizeQuestionOrder)
+                  P(indent, 'randomize_question_order', 'true');
+              }
               if (respInfo.buttonLabel)
                 P(indent, 'button_label', "'" + _jsStr(String(respInfo.buttonLabel)) + "'");
               if (respInfo.autocomplete) P(indent, 'autocomplete', 'true');
@@ -4452,7 +4703,7 @@ function _applyI18n() {
             // the keyboard component.
             var _trialDuration = (respType === 'button' ? respInfo.trialDuration : logic.trial_duration) ||
               t.trial_duration;
-            if (_trialDuration && respType !== 'textInput') {
+            if (_trialDuration && _surveyTypes.indexOf(respType) < 0) {
               P(indent, 'trial_duration', String(_trialDuration));
             }
             // Only ever the researcher's own words. The canned "press any key"
@@ -5365,6 +5616,10 @@ function _applyI18n() {
         jsPsychHtmlButtonResponse: {pkg: '@jspsych/plugin-html-button-response', ver: '2.1.0'},
         jsPsychHtmlSliderResponse: {pkg: '@jspsych/plugin-html-slider-response', ver: '2.1.0'},
         jsPsychSurveyText: {pkg: '@jspsych/plugin-survey-text', ver: '2.1.1'},
+        jsPsychSurveyLikert: {pkg: '@jspsych/plugin-survey-likert', ver: '2.2.0'},
+        jsPsychSurveyMultiChoice: {pkg: '@jspsych/plugin-survey-multi-choice', ver: '2.2.1'},
+        jsPsychSurveyMultiSelect: {pkg: '@jspsych/plugin-survey-multi-select', ver: '2.1.1'},
+        jsPsychSurveyHtmlForm: {pkg: '@jspsych/plugin-survey-html-form', ver: '2.1.0'},
         jsPsychPreload: {pkg: '@jspsych/plugin-preload', ver: '2.1.0'},
         jsPsychAnimation: {pkg: '@jspsych/plugin-animation', ver: '2.1.0'},
         jsPsychImageKeyboardResponse: {pkg: '@jspsych/plugin-image-keyboard-response', ver: '2.2.0'},

@@ -270,6 +270,62 @@
               <div class="comp-card-desc">Question · Free Text · Required</div>
             </div>
           </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="likert"
+            data-cat="r"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon l">📊</div>
+            <div>
+              <div class="comp-card-name">Survey Likert</div>
+              <div class="comp-card-desc">Scale · One row of labels</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="multiChoice"
+            data-cat="r"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon l">⚪</div>
+            <div>
+              <div class="comp-card-name">Survey Multiple Choice</div>
+              <div class="comp-card-desc">One Option Per Question</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="multiSelect"
+            data-cat="r"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon l">☑️</div>
+            <div>
+              <div class="comp-card-name">Survey Multi-Select</div>
+              <div class="comp-card-desc">Any Number of Options</div>
+            </div>
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="htmlForm"
+            data-cat="r"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon l">🧩</div>
+            <div>
+              <div class="comp-card-name">Survey HTML Form</div>
+              <div class="comp-card-desc">Your own HTML · Any Inputs</div>
+            </div>
+          </div>
           <!-- Its own group: an animation is neither a screen element nor a
                response. It takes the whole trial, and nothing shares it. -->
           <div

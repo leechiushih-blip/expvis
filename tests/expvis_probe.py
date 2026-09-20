@@ -35,6 +35,8 @@ PROBE = """
 // ExpVis no longer supports. A syntax error in the generated code throws here.
 var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
   'jsPsychHtmlSliderResponse', 'jsPsychSurveyText', 'jsPsychPreload', 'jsPsychAnimation',
+  'jsPsychSurveyLikert', 'jsPsychSurveyMultiChoice', 'jsPsychSurveyMultiSelect',
+  'jsPsychSurveyHtmlForm',
   'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
 // Node-level parameters that jsPsych reads but ExpVis does not derive from the
 // canvas. Everything else a node can carry — timeline_variables, sample,
@@ -554,6 +556,70 @@ function phaseCases() {
       secondResponse: shapeAfter([['keyboard', 'r'], ['button', 'r']]),
       // two stimuli still share a screen: the rules are not a blanket ban
       twoStimuli: shapeAfter([['text', 's'], ['shape', 's']]),
+    };
+  })();
+  // The survey family. Every one of these plugins takes a `questions` LIST —
+  // which the editor only ever filled with a single entry, so the plugin's
+  // ability to ask several on one page was unreachable. These pin that a page
+  // carries several, that each plugin's per-question fields reach the output,
+  // and that names are numbered rather than left to the plugin's default.
+  (function () {
+    function build(type, questions, html) {
+      resetEditor();
+      addPhase('trials');
+      addTrial(editor.phases[0].id);
+      var t = findTrial(editor.selectedTrial);
+      addComponent(t.id, type, 'r');
+      if (questions) t.components[0].questions = questions;
+      if (html != null) t.components[0].html = html;
+      var code = _compileExperiment({}).code;
+      return (code.match(/var trials_trial_1 = \\{[\\s\\S]*?\\n\\};/) || [''])[0];
+    }
+    var likert = build('likert', [
+      {prompt: 'One', labels: ['No', 'Maybe', 'Yes'], required: true},
+      {prompt: 'Two', labels: ['No', 'Maybe', 'Yes']}]);
+    var choice = build('multiChoice', [
+      {prompt: 'Pick', options: ['A', 'B'], required: true},
+      {prompt: 'Again', options: ['C', 'D'], horizontal: true}]);
+    var multi = build('multiSelect', [{prompt: 'Any', options: ['X', 'Y']}]);
+    var text = build('textInput', [
+      {prompt: 'Name', placeholder: 'here', required: true},
+      {prompt: 'Age'}]);
+    var form = build('htmlForm', null, '<input name="rating">');
+    function promptCount(trial) { return (trial.match(/prompt: /g) || []).length; }
+    out['survey questions'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      // each type reaches its own plugin
+      plugins: [/jsPsychSurveyLikert/, /jsPsychSurveyMultiChoice/,
+                /jsPsychSurveyMultiSelect/, /jsPsychSurveyText/,
+                /jsPsychSurveyHtmlForm/]
+        .every(function (re, i) {
+          return re.test([likert, choice, multi, text, form][i]);
+        }),
+      // several questions, not one
+      likertTwoQuestions: promptCount(likert) === 2,
+      choiceTwoQuestions: promptCount(choice) === 2,
+      textTwoQuestions: promptCount(text) === 2,
+      // the per-type fields that make each plugin what it is
+      labelsAsOneRow: /labels: \\[\\['No', 'Maybe', 'Yes'\\]\\]/.test(likert),
+      optionsReached: /options: \\['A', 'B'\\]/.test(choice) &&
+                      /options: \\['C', 'D'\\]/.test(choice),
+      horizontalReached: /horizontal: true/.test(choice),
+      requiredReached: /required: true/.test(likert) && /required: true/.test(text),
+      // placeholder only where one was set — the second text question has none
+      placeholderOnlyWhereSet: (text.match(/placeholder: /g) || []).length === 1,
+      // numbered names, so the data keys are visible in the file
+      namesNumbered: /name: 'Q0'/.test(likert) && /name: 'Q1'/.test(likert),
+      // html-form carries html, not questions
+      formHasHtml: /html: '<input name="rating">'/.test(form) &&
+                    form.indexOf('questions') < 0,
+      // no plugin may print the word "undefined" at a participant
+      noUndefined: [likert, choice, multi, text, form]
+        .every(function (x) { return x.indexOf('undefined') < 0; }),
+      // and none of them takes trial_duration
+      noTrialDuration: [likert, choice, multi, text, form]
+        .every(function (x) { return x.indexOf('trial_duration') < 0; }),
     };
   })();
   // A `data` override must keep the scoring key. The on_finish the editor
@@ -1477,6 +1543,14 @@ def cmd_check():
                     if c[k] != expect:
                         broken_cases.append(
                             f"phase case {name}: {k} = {c[k]!r}, expected {expect!r}")
+            if name == "survey questions":
+                for k in ("plugins", "likertTwoQuestions", "choiceTwoQuestions",
+                          "textTwoQuestions", "labelsAsOneRow", "optionsReached",
+                          "horizontalReached", "requiredReached",
+                          "placeholderOnlyWhereSet", "namesNumbered", "formHasHtml",
+                          "noUndefined", "noTrialDuration"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
             if name == "expression validation":
                 for k, want in (("rejectsStatement", True), ("namesTheValue", True),
                                 ("suggestsAFunction", True), ("acceptsFunction", True),
