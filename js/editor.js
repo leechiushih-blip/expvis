@@ -647,6 +647,20 @@ function _applyI18n() {
             stimulus_duration: 0,
             response_ends_trial: true,
             wait_for_key_release: false,
+            // ---- feedback, optional ----
+            // Filling either message switches the trial onto jsPsych's own
+            // categorize plugin, which shows a right/wrong message instead of
+            // ending silently. The names are that plugin's parameters.
+            //
+            // Empty is the default and it means "no feedback" — a pre-filled
+            // "Correct." would turn the feature on for every trial in the
+            // experiment, which is not what an untouched field should do.
+            correct_text: '',
+            incorrect_text: '',
+            feedback_duration: 0,
+            timeout_message: '',
+            show_feedback_on_timeout: false,
+            force_correct_button_press: false,
           },
           // Field names mirror jsPsychHtmlButtonResponse's parameters exactly, so
           // the inspector reads like the plugin's docs. `choices` is a real array
@@ -982,6 +996,12 @@ function _applyI18n() {
         max: 'Max',
         step: 'Step',
         frames: 'Frames',
+        correct_text: 'Correct Message',
+        incorrect_text: 'Incorrect Message',
+        feedback_duration: 'Feedback Duration (ms)',
+        timeout_message: 'Timeout Message',
+        show_feedback_on_timeout: 'Message on Timeout',
+        force_correct_button_press: 'Force Correct Press',
         frame_time: 'Frame Time',
         frame_isi: 'Frame ISI',
         sequence_reps: 'Sequence Reps',
@@ -1466,6 +1486,24 @@ function _applyI18n() {
               clashTip = 'A jsPsych trial runs one response plugin, so only "' +
                 respComps[0].type + '" is generated and the others are ignored. ' +
                 'Delete them and add them to a trial of their own.';
+            } else {
+              // Feedback that cannot be emitted. Writing a message switches the
+              // trial onto jsPsych's categorize plugin, which scores against
+              // exactly one key — so a Correct Key listing several (or none)
+              // leaves the feedback out. Said here rather than only in the
+              // exported code, which is the one place a researcher is not looking.
+              var kbComp = t.components.filter(function (c) { return c.type === 'keyboard'; })[0];
+              if (kbComp && (kbComp.correct_text || kbComp.incorrect_text)) {
+                var keyCount = String(kbComp.correctKey || '').split(',')
+                  .filter(function (x) { return x.trim() !== ''; }).length;
+                if (keyCount !== 1) {
+                  clash = '⚠ feedback not generated — ' +
+                    (keyCount ? 'several Correct Keys' : 'no Correct Key');
+                  clashTip = 'A message here switches the trial to jsPsych\'s categorize ' +
+                    'plugin, which scores against exactly one key. Set a single Correct ' +
+                    'Key, or clear the feedback messages.';
+                }
+              }
             }
             if (clash) {
               var extra = document.createElement('div');
@@ -2174,6 +2212,8 @@ function _applyI18n() {
             trial_duration: 'Trial Duration (ms). 0=no limit. If >0, auto-judges as timeout and records RT when exceeded.',
             choices: 'Comma-separated button labels, e.g. Yes,No. Exported as the jsPsych `choices` array.',
             frames: 'Upload the frames in playback order. They are played as a flipbook, one image at a time.',
+            correct_text: 'Shown after a correct response. Writing a message here switches this trial onto jsPsych\'s categorize plugin, which scores the response and shows the message itself. Needs a single Correct Key.',
+            incorrect_text: 'Shown after a wrong response. Leave both messages empty for the trial to end silently, as it does now.',
             frame_time: 'How long each frame is shown, in ms. jsPsych default is 250.',
             frame_isi: 'Blank gap between frames, in ms. 0 = frames run back to back.',
             sequence_reps: 'How many times the whole sequence plays. The trial ends by itself after the last rep.',
@@ -4256,6 +4296,16 @@ function _applyI18n() {
             c.response_ends_trial === 'false');
           respInfo.waitForKeyRelease = (c.wait_for_key_release === true ||
             c.wait_for_key_release === 'true');
+          // Feedback, if any was written. A filled message is what switches this
+          // trial onto the categorize plugin (see the choice of `pname` below).
+          respInfo.correctText = c.correct_text || '';
+          respInfo.incorrectText = c.incorrect_text || '';
+          respInfo.feedbackDuration = Number(c.feedback_duration) || 0;
+          respInfo.timeoutMessage = c.timeout_message || '';
+          respInfo.showFeedbackOnTimeout =
+            (c.show_feedback_on_timeout === true || c.show_feedback_on_timeout === 'true');
+          respInfo.forceCorrectButtonPress =
+            (c.force_correct_button_press === true || c.force_correct_button_press === 'true');
           if (c.trial_duration) logic.trial_duration = Math.max(logic.trial_duration || 0, c.trial_duration);
         } else if (c.type === 'button') {
           // Runs on jsPsychHtmlButtonResponse — every field below is emitted
@@ -4411,10 +4461,36 @@ function _applyI18n() {
               _mediaRef(stims[0])) ? stims[0] : null;
             var useImagePlugin = !!imageOnlyComp && !!_imagePlugins[respType];
 
+            // ---- feedback: a filled message moves the trial onto jsPsych's own
+            // categorize plugin, which scores the response and shows the answer
+            // itself instead of the trial ending silently. ----
+            // Two conditions it cannot meet, and both are checked here rather than
+            // discovered by a participant:
+            //   - it exists only for keyboard responses — its `choices` are key
+            //     characters and there is no button or slider variant;
+            //   - `key_answer` is a SINGLE key, while a Correct Key may list several.
+            // Either way the feedback is left out, and the canvas says so.
+            var wantsFeedback = respType === 'keyboard' &&
+              !!(respInfo.correctText || respInfo.incorrectText);
+            var _keyCount = String(respInfo.correctKey || '').split(',')
+              .filter(function (x) { return x.trim() !== ''; }).length;
+            var useCategorize = wantsFeedback && _keyCount === 1;
+            if (wantsFeedback && _keyCount !== 1) {
+              logic.hints.push('// !! Feedback was set, but this trial\'s Correct Key ' +
+                (_keyCount ? 'lists several keys' : 'is empty') + ' and jsPsych\'s ' +
+                'categorize plugin scores against exactly one. No feedback is emitted.');
+            }
+
             // Semantic, stable names in the generated code: the phase name plus
             // the trial's index within that phase.
             var trialName = phaseSlug + '_trial_' + (ti + 1);
-            var pname = pluginName(respType, useImagePlugin);
+            // Categorize-image takes the picture as `stimulus` exactly as the image
+            // plugins do, so it rides on the same `imageOnlyComp` decision; anything
+            // else takes the rendered screen as HTML.
+            var pname = useCategorize
+              ? (useImagePlugin ? 'jsPsychCategorizeImage' : 'jsPsychCategorizeHtml')
+              : pluginName(respType, useImagePlugin);
+            if (useCategorize) _usedPlugins[pname] = true;
 
             // ---- jsPsychAnimation owns the display element, so it is emitted as
             // the whole trial rather than as one parameter among others. ----
@@ -4713,12 +4789,37 @@ function _applyI18n() {
             if (respType === 'keyboard' && respInfo.prompt)
               P(indent, 'prompt', "'" + _jsStr(respInfo.prompt) + "'");
 
+            // ---- jsPsychCategorize* parameters ----
+            // Only reachable when a feedback message was written and the Correct
+            // Key is a single key, so the plugin can do the scoring. Every name
+            // here is the plugin's own; anything left at its ExpVis default is
+            // omitted so jsPsych applies its documented default instead.
+            if (useCategorize) {
+              P(indent, 'key_answer', "'" + _jsStr(String(respInfo.correctKey).trim()) + "'");
+              if (respInfo.correctText)
+                P(indent, 'correct_text', "'" + _jsStr(String(respInfo.correctText)) + "'");
+              if (respInfo.incorrectText)
+                P(indent, 'incorrect_text', "'" + _jsStr(String(respInfo.incorrectText)) + "'");
+              if (respInfo.feedbackDuration)
+                P(indent, 'feedback_duration', String(respInfo.feedbackDuration));
+              if (respInfo.timeoutMessage)
+                P(indent, 'timeout_message', "'" + _jsStr(String(respInfo.timeoutMessage)) + "'");
+              if (respInfo.showFeedbackOnTimeout)
+                P(indent, 'show_feedback_on_timeout', 'true');
+              if (respInfo.forceCorrectButtonPress)
+                P(indent, 'force_correct_button_press', 'true');
+            }
+
             // --- scoring ---
             // `data` is written only when it carries something the analysis needs.
             // Provenance fields are not added automatically: jsPsych records
             // trial_index and trial_type on its own.
             var hasScore = !!correctResponseExpr;
-            if (correctResponseExpr) {
+            // The categorize plugins score the response themselves, against
+            // `key_answer`. Writing our own `data` + `on_finish` on top would
+            // judge it a second time, and the plugin's own `correct` field is the
+            // one that belongs in the data.
+            if (correctResponseExpr && !useCategorize) {
               P(indent, 'data', '{correct_response: ' + correctResponseExpr + '}');
               P(indent, 'on_finish', null, function () {
                 L(indent, 'on_finish: function(data) {');
@@ -5620,6 +5721,8 @@ function _applyI18n() {
         jsPsychSurveyMultiChoice: {pkg: '@jspsych/plugin-survey-multi-choice', ver: '2.2.1'},
         jsPsychSurveyMultiSelect: {pkg: '@jspsych/plugin-survey-multi-select', ver: '2.1.1'},
         jsPsychSurveyHtmlForm: {pkg: '@jspsych/plugin-survey-html-form', ver: '2.1.0'},
+        jsPsychCategorizeImage: {pkg: '@jspsych/plugin-categorize-image', ver: '2.1.0'},
+        jsPsychCategorizeHtml: {pkg: '@jspsych/plugin-categorize-html', ver: '2.1.0'},
         jsPsychPreload: {pkg: '@jspsych/plugin-preload', ver: '2.1.0'},
         jsPsychAnimation: {pkg: '@jspsych/plugin-animation', ver: '2.1.0'},
         jsPsychImageKeyboardResponse: {pkg: '@jspsych/plugin-image-keyboard-response', ver: '2.2.0'},

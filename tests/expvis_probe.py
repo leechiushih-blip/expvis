@@ -36,7 +36,7 @@ PROBE = """
 var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
   'jsPsychHtmlSliderResponse', 'jsPsychSurveyText', 'jsPsychPreload', 'jsPsychAnimation',
   'jsPsychSurveyLikert', 'jsPsychSurveyMultiChoice', 'jsPsychSurveyMultiSelect',
-  'jsPsychSurveyHtmlForm',
+  'jsPsychSurveyHtmlForm', 'jsPsychCategorizeImage', 'jsPsychCategorizeHtml',
   'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
 // Node-level parameters that jsPsych reads but ExpVis does not derive from the
 // canvas. Everything else a node can carry — timeline_variables, sample,
@@ -620,6 +620,62 @@ function phaseCases() {
       // and none of them takes trial_duration
       noTrialDuration: [likert, choice, multi, text, form]
         .every(function (x) { return x.indexOf('trial_duration') < 0; }),
+    };
+  })();
+  // Feedback switches the trial onto jsPsych's OWN categorize plugin rather than
+  // ExpVis growing a feedback mechanism of its own, and it does the scoring too.
+  // Two conditions decide it: the response must be a keyboard (there is no
+  // button or slider categorize variant) and the Correct Key must be a single
+  // key (`key_answer` is one character). When either fails the feedback is left
+  // out — and the canvas says so, which is asserted in the UI checks, not here.
+  (function () {
+    function build(spec, tweak) {
+      resetEditor();
+      addPhase('trials');
+      addTrial(editor.phases[0].id);
+      var t = findTrial(editor.selectedTrial);
+      spec.forEach(function (s) {
+        addComponent(t.id, s[0], s[1]);
+        var c = t.components[t.components.length - 1];
+        Object.keys(s[2] || {}).forEach(function (k) { c[k] = s[2][k]; });
+      });
+      if (tweak) tweak(t);
+      return (_compileExperiment({}).code.match(/var trials_trial_1 = \\{[\\s\\S]*?\\n\\};/)
+        || [''])[0];
+    }
+    var KB = ['keyboard', 'r', {choices: ['f', 'j'], correctKey: 'f'}];
+    var IMG = ['image', 's', {fileData: 'data:image/png;base64,iVBORw0KGgo=',
+                              fileName: 'p.png', stimulus_width: 0}];
+    var TXT = ['text', 's', {content: 'word'}];
+    function withFeedback(t) {
+      t.components[t.components.length - 1].correct_text = 'Correct!';
+    }
+    var img = build([IMG, KB], withFeedback);
+    var html = build([TXT, KB], withFeedback);
+    var plain = build([IMG, KB]);
+    var twoKeys = build([IMG, ['keyboard', 'r', {choices: ['f', 'j'], correctKey: 'f,j'}]],
+      withFeedback);
+    out['feedback uses categorize'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      // an image alone gets the image variant, holding the picture as `stimulus`
+      imageUsesImagePlugin: /type: jsPsychCategorizeImage/.test(img) &&
+                            /stimulus: 'img\\/p.png'/.test(img),
+      // anything else gets the html variant, holding the rendered screen
+      htmlUsesHtmlPlugin: /type: jsPsychCategorizeHtml/.test(html) &&
+                          html.indexOf("'<div") >= 0,
+      // the feedback parameters are the plugin's own, emitted only when set
+      feedbackEmitted: /correct_text: 'Correct!'/.test(img) &&
+                       img.indexOf('incorrect_text') < 0,
+      keyAnswerEmitted: /key_answer: 'f'/.test(img),
+      // the plugin scores it, so ExpVis must NOT add its own data + on_finish
+      pluginDoesTheScoring: img.indexOf('data: {correct_response') < 0 &&
+                            img.indexOf('on_finish') < 0,
+      // no feedback: exactly what it was before
+      withoutFeedbackUnchanged: /type: jsPsychImageKeyboardResponse/.test(plain) &&
+                                /data: \\{correct_response: 'f'\\}/.test(plain),
+      // two correct keys: categorize cannot score it, so it is not used
+      severalKeysRefuse: /type: jsPsychImageKeyboardResponse/.test(twoKeys),
     };
   })();
   // A `data` override must keep the scoring key. The on_finish the editor
@@ -1549,6 +1605,12 @@ def cmd_check():
                           "horizontalReached", "requiredReached",
                           "placeholderOnlyWhereSet", "namesNumbered", "formHasHtml",
                           "noUndefined", "noTrialDuration"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "feedback uses categorize":
+                for k in ("imageUsesImagePlugin", "htmlUsesHtmlPlugin", "feedbackEmitted",
+                          "keyAnswerEmitted", "pluginDoesTheScoring",
+                          "withoutFeedbackUnchanged", "severalKeysRefuse"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "expression validation":
