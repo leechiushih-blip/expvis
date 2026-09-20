@@ -220,12 +220,34 @@ function _aiSystemPrompt(dev) {
   '⚠ IMPORTANT: Output all text content, labels, and instructions in ENGLISH. Use English for all user-facing text.\n\n' +
   '【Output Format】Strict JSON only - no markdown code blocks, no comments.\n' +
   '{"phases":[\n' +
-  '  {"name":"Instructions","timeline":[{"id":"t1","components":[text(instructions)+button(start)]}]},\n' +
-  '  {"name":"Trials","timeline":[{"id":"t2","components":[fixation+stimulus×N+response]}]},\n' +
-  '  {"name":"Feedback","timeline":[{"id":"tN","components":[text(thanks)]}]}\n' +
+  '  {"name":"Instructions","timeline":[{"components":[text(instructions)+button(start)]}]},\n' +
+  '  {"name":"Trials","repetitions":48,"randomize_order":true,"timeline":[{"components":[fixation+stimulus+response]}]},\n' +
+  '  {"name":"Feedback","timeline":[{"components":[text(thanks)]}]}\n' +
   ']}\n' +
   'A phase has a NAME and a `timeline` of trials. There is no phase type and no colour.\n' +
-  'Instructions and Feedback as above are conventional, not required — use as many phases as the design needs.\n\n' +
+  'Instructions and Feedback as above are conventional, not required — use as many phases as the design needs.\n' +
+  'Do NOT write `id`s. The editor assigns them on import, so any you invent are discarded.\n\n' +
+  '【Phase Settings】OPTIONAL, on the phase object beside `name` and `timeline`.\n' +
+  '  This is how a block repeats and how it orders itself. It is also the ONLY way to\n' +
+  '  reach the four things ExpVis used to express as components.\n' +
+  '  ⚠ NEVER write the same trial out N times. Write it ONCE and set these.\n\n' +
+  '  repetitions: 48                    run the phase timeline 48 times\n' +
+  '  randomize_order: true              shuffle the trials within each run\n' +
+  '  sample: {type:"without-replacement", size:24}\n' +
+  '        "without-replacement" — draw 24 of them, no repeats\n' +
+  '        "with-replacement"    — draw 24, repeats allowed (also takes weights:[3,1])\n' +
+  '        "fixed-repetitions"   — each trial appears `size` times, then shuffled\n' +
+  '        "alternate-groups"    — cycle groups; also takes groups:[[0,2],[1,3]]\n' +
+  '                                and randomize_group_order:true\n' +
+  '        "custom"              — takes fn: a JS function of the order array\n' +
+  '  loop: {field:"correct", op:"is", value:"false"}\n' +
+  '        Repeat the WHOLE phase while this condition holds (read it as "until").\n' +
+  '  cond: {field:"correct", op:"is not", value:"true"}\n' +
+  '        Run the phase only if this condition holds; otherwise skip it.\n' +
+  '        `op` is one of: "is" | "is not" | "more than" | "at most" | "less than" | "at least"\n' +
+  '        `field` is a column the trials record: "correct" | "response" | "rt", or any other.\n' +
+  '        ⚠ jsPsych puts NO limit on a `loop`, and the editor adds none: a condition that\n' +
+  '          never comes true repeats until the session is abandoned. Make sure it can come true.\n\n' +
   '【Full Component Schema】(cat: s=stimulus r=response x=owns the whole trial)\n\n' +
   'text:       {type:"text",content:"text",fontSize:32,color:"#333333",position:"center",fontWeight:"bold",cat:"s"}\n' +
   'shape:      {type:"shape",shape:"circle|square|triangle|diamond|star",size:80,color:"#6366f1",position:"center",cat:"s"}\n' +
@@ -234,11 +256,18 @@ function _aiSystemPrompt(dev) {
   'animation:  {type:"animation",frames:[],frame_time:250,frame_isi:0,sequence_reps:1,choices:[],prompt:"",render_on_canvas:true,cat:"x"}  // OWNS the trial; never combine with anything\n' +
   'audio:      {type:"audio",fileData:"",fileName:"",trial_ends_after_audio:false,response_allowed_while_playing:true,cat:"s"}\n' +
   'video:      {type:"video",fileData:"",fileName:"",width:320,height:0,autoplay:true,controls:false,start:0,stop:0,cat:"s"}\n' +
-  'keyboard:   {type:"keyboard",choices:["a","l"],correctKey:"",prompt:"Press a key",trial_duration:0,stimulus_duration:0,response_ends_trial:true,wait_for_key_release:false,cat:"r"}\n' +
+  // The six trailing fields are the editor's own names for the categorize
+  // plugin's feedback parameters. The schema omitted them, which is what made
+  // an in-trial feedback experiment unreachable from a description — the model
+  // had no way to learn the field names.
+  'keyboard:   {type:"keyboard",choices:["a","l"],correctKey:"",prompt:"Press a key",trial_duration:0,stimulus_duration:0,response_ends_trial:true,wait_for_key_release:false,correct_text:"",incorrect_text:"",feedback_duration:0,timeout_message:"",show_feedback_on_timeout:false,force_correct_button_press:false,cat:"r"}\n' +
   'button:     {type:"button",choices:["Yes","No"],prompt:"",button_layout:"grid",grid_rows:1,grid_columns:0,trial_duration:0,stimulus_duration:0,response_ends_trial:true,enable_button_after:0,cat:"r"}\n' +
   'slider:     {type:"slider",min:0,max:100,step:1,slider_start:50,labels:[],button_label:"Continue",slider_width:0,require_movement:false,prompt:"",trial_duration:0,stimulus_duration:0,response_ends_trial:true,cat:"r"}\n' +
-  'textInput:  {type:"textInput",prompt:"",placeholder:"Type here",name:"Q0",required:false,rows:1,columns:40,button_label:"Continue",autocomplete:false,cat:"r"}  // no right answer, no timeout\n' +
-  'textInput:  {type:"textInput",questions:[{prompt:"",placeholder:"Enter text",required:false}],button_label:"Continue",preamble:"",autocomplete:false,cat:"r"}\n' +
+  // One line, not two. The flat `prompt` / `name` / `rows` / `columns` shape was
+  // a second, older spelling that the component no longer has — the editor
+  // builds every textInput with a `questions` array. A model reading both lines
+  // had a coin flip's chance of writing the one that does not exist.
+  'textInput:  {type:"textInput",questions:[{prompt:"",placeholder:"Enter text",required:false}],button_label:"Continue",preamble:"",autocomplete:false,cat:"r"}  // no right answer, no timeout\n' +
   'likert:     {type:"likert",questions:[{prompt:"",labels:["Disagree","Neutral","Agree"],required:false}],scale_width:0,randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
   'multiChoice:{type:"multiChoice",questions:[{prompt:"",options:["A","B"],required:false,horizontal:false}],randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
   'multiSelect:{type:"multiSelect",questions:[{prompt:"",options:["A","B"],required:false,horizontal:false}],randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
@@ -275,18 +304,27 @@ function _aiSystemPrompt(dev) {
   '    Error messages: slightly smaller than stimuli (~' + Math.round(dev.h * 0.04) + 'px)\n' +
   '    Small devices (w<500): reduce all sizes by ~30%\n' +
   '    Large screens (w>1500): increase stimuli up to ' + Math.round(dev.h * 0.1) + 'px\n\n' +
-  '【ID System】Trials "t1","t2"... Components "c1","c2"... globally sequential across all phases\n\n' +
+  // The 【ID System】 section used to sit here and spell out a t1/t2/c1/c2
+  // numbering scheme. The editor assigns every id on import and discards the
+  // ones it is given, so the section taught work that is thrown away — and it
+  // contradicted the Output Format note that says not to write ids.
   '【Scoring and feedback】\n' +
   '  Set `correctKey` on a keyboard component to score it: the exported trial records\n' +
   '  `correct` per response. Leave it empty for a trial that is not scored.\n' +
-  '  Writing `correct_text` / `incorrect_text` on that keyboard component switches the trial\n' +
-  '  onto jsPsych\'s categorize plugin, which shows the message itself — and then `correctKey`\n' +
-  '  must name exactly ONE key, because that plugin scores against a single one.\n' +
-  '  There is no in-trial branching: to react to a response, score it and use a later trial.\n\n' +
+  '  Filling `correct_text` or `incorrect_text` switches that trial onto jsPsych\'s categorize\n' +
+  '  plugin, which shows the message itself instead of ending silently. Two rules follow:\n' +
+  '    · `correctKey` must then name exactly ONE key — the plugin scores against a single one.\n' +
+  '      With several keys the message is dropped and the trial stays on the plain plugin.\n' +
+  '    · The companion fields are `feedback_duration` (ms the message stays; 0 = until a key),\n' +
+  '      `timeout_message` and `show_feedback_on_timeout` (what a timed-out trial shows), and\n' +
+  '      `force_correct_button_press` (make the participant press the right key to continue).\n' +
+  '  There is no in-trial branching, so one trial cannot react to its own response: to do that,\n' +
+  '  score the trial and let a later phase act on the score — a `cond` on the next phase, or a\n' +
+  '  `loop` on this one.\n\n' +
   '【Experiment Patterns】\n' +
-  '  Stroop: one trial per condition — text(word, coloured) + keyboard(choices, correctKey) — then a phase\n' +
-  '    whose settings repeat it and sample the order. The varying word lives in the phase\'s\n' +
-  '    condition table (one trial per condition, values filled in per condition).\n' +
+  '  Stroop: ONE trial — text(word, coloured) + keyboard(choices, correctKey) — with the phase\n' +
+  '    repeating it. For several conditions write one trial per condition instead and let\n' +
+  '    `randomize_order` shuffle them; do not write 48 copies of anything.\n' +
   '  Flanker: text("<<<<<") + keyboard(choices:["f","j"], correctKey:"f"), and a trial per arrow direction.\n' +
   '  Simon: shape(colour, position:"left"|"right") + keyboard(choices:["a","l"], correctKey).\n' +
   '  Memory / Survey: a single trial with text + textInput(questions:[...]) — several questions on one page.\n' +
@@ -732,237 +770,244 @@ function _applyI18n() {
         return null;
       }
 
+
+// The defaults every component is created from. They live here rather than
+// inside addComponent because the AI prompt teaches this same schema, and the
+// two had already drifted: the prompt never learned the six feedback fields on
+// `keyboard`, so an in-trial feedback experiment was unreachable from a
+// description. The probe now diffs this table against the prompt.
+var _compDefaults = {
+  text: {
+    type: 'text',
+    content: 'New Text',
+    fontSize: 32,
+    color: '#333333',
+    position: 'center',
+    fontWeight: 'bold',
+  },
+  shape: {type: 'shape', shape: 'circle', size: 80, color: '#6366f1', position: 'center'},
+  // stimulus_width/height/maintain_aspect_ratio are the image plugins'
+  // own parameters; they apply when the trial runs on one of them (see
+  // the image-plugin rule in _compileExperiment) and as max-width in the
+  // HTML path otherwise.
+  image: {
+    type: 'image',
+    fileData: '',
+    fileName: '',
+    stimulus_width: 200,
+    stimulus_height: 0,
+    maintain_aspect_ratio: true,
+    render_on_canvas: true,
+  },
+  // Frame-by-frame animation (jsPsychAnimation). It OWNS the display —
+  // the plugin clears the display element each frame — so it carries no
+  // position and cannot share a trial with other components.
+  animation: {
+    type: 'animation',
+    frames: [],
+    frame_time: 250,
+    frame_isi: 0,
+    sequence_reps: 1,
+    choices: [],
+    prompt: '',
+    render_on_canvas: true,
+  },
+  // These two mirror their plugins' parameters, as the image component
+  // does. `controls` defaults to false because a participant should not be
+  // able to scrub the stimulus.
+  audio: {
+    type: 'audio',
+    fileData: '',
+    fileName: '',
+    trial_ends_after_audio: false,
+    response_allowed_while_playing: true,
+  },
+  video: {
+    type: 'video',
+    fileData: '',
+    fileName: '',
+    width: 320,
+    height: 0,
+    autoplay: true,
+    controls: false,
+    start: 0,
+    stop: 0,
+  },
+  // Emitted as a jsPsychHtmlKeyboardResponse trial with choices NO_KEYS,
+  // so `trial_duration` is the parameter it actually sets. The jitter trio
+  // is an ExpVis extension that turns that value into a dynamic parameter
+  // (a function sampling from a list) — the same idiom the official
+  // rt-task demo uses for its fixation.
+  fixation: {
+    type: 'fixation',
+    trial_duration: 500,
+    durationMin: 0,
+    durationMax: 0,
+    durationStep: 250,
+  },
+  // Field names mirror jsPsychHtmlKeyboardResponse's parameters. `choices`
+  // is an array of key strings; an EMPTY array means "ALL_KEYS" (jsPsych's
+  // own sentinel for any key) — see keyboardChoices() below.
+  keyboard: {
+    type: 'keyboard',
+    choices: ['a', 'l'],
+    correctKey: '',
+    prompt: 'Press a key',
+    trial_duration: 0,
+    stimulus_duration: 0,
+    response_ends_trial: true,
+    wait_for_key_release: false,
+    // ---- feedback, optional ----
+    // Filling either message switches the trial onto jsPsych's own
+    // categorize plugin, which shows a right/wrong message instead of
+    // ending silently. The names are that plugin's parameters.
+    //
+    // Empty is the default and it means "no feedback" — a pre-filled
+    // "Correct." would turn the feature on for every trial in the
+    // experiment, which is not what an untouched field should do.
+    correct_text: '',
+    incorrect_text: '',
+    feedback_duration: 0,
+    timeout_message: '',
+    show_feedback_on_timeout: false,
+    force_correct_button_press: false,
+  },
+  // Field names mirror jsPsychHtmlButtonResponse's parameters exactly, so
+  // the inspector reads like the plugin's docs. `choices` is a real array
+  // (the inspector edits it as comma-separated text and converts back).
+  // 0 means "not set" for the numeric params — jsPsych's own default is null.
+  button: {
+    type: 'button',
+    choices: ['Yes', 'No'],
+    prompt: '',
+    button_layout: 'grid',
+    grid_rows: 1,
+    grid_columns: 0,
+    trial_duration: 0,
+    stimulus_duration: 0,
+    response_ends_trial: true,
+    enable_button_after: 0,
+  },
+  // Field names mirror jsPsychHtmlSliderResponse's parameters. `labels`
+  // is an array placed at equal spacing (0, or 2+ — one label would divide
+  // by zero in the plugin's layout maths). 0 means "not set" for numbers.
+  slider: {
+    type: 'slider',
+    min: 0,
+    max: 100,
+    step: 1,
+    slider_start: 50,
+    labels: [],
+    button_label: 'Continue',
+    slider_width: 0,
+    require_movement: false,
+    prompt: '',
+    trial_duration: 0,
+    stimulus_duration: 0,
+    response_ends_trial: true,
+  },
+  // ---- Survey -------------------------------------------------------
+  // The four that take a `questions` array share one shape: a list of
+  // question objects, each with its own prompt. Every one of these
+  // plugins has always accepted a list — the editor only ever put one
+  // entry in it. Now a page can ask several.
+  //
+  // `prompt` MUST be emitted as a string: the plugin renders <p>prompt</p>
+  // unconditionally, so a missing one would print the literal word
+  // "undefined" on screen.
+  //
+  // None of them has a correctAnswer or a trial_duration: a survey page
+  // has no right answer and cannot auto-advance.
+  textInput: {
+    type: 'textInput',
+    questions: [{prompt: '', placeholder: 'Enter text', required: false}],
+    button_label: 'Continue',
+    preamble: '',
+    autocomplete: false,
+  },
+  likert: {
+    type: 'likert',
+    // One set of scale labels, emitted as a single row. The plugin also
+    // accepts several rows (a subscale per row), which the editor does
+    // not offer — the flat case is what a Likert item usually is.
+    questions: [{
+      prompt: '',
+      labels: ['Strongly disagree', 'Neutral', 'Strongly agree'],
+      required: false,
+    }],
+    scale_width: 0,
+    randomize_question_order: false,
+    button_label: 'Continue',
+    preamble: '',
+  },
+  multiChoice: {
+    type: 'multiChoice',
+    questions: [{prompt: '', options: ['Option 1', 'Option 2'], required: false, horizontal: false}],
+    randomize_question_order: false,
+    button_label: 'Continue',
+    preamble: '',
+  },
+  multiSelect: {
+    type: 'multiSelect',
+    questions: [{prompt: '', options: ['Option 1', 'Option 2'], required: false, horizontal: false}],
+    randomize_question_order: false,
+    button_label: 'Continue',
+    preamble: '',
+  },
+  // ---- Task plugins -------------------------------------------------
+  // A page the plugin builds itself, with its own inputs and its own
+  // submit button. It takes no `stimulus`, so there is no screen for
+  // another component to share — it owns the trial outright, the same
+  // category animation is in.
+  //
+  // `text` carries the blanks: the plugin splits it on single percent
+  // signs, taking even pieces as prose and odd pieces as blanks (with
+  // / separating several accepted answers for one blank). That is its
+  // own notation, read off its source — the docs' examples double the
+  // percent sign for their own escaping and are misleading here.
+  cloze: {
+    type: 'cloze',
+    text: 'The capital of France is %Paris%.',
+    button_text: 'OK',
+    check_answers: false,
+    allow_blanks: true,
+    case_sensitivity: true,
+  },
+  // Drag pictures around a sorting area. Its `stimuli` is an ARRAY OF
+  // IMAGES (the plugin's own parameter type), not HTML — so it holds a
+  // list of images the way animation holds a list of frames, and shares
+  // the same uploader.
+  //
+  // It writes no `response`: where each picture ended up is in
+  // `final_locations`, as x/y per image.
+  freeSort: {
+    type: 'freeSort',
+    stimuli: [],
+    stim_width: 100,
+    stim_height: 100,
+    sort_area_width: 700,
+    sort_area_height: 700,
+    sort_area_shape: 'ellipse',
+    prompt: '',
+    prompt_location: 'above',
+    button_label: 'Continue',
+    stim_starts_inside: false,
+  },
+  // The odd one out: this plugin takes a block of HTML rather than a
+  // question list, so the researcher writes the form themselves and the
+  // editor only supplies the frame around it.
+  htmlForm: {
+    type: 'htmlForm',
+    html: '<p>Question</p>\n<input name="answer" type="text">',
+    button_label: 'Continue',
+    preamble: '',
+  },
+};
+
       function addComponent(tid, type, cat) {
         var t = findTrial(tid);
         if (!t) return;
-        var defs = {
-          text: {
-            type: 'text',
-            content: 'New Text',
-            fontSize: 32,
-            color: '#333333',
-            position: 'center',
-            fontWeight: 'bold',
-          },
-          shape: {type: 'shape', shape: 'circle', size: 80, color: '#6366f1', position: 'center'},
-          // stimulus_width/height/maintain_aspect_ratio are the image plugins'
-          // own parameters; they apply when the trial runs on one of them (see
-          // the image-plugin rule in _compileExperiment) and as max-width in the
-          // HTML path otherwise.
-          image: {
-            type: 'image',
-            fileData: '',
-            fileName: '',
-            stimulus_width: 200,
-            stimulus_height: 0,
-            maintain_aspect_ratio: true,
-            render_on_canvas: true,
-          },
-          // Frame-by-frame animation (jsPsychAnimation). It OWNS the display —
-          // the plugin clears the display element each frame — so it carries no
-          // position and cannot share a trial with other components.
-          animation: {
-            type: 'animation',
-            frames: [],
-            frame_time: 250,
-            frame_isi: 0,
-            sequence_reps: 1,
-            choices: [],
-            prompt: '',
-            render_on_canvas: true,
-          },
-          // These two mirror their plugins' parameters, as the image component
-          // does. `controls` defaults to false because a participant should not be
-          // able to scrub the stimulus.
-          audio: {
-            type: 'audio',
-            fileData: '',
-            fileName: '',
-            trial_ends_after_audio: false,
-            response_allowed_while_playing: true,
-          },
-          video: {
-            type: 'video',
-            fileData: '',
-            fileName: '',
-            width: 320,
-            height: 0,
-            autoplay: true,
-            controls: false,
-            start: 0,
-            stop: 0,
-          },
-          // Emitted as a jsPsychHtmlKeyboardResponse trial with choices NO_KEYS,
-          // so `trial_duration` is the parameter it actually sets. The jitter trio
-          // is an ExpVis extension that turns that value into a dynamic parameter
-          // (a function sampling from a list) — the same idiom the official
-          // rt-task demo uses for its fixation.
-          fixation: {
-            type: 'fixation',
-            trial_duration: 500,
-            durationMin: 0,
-            durationMax: 0,
-            durationStep: 250,
-          },
-          // Field names mirror jsPsychHtmlKeyboardResponse's parameters. `choices`
-          // is an array of key strings; an EMPTY array means "ALL_KEYS" (jsPsych's
-          // own sentinel for any key) — see keyboardChoices() below.
-          keyboard: {
-            type: 'keyboard',
-            choices: ['a', 'l'],
-            correctKey: '',
-            prompt: 'Press a key',
-            trial_duration: 0,
-            stimulus_duration: 0,
-            response_ends_trial: true,
-            wait_for_key_release: false,
-            // ---- feedback, optional ----
-            // Filling either message switches the trial onto jsPsych's own
-            // categorize plugin, which shows a right/wrong message instead of
-            // ending silently. The names are that plugin's parameters.
-            //
-            // Empty is the default and it means "no feedback" — a pre-filled
-            // "Correct." would turn the feature on for every trial in the
-            // experiment, which is not what an untouched field should do.
-            correct_text: '',
-            incorrect_text: '',
-            feedback_duration: 0,
-            timeout_message: '',
-            show_feedback_on_timeout: false,
-            force_correct_button_press: false,
-          },
-          // Field names mirror jsPsychHtmlButtonResponse's parameters exactly, so
-          // the inspector reads like the plugin's docs. `choices` is a real array
-          // (the inspector edits it as comma-separated text and converts back).
-          // 0 means "not set" for the numeric params — jsPsych's own default is null.
-          button: {
-            type: 'button',
-            choices: ['Yes', 'No'],
-            prompt: '',
-            button_layout: 'grid',
-            grid_rows: 1,
-            grid_columns: 0,
-            trial_duration: 0,
-            stimulus_duration: 0,
-            response_ends_trial: true,
-            enable_button_after: 0,
-          },
-          // Field names mirror jsPsychHtmlSliderResponse's parameters. `labels`
-          // is an array placed at equal spacing (0, or 2+ — one label would divide
-          // by zero in the plugin's layout maths). 0 means "not set" for numbers.
-          slider: {
-            type: 'slider',
-            min: 0,
-            max: 100,
-            step: 1,
-            slider_start: 50,
-            labels: [],
-            button_label: 'Continue',
-            slider_width: 0,
-            require_movement: false,
-            prompt: '',
-            trial_duration: 0,
-            stimulus_duration: 0,
-            response_ends_trial: true,
-          },
-          // ---- Survey -------------------------------------------------------
-          // The four that take a `questions` array share one shape: a list of
-          // question objects, each with its own prompt. Every one of these
-          // plugins has always accepted a list — the editor only ever put one
-          // entry in it. Now a page can ask several.
-          //
-          // `prompt` MUST be emitted as a string: the plugin renders <p>prompt</p>
-          // unconditionally, so a missing one would print the literal word
-          // "undefined" on screen.
-          //
-          // None of them has a correctAnswer or a trial_duration: a survey page
-          // has no right answer and cannot auto-advance.
-          textInput: {
-            type: 'textInput',
-            questions: [{prompt: '', placeholder: 'Enter text', required: false}],
-            button_label: 'Continue',
-            preamble: '',
-            autocomplete: false,
-          },
-          likert: {
-            type: 'likert',
-            // One set of scale labels, emitted as a single row. The plugin also
-            // accepts several rows (a subscale per row), which the editor does
-            // not offer — the flat case is what a Likert item usually is.
-            questions: [{
-              prompt: '',
-              labels: ['Strongly disagree', 'Neutral', 'Strongly agree'],
-              required: false,
-            }],
-            scale_width: 0,
-            randomize_question_order: false,
-            button_label: 'Continue',
-            preamble: '',
-          },
-          multiChoice: {
-            type: 'multiChoice',
-            questions: [{prompt: '', options: ['Option 1', 'Option 2'], required: false, horizontal: false}],
-            randomize_question_order: false,
-            button_label: 'Continue',
-            preamble: '',
-          },
-          multiSelect: {
-            type: 'multiSelect',
-            questions: [{prompt: '', options: ['Option 1', 'Option 2'], required: false, horizontal: false}],
-            randomize_question_order: false,
-            button_label: 'Continue',
-            preamble: '',
-          },
-          // ---- Task plugins -------------------------------------------------
-          // A page the plugin builds itself, with its own inputs and its own
-          // submit button. It takes no `stimulus`, so there is no screen for
-          // another component to share — it owns the trial outright, the same
-          // category animation is in.
-          //
-          // `text` carries the blanks: the plugin splits it on single percent
-          // signs, taking even pieces as prose and odd pieces as blanks (with
-          // / separating several accepted answers for one blank). That is its
-          // own notation, read off its source — the docs' examples double the
-          // percent sign for their own escaping and are misleading here.
-          cloze: {
-            type: 'cloze',
-            text: 'The capital of France is %Paris%.',
-            button_text: 'OK',
-            check_answers: false,
-            allow_blanks: true,
-            case_sensitivity: true,
-          },
-          // Drag pictures around a sorting area. Its `stimuli` is an ARRAY OF
-          // IMAGES (the plugin's own parameter type), not HTML — so it holds a
-          // list of images the way animation holds a list of frames, and shares
-          // the same uploader.
-          //
-          // It writes no `response`: where each picture ended up is in
-          // `final_locations`, as x/y per image.
-          freeSort: {
-            type: 'freeSort',
-            stimuli: [],
-            stim_width: 100,
-            stim_height: 100,
-            sort_area_width: 700,
-            sort_area_height: 700,
-            sort_area_shape: 'ellipse',
-            prompt: '',
-            prompt_location: 'above',
-            button_label: 'Continue',
-            stim_starts_inside: false,
-          },
-          // The odd one out: this plugin takes a block of HTML rather than a
-          // question list, so the researcher writes the form themselves and the
-          // editor only supplies the frame around it.
-          htmlForm: {
-            type: 'htmlForm',
-            html: '<p>Question</p>\n<input name="answer" type="text">',
-            button_label: 'Continue',
-            preamble: '',
-          },
-        };
-        if (!defs[type]) {
+        if (!_compDefaults[type]) {
           // A retired or unknown type: refuse rather than create an inert shell
           // that renders as an empty node and generates nothing.
           console.warn('[ExpVis] Unknown component type "' + type + '" — nothing was added.');
@@ -1001,7 +1046,7 @@ function _applyI18n() {
             editor.selectedTrial = nt.id;
           }
         }
-        var c = JSON.parse(JSON.stringify(defs[type]));
+        var c = JSON.parse(JSON.stringify(_compDefaults[type]));
         c.id = 'c' + ++editor.cc;
         c.cat = cat;
         saveState();

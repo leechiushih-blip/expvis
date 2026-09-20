@@ -1136,6 +1136,116 @@ function phaseCases() {
     };
   })();
 
+  // The prompt teaches a schema; the editor creates components from another.
+  // They are the same schema or the model writes fields that do not exist, and
+  // they had already drifted once — `keyboard` gained six feedback fields and
+  // the prompt never learned them, so an in-trial feedback experiment could not
+  // be described. Diffed in both directions, and the failure names the field.
+  (function () {
+    var sys = _aiSystemPrompt({w: 1280, h: 720});
+    var i = sys.indexOf('Full Component Schema');
+    var j = sys.indexOf('【Color Rules', i);
+    var schema = (i >= 0 && j > i) ? sys.slice(i, j) : '';
+
+    // Top-level keys of one `{type:…}` literal. Strings are stepped over whole,
+    // so a colon inside a value cannot be read as the start of a key, and
+    // bracket depth keeps the nested `questions:[{…}]` out of the result.
+    function topLevelKeys(body) {
+      var keys = [], depth = 0, k = 0;
+      while (k < body.length) {
+        var ch = body.charAt(k);
+        if (ch === '"') {
+          k++;
+          while (k < body.length && body.charAt(k) !== '"') {
+            if (body.charCodeAt(k) === 92) k++;   // backslash: skip the escape
+            k++;
+          }
+          k++;
+          continue;
+        }
+        if (ch === '{' || ch === '[') { depth++; k++; continue; }
+        if (ch === '}' || ch === ']') { depth--; k++; continue; }
+        if (depth === 1 && /[A-Za-z_$]/.test(ch)) {
+          var e = k;
+          while (e < body.length && /[A-Za-z0-9_$]/.test(body.charAt(e))) e++;
+          var name = body.slice(k, e);
+          var c = e;
+          while (c < body.length && body.charAt(c) === ' ') c++;
+          if (body.charAt(c) === ':') keys.push(name);
+          k = e;
+          continue;
+        }
+        k++;
+      }
+      return keys;
+    }
+
+    var taught = {};
+    // The split argument is DOUBLED on purpose: PROBE goes through a Python
+    // percent-format, where an undoubled escape becomes a real newline in the
+    // JS source, cutting the statement in half and stopping the editor from
+    // loading at all. See the escape traps in HANDOFF.
+    schema.split('\\n').forEach(function (line) {
+      if (line.indexOf('{type:') < 0 || line.indexOf(':') < 0) return;
+      var m = line.match(/([A-Za-z]+):\s*\{type:"([A-Za-z]+)"/);
+      if (!m) return;
+      var body = line.slice(line.indexOf('{type:'));
+      var cut = body.indexOf('//');
+      if (cut >= 0) body = body.slice(0, cut);
+      body = body.slice(0, body.lastIndexOf('}'));
+      taught[m[2]] = (taught[m[2]] || []).concat(topLevelKeys(body));
+    });
+
+    // `type` and `cat` are the two the defaults table does not carry: the table
+    // is keyed by type, and addComponent stamps `cat` on afterwards.
+    var OUTSIDE = ['type', 'cat'];
+    var drift = [];
+    Object.keys(taught).forEach(function (t) {
+      var real = _compDefaults[t];
+      if (!real) { drift.push(t + ': not a component'); return; }
+      var realKeys = Object.keys(real).filter(function (x) { return OUTSIDE.indexOf(x) < 0; });
+      taught[t].forEach(function (x) {
+        if (OUTSIDE.indexOf(x) < 0 && realKeys.indexOf(x) < 0) {
+          drift.push(t + '.' + x + ': taught, not real');
+        }
+      });
+      realKeys.forEach(function (x) {
+        if (taught[t].indexOf(x) < 0) drift.push(t + '.' + x + ': real, not taught');
+      });
+    });
+    // …and nothing in the editor is missing from the prompt altogether
+    Object.keys(_compDefaults).forEach(function (t) {
+      if (!taught[t]) drift.push(t + ': no schema line at all');
+    });
+
+    // The five phase controls the compiler reads. The prompt has to name the
+    // same five, or "repeat this 48 times" has no spelling the model can use.
+    var controls = ['repetitions', 'randomize_order', 'sample', 'loop', 'cond'];
+    var missingControls = controls.filter(function (c) {
+      return sys.indexOf(c) < 0;
+    });
+    // …and every sample type the settings dialog can emit
+    var sampleTypes = ['without-replacement', 'with-replacement',
+                       'fixed-repetitions', 'alternate-groups', 'custom'];
+    var missingSample = sampleTypes.filter(function (t) { return sys.indexOf(t) < 0; });
+    // the condition operators, as the dialog spells them
+    var ops = ['is not', 'more than', 'at most', 'less than', 'at least'];
+    var missingOps = ops.filter(function (o) { return sys.indexOf(o) < 0; });
+
+    out['the prompt teaches the schema the editor has'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      schemaFound: schema.length > 0,
+      typesCovered: Object.keys(taught).length === Object.keys(_compDefaults).length,
+      noDrift: drift.length === 0,
+      // reported so a failure says which field, not just that something moved
+      drift: drift.join('; '),
+      controlsNamed: missingControls.length === 0,
+      sampleTypesNamed: missingSample.length === 0,
+      operatorsNamed: missingOps.length === 0
+    };
+  })();
+
   // Anthropic does not read `Authorization`; it wants `x-api-key`, and a call
   // from a page is refused at the preflight unless the caller opts in. The
   // provider used to hand its key to the shared `Authorization` path, so every
@@ -1992,6 +2102,16 @@ def cmd_check():
                 for k in ("templatesAreClean", "metaTypesAreReal",
                           "schemaHasNoRetiredType", "stillForbidden",
                           "templatesMatchButtons"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "the prompt teaches the schema the editor has":
+                if not c["schemaFound"]:
+                    broken_cases.append(f"phase case {name}: no schema section found")
+                if not c["typesCovered"]:
+                    broken_cases.append(f"phase case {name}: typesCovered is false")
+                if not c["noDrift"]:
+                    broken_cases.append(f"phase case {name}: prompt and editor disagree — {c['drift']}")
+                for k in ("controlsNamed", "sampleTypesNamed", "operatorsNamed"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "ai provider headers":
