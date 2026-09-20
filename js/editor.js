@@ -1728,7 +1728,13 @@ function _applyI18n() {
         // `>=`, not `>`: jsPsych's `do { … } while (t(data))` calls this once
         // per round, so the call that returns false ends a round that already
         // ran. `> cap` would let one more through and make "at most 10" mean 11.
+        //
+        // The comment travels into the generated file on purpose: the counter is
+        // not jsPsych's, and a reader who meets it there deserves to know where
+        // it came from and why it is there.
         return '(function () {\n' +
+          '    // Added by ExpVis, not jsPsych: a loop_function that never\n' +
+          '    // becomes false would repeat this node forever.\n' +
           '    var rounds = 0;\n' +
           '    return function (data) {\n' +
           '      if (++rounds >= ' + cap + ') return false;\n' +
@@ -4945,10 +4951,10 @@ function _applyI18n() {
                 _escAttr(String(draft.loop.cap)) + '" style="' + NUM + '">' +
                 '<span style="font-size:0.76rem">times</span>'
               : ''),
-            'Repeats while the condition is FALSE, so it reads as “until”. ' +
-            'The cap is ExpVis’s: jsPsych has no limit, and a condition that ' +
-            'never comes true would hang the session. 0 = no cap. Counted per ' +
-            'node, not per repetition.');
+            'Repeats while the condition is false, so it reads as “until”. ' +
+            'The cap is what keeps a condition that never comes true from ' +
+            'hanging the session — jsPsych has none of its own. 0 = no cap. ' +
+            'Counted across the node, not once per repetition.');
           h += _condRow('ps-cond', draft.cond, 'Run this block only when', '',
             'Reads the whole experiment’s data — jsPsych passes this function ' +
             'nothing. A false answer skips the block entirely, including its ' +
