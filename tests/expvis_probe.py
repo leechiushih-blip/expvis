@@ -38,6 +38,9 @@ var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
   'jsPsychSurveyLikert', 'jsPsychSurveyMultiChoice', 'jsPsychSurveyMultiSelect',
   'jsPsychSurveyHtmlForm', 'jsPsychCategorizeImage', 'jsPsychCategorizeHtml',
   'jsPsychCloze', 'jsPsychFreeSort',
+  'jsPsychAudioKeyboardResponse', 'jsPsychAudioButtonResponse',
+  'jsPsychAudioSliderResponse', 'jsPsychVideoKeyboardResponse',
+  'jsPsychVideoButtonResponse', 'jsPsychVideoSliderResponse',
   'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
 // Node-level parameters that jsPsych reads but ExpVis does not derive from the
 // canvas. Everything else a node can carry — timeline_variables, sample,
@@ -776,6 +779,64 @@ function phaseCases() {
                             trial.indexOf('stimulus:') < 0,
       // an area with nothing to sort says so
       emptyWarns: /has no images/.test(empty),
+    };
+  })();
+  // Audio and video run on their own plugins, as image does. Those plugins exist
+  // for a reason the HTML path cannot match: they wait for the media before the
+  // trial's clock starts. Their parameters are the plugin's own.
+  (function () {
+    function build(spec, setup) {
+      resetEditor();
+      addPhase('trials');
+      addTrial(editor.phases[0].id);
+      var t = findTrial(editor.selectedTrial);
+      spec.forEach(function (s) {
+        addComponent(t.id, s[0], s[1]);
+        var c = t.components[t.components.length - 1];
+        Object.keys(s[2] || {}).forEach(function (k) { c[k] = s[2][k]; });
+      });
+      if (setup) setup(t);
+      return (_compileExperiment({}).code.match(/var trials_trial_1 = \\{[\\s\\S]*?\\n\\};/)
+        || [''])[0];
+    }
+    var KB = ['keyboard', 'r', {choices: ['f', 'j'], correctKey: 'f'}];
+    var AUD = ['audio', 's', {fileData: 'data:audio/wav;base64,AAAA', fileName: 'tone.wav'}];
+    var VID = ['video', 's', {fileData: 'data:video/mp4;base64,AAAA', fileName: 'clip.mp4'}];
+    var IMG = ['image', 's', {fileData: 'data:image/png;base64,AAAA',
+                              fileName: 'p.png', stimulus_width: 0}];
+    var TXT = ['text', 's', {content: 'listen'}];
+    var audio = build([AUD, KB], function (t) {
+      t.components[0].trial_ends_after_audio = true;
+      t.components[0].response_allowed_while_playing = false;
+    });
+    var video = build([VID, KB], function (t) {
+      t.components[0].start = 2;
+      t.components[0].stop = 5;
+    });
+    var image = build([IMG, KB]);
+    // audio with something else on the screen: no plugin can do that, so it
+    // falls back to HTML — and that fallback is the common case, not the rare one
+    var fallback = build([AUD, TXT, KB]);
+    out['audio and video'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      audioPlugin: /type: jsPsychAudioKeyboardResponse/.test(audio) &&
+                   /stimulus: 'snd\\/tone.wav'/.test(audio),
+      // the media plugin's own parameters, and only when they were changed
+      audioParams: /trial_ends_after_audio: true/.test(audio) &&
+                   /response_allowed_while_playing: false/.test(audio),
+      videoPlugin: /type: jsPsychVideoKeyboardResponse/.test(video),
+      // a video plugin's `stimulus` is an ARRAY; an audio plugin's is not
+      videoStimulusIsArray: /stimulus: \\['vid\\/clip.mp4'\\]/.test(video),
+      videoParams: /start: 2/.test(video) && /stop: 5/.test(video) &&
+                   video.indexOf('controls') < 0 &&
+                   video.indexOf('autoplay') < 0,
+      // image is untouched by any of this
+      imageStillItsOwn: /type: jsPsychImageKeyboardResponse/.test(image),
+      // the HTML fallback carries the medium without a playback bar
+      fallbackHasNoControls: /type: jsPsychHtmlKeyboardResponse/.test(fallback) &&
+                             fallback.indexOf('<audio ') >= 0 &&
+                             fallback.indexOf('controls') < 0,
     };
   })();
   // A `data` override must keep the scoring key. The on_finish the editor
@@ -1721,6 +1782,12 @@ def cmd_check():
             if name == "free sort":
                 for k in ("plugin", "allImagesEmitted", "assetsCarried", "onlyChanged",
                           "noResponseOrStimulus", "emptyWarns"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "audio and video":
+                for k in ("audioPlugin", "audioParams", "videoPlugin",
+                          "videoStimulusIsArray", "videoParams", "imageStillItsOwn",
+                          "fallbackHasNoControls"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "expression validation":

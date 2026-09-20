@@ -621,8 +621,27 @@ function _applyI18n() {
             prompt: '',
             render_on_canvas: true,
           },
-          audio: {type: 'audio', fileData: '', fileName: ''},
-          video: {type: 'video', fileData: '', fileName: '', width: 320},
+          // These two mirror their plugins' parameters, as the image component
+          // does. `controls` defaults to false because a participant should not be
+          // able to scrub the stimulus.
+          audio: {
+            type: 'audio',
+            fileData: '',
+            fileName: '',
+            trial_ends_after_audio: false,
+            response_allowed_while_playing: true,
+          },
+          video: {
+            type: 'video',
+            fileData: '',
+            fileName: '',
+            width: 320,
+            height: 0,
+            autoplay: true,
+            controls: false,
+            start: 0,
+            stop: 0,
+          },
           // Emitted as a jsPsychHtmlKeyboardResponse trial with choices NO_KEYS,
           // so `trial_duration` is the parameter it actually sets. The jitter trio
           // is an ExpVis extension that turns that value into a dynamic parameter
@@ -3952,14 +3971,30 @@ function _applyI18n() {
         // used as intended; every response component now runs on its own plugin.
         // container with choices: "NO_KEYS" — the controls are drawn into the
         // stimulus and the trial ends via jsPsych.finishTrial().
-        // Which plugin runs an image-only trial. The dedicated image plugins take
-        // the picture as `stimulus` and nothing else, so this only applies when
-        // the image is the whole visual content — the same shape as the official
+        // Which plugin runs a trial whose content is a single medium — the
+        // picture, the sound, the clip — with nothing else on the screen. Those
+        // plugins take the medium itself as `stimulus` and nothing else, so they
+        // apply only when it is the whole content, the same shape as the official
         // jsPsych RT-task demo.
-        var _imagePlugins = {
-          keyboard: 'jsPsychImageKeyboardResponse',
-          button: 'jsPsychImageButtonResponse',
-          slider: 'jsPsychImageSliderResponse',
+        //
+        // A video's `stimulus` is an ARRAY in the plugin and an audio's is not,
+        // so the two are not interchangeable even though the table looks it.
+        var _mediaPlugins = {
+          image: {
+            keyboard: 'jsPsychImageKeyboardResponse',
+            button: 'jsPsychImageButtonResponse',
+            slider: 'jsPsychImageSliderResponse',
+          },
+          audio: {
+            keyboard: 'jsPsychAudioKeyboardResponse',
+            button: 'jsPsychAudioButtonResponse',
+            slider: 'jsPsychAudioSliderResponse',
+          },
+          video: {
+            keyboard: 'jsPsychVideoKeyboardResponse',
+            button: 'jsPsychVideoButtonResponse',
+            slider: 'jsPsychVideoSliderResponse',
+          },
         };
 
         // Response type → the plugin that runs it. A table, not a chain: there
@@ -3985,10 +4020,10 @@ function _applyI18n() {
           cloze: 'jsPsychCloze',
           freeSort: 'jsPsychFreeSort',
         };
-        function pluginName(rt, forImage) {
-          if (forImage && _imagePlugins[rt]) {
-            _usedPlugins[_imagePlugins[rt]] = true;
-            return _imagePlugins[rt];
+        function pluginName(rt, mediaPlugin) {
+          if (mediaPlugin) {
+            _usedPlugins[mediaPlugin] = true;
+            return mediaPlugin;
           }
           // Keyboard is the fallback: instructions, feedback and timed nodes
           // carry no response component of their own.
@@ -4073,14 +4108,19 @@ function _applyI18n() {
                 ? '<img src="' + _assetToken(c.fileName, c.type, c.fileData) +
                   '" style="' + px + 'max-width:' + (c.stimulus_width || 200) + 'px">'
                 : '';
+            // No `controls` on either: a playback bar lets the participant scrub
+            // the stimulus, pause it, or jump to the end. The plugins default to
+            // false for the same reason, and this path has to agree with them —
+            // it is what an audio or video trial falls back to whenever anything
+            // else shares the screen, so it is not the rare case.
             case 'audio':
               return c.fileData
-                ? '<audio controls src="' + _assetToken(c.fileName, c.type, c.fileData) +
+                ? '<audio src="' + _assetToken(c.fileName, c.type, c.fileData) +
                   '" style="' + px + '"></audio>'
                 : '';
             case 'video':
               return c.fileData
-                ? '<video controls src="' + _assetToken(c.fileName, c.type, c.fileData) +
+                ? '<video src="' + _assetToken(c.fileName, c.type, c.fileData) +
                   '" style="' + px + 'max-width:' + (c.width || 320) + 'px"></video>'
                 : '';
             default:
@@ -4610,9 +4650,12 @@ function _applyI18n() {
             // official RT-task demo does. One other visual component — a caption,
             // a shape — and the trial falls back to the HTML path, because the
             // image plugins take the picture as `stimulus` and nothing else.
-            var imageOnlyComp = (stims.length === 1 && stims[0].type === 'image' &&
+            // One medium, alone on the screen, with a response plugin that has a
+            // variant for it — then the dedicated plugin runs the trial.
+            var mediaOnlyComp = (stims.length === 1 && _mediaPlugins[stims[0].type] &&
               _mediaRef(stims[0])) ? stims[0] : null;
-            var useImagePlugin = !!imageOnlyComp && !!_imagePlugins[respType];
+            var mediaPlugin = mediaOnlyComp
+              ? (_mediaPlugins[mediaOnlyComp.type][respType] || null) : null;
 
             // ---- feedback: a filled message moves the trial onto jsPsych's own
             // categorize plugin, which scores the response and shows the answer
@@ -4638,11 +4681,11 @@ function _applyI18n() {
             // the trial's index within that phase.
             var trialName = phaseSlug + '_trial_' + (ti + 1);
             // Categorize-image takes the picture as `stimulus` exactly as the image
-            // plugins do, so it rides on the same `imageOnlyComp` decision; anything
-            // else takes the rendered screen as HTML.
+            // plugins do, so it rides on the same decision; anything else — including
+            // an audio or video trial — takes the rendered screen as HTML.
             var pname = useCategorize
-              ? (useImagePlugin ? 'jsPsychCategorizeImage' : 'jsPsychCategorizeHtml')
-              : pluginName(respType, useImagePlugin);
+              ? (mediaPlugin ? 'jsPsychCategorizeImage' : 'jsPsychCategorizeHtml')
+              : pluginName(respType, mediaPlugin);
             if (useCategorize) _usedPlugins[pname] = true;
 
             // ---- jsPsychAnimation owns the display element, so it is emitted as
@@ -4884,10 +4927,13 @@ function _applyI18n() {
             // `preamble`, the HTML shown above the questions.
             var _stimKey = _surveyTypes.indexOf(respType) >= 0 ? 'preamble' : 'stimulus';
             {
-              if (useImagePlugin) {
-                // The picture itself, as the image plugins expect.
-                P(indent, 'stimulus', "'" + _assetHref(
-                  imageOnlyComp.fileName, imageOnlyComp.type, imageOnlyComp.fileData) + "'");
+              if (mediaPlugin) {
+                // The medium itself, as its plugin expects. A video plugin takes a
+                // LIST, which is why this is wrapped even for one clip.
+                var _mref = "'" + _assetHref(mediaOnlyComp.fileName, mediaOnlyComp.type,
+                  mediaOnlyComp.fileData) + "'";
+                P(indent, 'stimulus', mediaOnlyComp.type === 'video'
+                  ? '[' + _mref + ']' : _mref);
               } else if (preHTML || postStims.length > 0) {
                 P(indent, _stimKey, "'" + fullStimHTML + "'");
               } else {
@@ -4964,14 +5010,36 @@ function _applyI18n() {
                 P(indent, 'button_label', "'" + _jsStr(String(respInfo.buttonLabel)) + "'");
               if (respInfo.autocomplete) P(indent, 'autocomplete', 'true');
             }
-            if (useImagePlugin) {
-              var _imc = imageOnlyComp;
-              if (_imc.stimulus_width) P(indent, 'stimulus_width', String(_imc.stimulus_width));
-              if (_imc.stimulus_height) P(indent, 'stimulus_height', String(_imc.stimulus_height));
-              if (_imc.maintain_aspect_ratio === false || _imc.maintain_aspect_ratio === 'false')
-                P(indent, 'maintain_aspect_ratio', 'false');
-              if (_imc.render_on_canvas === false || _imc.render_on_canvas === 'false')
-                P(indent, 'render_on_canvas', 'false');
+            if (mediaPlugin) {
+              var _imc = mediaOnlyComp;
+              if (_imc.type === 'image') {
+                if (_imc.stimulus_width) P(indent, 'stimulus_width', String(_imc.stimulus_width));
+                if (_imc.stimulus_height) P(indent, 'stimulus_height', String(_imc.stimulus_height));
+                if (_imc.maintain_aspect_ratio === false || _imc.maintain_aspect_ratio === 'false')
+                  P(indent, 'maintain_aspect_ratio', 'false');
+                if (_imc.render_on_canvas === false || _imc.render_on_canvas === 'false')
+                  P(indent, 'render_on_canvas', 'false');
+              }
+              // Audio and video bring their own playback parameters, and they are
+              // the reason this route exists: the plugin waits for the media and
+              // decides whether the trial may end on its own.
+              if (_imc.type === 'audio') {
+                if (_imc.trial_ends_after_audio === true || _imc.trial_ends_after_audio === 'true')
+                  P(indent, 'trial_ends_after_audio', 'true');
+                if (_imc.response_allowed_while_playing === false ||
+                    _imc.response_allowed_while_playing === 'false')
+                  P(indent, 'response_allowed_while_playing', 'false');
+              }
+              if (_imc.type === 'video') {
+                if (_imc.width) P(indent, 'width', String(_imc.width));
+                if (_imc.height) P(indent, 'height', String(_imc.height));
+                if (_imc.autoplay === false || _imc.autoplay === 'false')
+                  P(indent, 'autoplay', 'false');
+                if (_imc.controls === true || _imc.controls === 'true')
+                  P(indent, 'controls', 'true');
+                if (_imc.start) P(indent, 'start', String(_imc.start));
+                if (_imc.stop) P(indent, 'stop', String(_imc.stop));
+              }
             }
             if (respType === 'keyboard') {
               if (respInfo.stimulusDuration) P(indent, 'stimulus_duration', String(respInfo.stimulusDuration));
@@ -5948,6 +6016,12 @@ function _applyI18n() {
         jsPsychCloze: {pkg: '@jspsych/plugin-cloze', ver: '2.2.0'},
         jsPsychFreeSort: {pkg: '@jspsych/plugin-free-sort', ver: '2.1.0'},
         jsPsychImageKeyboardResponse: {pkg: '@jspsych/plugin-image-keyboard-response', ver: '2.2.0'},
+        jsPsychAudioKeyboardResponse: {pkg: '@jspsych/plugin-audio-keyboard-response', ver: '2.2.0'},
+        jsPsychAudioButtonResponse: {pkg: '@jspsych/plugin-audio-button-response', ver: '2.1.1'},
+        jsPsychAudioSliderResponse: {pkg: '@jspsych/plugin-audio-slider-response', ver: '2.1.1'},
+        jsPsychVideoKeyboardResponse: {pkg: '@jspsych/plugin-video-keyboard-response', ver: '2.2.0'},
+        jsPsychVideoButtonResponse: {pkg: '@jspsych/plugin-video-button-response', ver: '2.1.1'},
+        jsPsychVideoSliderResponse: {pkg: '@jspsych/plugin-video-slider-response', ver: '2.1.1'},
         jsPsychImageButtonResponse: {pkg: '@jspsych/plugin-image-button-response', ver: '2.2.0'},
         jsPsychImageSliderResponse: {pkg: '@jspsych/plugin-image-slider-response', ver: '2.1.0'},
       };
