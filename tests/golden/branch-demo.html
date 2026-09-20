@@ -15,13 +15,11 @@
   <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@2.2.0"></script>
   <script src="https://unpkg.com/@jspsych/plugin-html-button-response@2.1.0"></script>
   <link href="https://unpkg.com/jspsych@8.3.0/css/jspsych.css" rel="stylesheet" type="text/css">
-  <style>
-.jspsych-display-element { min-height: 720px; }
-  </style>
 </head>
 <body>
   <script>
     var jsPsych = initJsPsych({
+      experiment_width: 1280,
       on_finish: function() {
         jsPsych.data.displayData();
         jsPsych.data.get().localSave('csv', 'experiment_' + Date.now() + '.csv');
@@ -33,7 +31,7 @@
     // ── Instructions (1/3) ──
     var instructions_trial_1 = {
       type: jsPsychHtmlButtonResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:18px;color:#333333;font-weight:bold">Branch Demo<br><br>This experiment demonstrates the branch component:<br>• Red text → Press A<br>• Blue text → Press L<br>• Wrong answer → jumps to error feedback<br>• Correct answer → proceeds normally<br><br>2 sets of 3 trials each.</div></div>',
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:18px;color:#333333;font-weight:bold">Branch Demo<br><br>This experiment demonstrates the branch component:<br>• Red text → Press A<br>• Blue text → Press L<br>• Wrong answer → jumps to error feedback<br>• Correct answer → proceeds normally<br><br>2 sets of 3 trials each.</div></div>',
       choices: ["Start Demo"],
       button_layout: 'grid',
       grid_rows: 1
@@ -47,13 +45,13 @@
     // ── Trials (2/3) ──
     var trials_trial_2 = {
       type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press A for RED text</div></div>',
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press A for RED text</div></div>',
       trial_duration: 1500
     };
 
     var trials_trial_4 = {
       type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press L for BLUE text</div></div>',
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:22px;color:#ef4444;font-weight:bold">Wrong key!<br><br>Press L for BLUE text</div></div>',
       trial_duration: 1500
     };
 
@@ -62,13 +60,13 @@
         // Trial 1
         {
           type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:60px;color:#ccc">+</div></div>',
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:60px;color:#ccc">+</div></div>',
           choices: 'NO_KEYS',
           trial_duration: 700,
         },
         {
           type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:36px;color:#ef4444;font-weight:bold">RED</div></div>',
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:36px;color:#ef4444;font-weight:bold">RED</div></div>',
           choices: ["a","l"],
           prompt: 'Press a key',
           data: {correct_response: 'a'},
@@ -80,13 +78,13 @@
         // Trial 3
         {
           type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:60px;color:#ccc">+</div></div>',
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:60px;color:#ccc">+</div></div>',
           choices: 'NO_KEYS',
           trial_duration: 700,
         },
         {
           type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:36px;color:#3b82f6;font-weight:bold">BLUE</div></div>',
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:36px;color:#3b82f6;font-weight:bold">BLUE</div></div>',
           choices: ["a","l"],
           prompt: 'Press a key',
           data: {correct_response: 'l'},
@@ -102,7 +100,7 @@
     // ── Feedback (3/3) ──
     var feedback_trial_1 = {
       type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:20px;color:#333333;font-weight:bold">Demo complete!<br><br>Key branch features:<br>• targetFail property specifies error jump target<br>• Correct answer: continues main flow<br>• Wrong answer: flashes red → jumps to error page<br>• Error page ends → returns to main flow<br>• Target trials auto-skipped when reached via normal flow</div></div>'
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:20px;color:#333333;font-weight:bold">Demo complete!<br><br>Key branch features:<br>• targetFail property specifies error jump target<br>• Correct answer: continues main flow<br>• Wrong answer: flashes red → jumps to error page<br>• Error page ends → returns to main flow<br>• Target trials auto-skipped when reached via normal flow</div></div>'
     };
 
     var feedback_timeline = {

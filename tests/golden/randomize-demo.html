@@ -16,13 +16,11 @@
   <script src="https://unpkg.com/@jspsych/plugin-html-button-response@2.1.0"></script>
   <script src="https://unpkg.com/@jspsych/plugin-survey-text@2.1.1"></script>
   <link href="https://unpkg.com/jspsych@8.3.0/css/jspsych.css" rel="stylesheet" type="text/css">
-  <style>
-.jspsych-display-element { min-height: 720px; }
-  </style>
 </head>
 <body>
   <script>
     var jsPsych = initJsPsych({
+      experiment_width: 1280,
       on_finish: function() {
         jsPsych.data.displayData();
         jsPsych.data.get().localSave('csv', 'experiment_' + Date.now() + '.csv');
@@ -34,7 +32,7 @@
     // ── Instructions (1/3) ──
     var instructions_trial_1 = {
       type: jsPsychHtmlButtonResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:17px;color:#333333;font-weight:bold">Randomize + Variable Demo<br><br>This experiment demonstrates two logic components:<br><br>Variable: stores experiment data (e.g. score)<br>  • Creates variable score=0 at trial start<br>  • +1 on each correct answer<br><br>Randomize: shuffles component display order<br>  • 4 fruit names in random order<br>  • Different order each loop<br><br>Memorize the fruit names, then type them in.<br>5 rounds total.</div></div>',
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:17px;color:#333333;font-weight:bold">Randomize + Variable Demo<br><br>This experiment demonstrates two logic components:<br><br>Variable: stores experiment data (e.g. score)<br>  • Creates variable score=0 at trial start<br>  • +1 on each correct answer<br><br>Randomize: shuffles component display order<br>  • 4 fruit names in random order<br>  • Different order each loop<br><br>Memorize the fruit names, then type them in.<br>5 rounds total.</div></div>',
       choices: ["Start Demo"],
       button_layout: 'grid',
       grid_rows: 1
@@ -52,13 +50,13 @@
         // Trial 2
         {
           type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:60px;color:#ccc">+</div></div>',
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:60px;color:#ccc">+</div></div>',
           choices: 'NO_KEYS',
           trial_duration: 700,
         },
         {
           type: jsPsychSurveyText,
-          preamble: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:32px;color:#333333;font-weight:bold">New Text</div><div style="font-size:30px;color:#ef4444;font-weight:bold">Apple</div><div style="font-size:30px;color:#f59e0b;font-weight:bold">Banana</div><div style="font-size:30px;color:#f97316;font-weight:bold">Orange</div></div>',
+          preamble: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:32px;color:#333333;font-weight:bold">New Text</div><div style="font-size:30px;color:#ef4444;font-weight:bold">Apple</div><div style="font-size:30px;color:#f59e0b;font-weight:bold">Banana</div><div style="font-size:30px;color:#f97316;font-weight:bold">Orange</div></div>',
           questions: [{
             prompt: '',
             placeholder: 'Enter text',
@@ -73,7 +71,7 @@
     // ── Feedback (3/3) ──
     var feedback_trial_1 = {
       type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:20px;color:#333333;font-weight:bold">Demo complete!<br><br>Variable component:<br>• Stores and updates experiment data<br>• e.g. scores, cumulative RT<br>• Converted to data fields in jsPsych<br><br>Randomize component:<br>• Shuffles component order within a trial<br>• Controls order effects<br>• Converted to timeline_variables in jsPsych</div></div>'
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:20px;color:#333333;font-weight:bold">Demo complete!<br><br>Variable component:<br>• Stores and updates experiment data<br>• e.g. scores, cumulative RT<br>• Converted to data fields in jsPsych<br><br>Randomize component:<br>• Shuffles component order within a trial<br>• Controls order effects<br>• Converted to timeline_variables in jsPsych</div></div>'
     };
 
     var feedback_timeline = {

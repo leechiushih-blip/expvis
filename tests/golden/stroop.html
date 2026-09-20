@@ -15,13 +15,11 @@
   <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@2.2.0"></script>
   <script src="https://unpkg.com/@jspsych/plugin-html-button-response@2.1.0"></script>
   <link href="https://unpkg.com/jspsych@8.3.0/css/jspsych.css" rel="stylesheet" type="text/css">
-  <style>
-.jspsych-display-element { min-height: 720px; }
-  </style>
 </head>
 <body>
   <script>
     var jsPsych = initJsPsych({
+      experiment_width: 1280,
       on_finish: function() {
         jsPsych.data.displayData();
         jsPsych.data.get().localSave('csv', 'experiment_' + Date.now() + '.csv');
@@ -33,7 +31,7 @@
     // ── Instructions (1/3) ──
     var instructions_trial_1 = {
       type: jsPsychHtmlButtonResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:20px;color:#333333;font-weight:bold">Welcome to the Stroop experiment!<br><br>You will see color words (RED, BLUE, GREEN) displayed in different font colors.<br>Your task is to respond to the FONT COLOR, ignoring the word meaning.<br><br>Red font → Press A<br>Blue font → Press L<br>Green font → Press K<br><br>Respond as quickly and accurately as possible!</div></div>',
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:20px;color:#333333;font-weight:bold">Welcome to the Stroop experiment!<br><br>You will see color words (RED, BLUE, GREEN) displayed in different font colors.<br>Your task is to respond to the FONT COLOR, ignoring the word meaning.<br><br>Red font → Press A<br>Blue font → Press L<br>Green font → Press K<br><br>Respond as quickly and accurately as possible!</div></div>',
       choices: ["Start Experiment"],
       button_layout: 'grid',
       grid_rows: 1
@@ -47,7 +45,7 @@
     // ── Trials (2/3) ──
     var trials_trial_2 = {
       type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#ef4444;font-weight:bold">Press the key for the FONT COLOR!<br>Red=A  Blue=L  Green=K</div></div>',
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:22px;color:#ef4444;font-weight:bold">Press the key for the FONT COLOR!<br>Red=A  Blue=L  Green=K</div></div>',
       trial_duration: 1200
     };
 
@@ -56,13 +54,13 @@
         // Trial 1
         {
           type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:60px;color:#ccc">+</div></div>',
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:60px;color:#ccc">+</div></div>',
           choices: 'NO_KEYS',
           trial_duration: 700,
         },
         {
           type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:32px;color:#333333;font-weight:bold">New Text</div><div style="font-size:36px;color:#ff0000;font-weight:bold">RED</div><div style="font-size:36px;color:#0000ff;font-weight:bold">RED</div><div style="font-size:36px;color:#00aa00;font-weight:bold">RED</div><div style="font-size:36px;color:#ff0000;font-weight:bold">BLUE</div><div style="font-size:36px;color:#0000ff;font-weight:bold">BLUE</div><div style="font-size:36px;color:#00aa00;font-weight:bold">BLUE</div><div style="font-size:36px;color:#ff0000;font-weight:bold">GREEN</div><div style="font-size:36px;color:#0000ff;font-weight:bold">GREEN</div></div>',
+          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:32px;color:#333333;font-weight:bold">New Text</div><div style="font-size:36px;color:#ff0000;font-weight:bold">RED</div><div style="font-size:36px;color:#0000ff;font-weight:bold">RED</div><div style="font-size:36px;color:#00aa00;font-weight:bold">RED</div><div style="font-size:36px;color:#ff0000;font-weight:bold">BLUE</div><div style="font-size:36px;color:#0000ff;font-weight:bold">BLUE</div><div style="font-size:36px;color:#00aa00;font-weight:bold">BLUE</div><div style="font-size:36px;color:#ff0000;font-weight:bold">GREEN</div><div style="font-size:36px;color:#0000ff;font-weight:bold">GREEN</div></div>',
           choices: ["a","l"],
           prompt: 'Press a key'
         },
@@ -74,7 +72,7 @@
     // ── Feedback (3/3) ──
     var feedback_trial_1 = {
       type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box;width:1280px"><div style="font-size:22px;color:#333333;font-weight:bold">Experiment complete!<br><br>Thank you for your participation.<br>Your response data has been recorded.</div></div>'
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:22px;color:#333333;font-weight:bold">Experiment complete!<br><br>Thank you for your participation.<br>Your response data has been recorded.</div></div>'
     };
 
     var feedback_timeline = {

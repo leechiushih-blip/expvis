@@ -945,6 +945,29 @@ function _applyI18n() {
       function renderFlow() {
         var fc = document.getElementById('flow-container');
         var es = document.getElementById('empty-state');
+        // A real click focuses the button before it fires, and the browser
+        // scrolls a newly focused element into view — so clicking "+ Add Trial"
+        // or a row's ✕ scrolled the canvas to wherever that button sat, which
+        // reads as the canvas jumping to the top. The rebuild then replaces the
+        // button, and the canvas stays where the focus put it. That is why this
+        // happened on mouse clicks and never on a synthetic `.click()`: the
+        // latter does not move focus at all.
+        //
+        // Taking the default away from mousedown on buttons stops the focus and
+        // the click still fires. Only buttons: the drag handles are spans, so
+        // dragging a phase or a component is untouched. Assigned rather than
+        // added, so repeated renders do not stack handlers.
+        fc.onmousedown = function (e) {
+          if (e.target && e.target.closest && e.target.closest('button')) {
+            e.preventDefault();
+          }
+        };
+        // The rebuild below removes every card before adding the new ones, and
+        // during that gap the container is only as tall as its min-height. When
+        // that is shorter than the visible canvas the browser clamps scrollTop
+        // to 0. Carry the position across the rebuild as well.
+        var scroller = document.getElementById('canvas-scroll');
+        var keepTop = scroller ? scroller.scrollTop : 0;
         if (editor.phases.length === 0) {
           es.style.display = 'block';
           fc.querySelectorAll('.phase-card,.phase-arrow,.flow-row,.add-node-btn').forEach((el) => {
@@ -1412,6 +1435,22 @@ function _applyI18n() {
             this.closest('.phase-card').style.opacity = '1';
           };
         });
+        // Restoring after the rebuild, not instead of it. A delete can leave
+        // less to scroll through than before, in which case the browser clamps
+        // this to the new maximum — which is what a shorter canvas should do.
+        //
+        // Twice, because the rebuild removes the very button that was clicked:
+        // Chrome answers the focused element disappearing by scrolling its
+        // container back to the top, and it does that AFTER this frame, so a
+        // single restore loses to it. Measured: a canvas scrolled to 300 came
+        // back at 25. The rAF runs after that reaction, and the second write
+        // wins.
+        if (scroller) {
+          scroller.scrollTop = keepTop;
+          requestAnimationFrame(function () {
+            if (scroller) scroller.scrollTop = keepTop;
+          });
+        }
       }
 
       function getShapeCSS(s, clr) {
@@ -3386,13 +3425,15 @@ function _applyI18n() {
         }
         // The stage every stimulus is laid out on. jsPsych's own
         // `.jspsych-content-wrapper { margin:auto }` centres this block, so it
-        // needs no justify-content of its own. The width is the device the
-        // experiment was designed for; the height lives on the display element
-        // (see _deviceStyle) because the plugins append their own controls AFTER
-        // the stimulus, and a stage as tall as the device would push them off it.
+        // needs no justify-content of its own. The WIDTH is deliberately not
+        // here: it is `experiment_width` on initJsPsych, which sizes jsPsych's
+        // content element once rather than repeating the device number in every
+        // trial's markup — and a stage div with no width fills that element, so
+        // the box the researcher laid out is still the box the participant gets.
+        // No height is set anywhere: see the note where _deviceStyle used to be.
         function _stage(innerHTML) {
           return '<div style="display:flex;flex-direction:column;align-items:center;' +
-            'gap:1.5em;padding:2em;box-sizing:border-box;width:' + dev.w + 'px">' +
+            'gap:1.5em;padding:2em;box-sizing:border-box">' +
             innerHTML + '</div>';
         }
 
@@ -3427,6 +3468,10 @@ function _applyI18n() {
         if (opts.displayElement) {
           code += "  display_element: '" + opts.displayElement + "',\n";
         }
+        // The designed width, as jsPsych's own parameter. It sets the width of
+        // the content element, which every stimulus then fills — so the number
+        // appears once here instead of in each trial's markup.
+        code += '  experiment_width: ' + dev.w + ',\n';
         code += '  on_finish: function() {\n';
         onFinishBody.split('\n').forEach(function (l) {
           code += '    ' + l + '\n';
@@ -4064,12 +4109,12 @@ function _applyI18n() {
             // because the plugin's buttons are appended AFTER this block and got
             // pushed away from their stimulus. gap + align-items do the real work:
             // gap spaces the components, align-items centres fixed-width ones.
-            // The stage is pinned to the device width, so what the researcher laid
-            // out is the box the participant gets. The HEIGHT is not set here: the
-            // plugins append their own controls *after* the stimulus, so a stage as
-            // tall as the device would push buttons and sliders off the bottom of
-            // the screen. The design height is applied to jsPsych's display area
-            // instead — see _deviceStyle().
+            // Neither dimension is pinned here any more. The width is
+            // `experiment_width` on initJsPsych, so the stage fills the content
+            // element without repeating the device number in every trial's
+            // markup. The height is not set here OR on the display element: the
+            // plugins append their own controls *after* the stimulus, and a stage
+            // as tall as the device would push buttons and sliders off-screen.
             var _bodyHTML = preHTML + postStims.map(function(c){return compHTML(c);}).join('');
             var fullStimHTML = _jsStr(_stage(_bodyHTML));
 
@@ -5192,16 +5237,18 @@ function _applyI18n() {
         jsPsychImageSliderResponse: {pkg: '@jspsych/plugin-image-slider-response', ver: '2.1.0'},
       };
 
-      // The device height is a property of the *viewport* the experiment was
-      // designed for, not of the stimulus box: jsPsych appends each plugin's own
-      // controls (buttons, slider submit) after the content, so pinning the
-      // stimulus to the full height would push those controls off-screen. Sizing
-      // the display area instead keeps the content centred inside the designed
-      // height with the controls still beside it.
-      function _deviceStyle() {
-        var d = editor.device || {w: 1280, h: 720};
-        return '.jspsych-display-element { min-height: ' + d.h + 'px; }\n';
-      }
+      // There is deliberately no rule sizing the display element to the device
+      // HEIGHT. It used to be `.jspsych-display-element { min-height: 720px }`,
+      // which centred the content in a 720px canvas. On a viewport shorter than
+      // that it pushed a 130px stimulus down to top=295 — bottom edge below the
+      // fold, where a participant would never think to scroll for it — and on a
+      // viewport taller than the device it changed nothing at all. jsPsych
+      // centres the content either way (`.jspsych-content { margin: auto }`), so
+      // the rule had no effect it could be proud of.
+      //
+      // The device height is still what the editor's preview frame and the AI
+      // prompt's type scale are built from; it just stops being written into the
+      // experiment.
 
       // CDN script tags for the core plus every plugin this experiment actually uses.
       function _cdnTags(usedPlugins) {
@@ -5237,7 +5284,10 @@ function _applyI18n() {
         _cdnTags(usedPlugins).forEach(function (t) { h += '  ' + t + '\n'; });
         h += '  <link href="https://unpkg.com/jspsych@' + _JSPsychVersion +
              '/css/jspsych.css" rel="stylesheet" type="text/css">\n';
-        h += '  <style>\n' + _deviceStyle() + (extraStyle || '') + '  </style>\n';
+        // Only when the caller has something to say. With the device height no
+        // longer emitted, a page that has no extra style would otherwise carry
+        // an empty <style> block.
+        if (extraStyle) h += '  <style>\n' + extraStyle + '  </style>\n';
         h += '</head>\n';
         return h;
       }
