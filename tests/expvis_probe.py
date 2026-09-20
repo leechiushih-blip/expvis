@@ -37,7 +37,7 @@ var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
   'jsPsychHtmlSliderResponse', 'jsPsychSurveyText', 'jsPsychPreload', 'jsPsychAnimation',
   'jsPsychSurveyLikert', 'jsPsychSurveyMultiChoice', 'jsPsychSurveyMultiSelect',
   'jsPsychSurveyHtmlForm', 'jsPsychCategorizeImage', 'jsPsychCategorizeHtml',
-  'jsPsychCloze',
+  'jsPsychCloze', 'jsPsychFreeSort',
   'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
 // Node-level parameters that jsPsych reads but ExpVis does not derive from the
 // canvas. Everything else a node can carry — timeline_variables, sample,
@@ -726,6 +726,56 @@ function phaseCases() {
       // comments included — a percent followed by a dash reads as a format
       // spec, and the probe dies before it ever runs.
       noBlankWarns: /has no %% blank/.test(bare),
+    };
+  })();
+  // The second task plugin. Free-sort's `stimuli` is an ARRAY OF IMAGES — the
+  // plugin's own parameter type, not HTML — so it holds pictures the way
+  // animation holds frames, and the two share an uploader. It writes no
+  // `response`: where each picture ended up is in `final_locations`.
+  (function () {
+    function build(stimuli) {
+      resetEditor();
+      addPhase('trials');
+      addTrial(editor.phases[0].id);
+      var t = findTrial(editor.selectedTrial);
+      addComponent(t.id, 'freeSort', 'x');
+      var c = t.components[0];
+      if (stimuli) c.stimuli = stimuli;
+      c.prompt = 'Sort these';
+      c.sort_area_shape = 'square';
+      c.stim_width = 80;
+      var code = _compileExperiment({}).code;
+      return {
+        trial: (code.match(/var trials_trial_1 = \\{[\\s\\S]*?\\n\\};/) || [''])[0],
+        code: code,
+        assets: _compileExperiment({}).assets.map(function (a) { return a.path; })
+      };
+    }
+    var full = build([{fileData: 'data:image/png;base64,AAAA', fileName: 'a.png'},
+                      {fileData: 'data:image/png;base64,BBBB', fileName: 'b.png'}]);
+    var trial = full.trial;
+    var empty = build([]).code;
+    out['free sort'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      plugin: /type: jsPsychFreeSort/.test(trial),
+      // every picture is emitted, by path, in the order it was uploaded
+      allImagesEmitted: /stimuli: \\['img\\/a.png', 'img\\/b.png'\\]/.test(trial),
+      // and they reach the export bundle too
+      assetsCarried: full.assets.length === 2 &&
+                     full.assets.join(',') === 'img/a.png,img/b.png',
+      // only what the researcher changed from the plugin's defaults is written,
+      // so jsPsych applies its own documented values for the rest
+      onlyChanged: /stim_width: 80/.test(trial) &&
+                   /sort_area_shape: 'square'/.test(trial) &&
+                   trial.indexOf('stim_height') < 0 &&
+                   trial.indexOf('sort_area_height') < 0 &&
+                   trial.indexOf('prompt_location') < 0,
+      // it has neither a response nor a stimulus parameter
+      noResponseOrStimulus: trial.indexOf('choices') < 0 &&
+                            trial.indexOf('stimulus:') < 0,
+      // an area with nothing to sort says so
+      emptyWarns: /has no images/.test(empty),
     };
   })();
   // A `data` override must keep the scoring key. The on_finish the editor
@@ -1666,6 +1716,11 @@ def cmd_check():
             if name == "cloze page":
                 for k in ("plugin", "notationKept", "paramsEmitted",
                           "defaultsOmitted", "noBlankWarns"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "free sort":
+                for k in ("plugin", "allImagesEmitted", "assetsCarried", "onlyChanged",
+                          "noResponseOrStimulus", "emptyWarns"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "expression validation":

@@ -763,6 +763,26 @@ function _applyI18n() {
             allow_blanks: true,
             case_sensitivity: true,
           },
+          // Drag pictures around a sorting area. Its `stimuli` is an ARRAY OF
+          // IMAGES (the plugin's own parameter type), not HTML — so it holds a
+          // list of images the way animation holds a list of frames, and shares
+          // the same uploader.
+          //
+          // It writes no `response`: where each picture ended up is in
+          // `final_locations`, as x/y per image.
+          freeSort: {
+            type: 'freeSort',
+            stimuli: [],
+            stim_width: 100,
+            stim_height: 100,
+            sort_area_width: 700,
+            sort_area_height: 700,
+            sort_area_shape: 'ellipse',
+            prompt: '',
+            prompt_location: 'above',
+            button_label: 'Continue',
+            stim_starts_inside: false,
+          },
           // The odd one out: this plugin takes a block of HTML rather than a
           // question list, so the researcher writes the form themselves and the
           // editor only supplies the frame around it.
@@ -961,6 +981,7 @@ function _applyI18n() {
         button: '🔘',
         slider: '🎚️',
         cloze: '🔤',
+        freeSort: '🧩',
         textInput: '✏️',
         likert: '📊',
         multiChoice: '⚪',
@@ -979,6 +1000,7 @@ function _applyI18n() {
         button: 'Button',
         slider: 'Slider',
         cloze: 'Cloze',
+        freeSort: 'Free Sort',
         textInput: 'Survey Text',
         likert: 'Survey Likert',
         multiChoice: 'Survey Multiple Choice',
@@ -1022,6 +1044,14 @@ function _applyI18n() {
         step: 'Step',
         frames: 'Frames',
         text: 'Text',
+        stimuli: 'Images',
+        stim_width: 'Image Width',
+        stim_height: 'Image Height',
+        sort_area_width: 'Sort Area Width',
+        sort_area_height: 'Sort Area Height',
+        sort_area_shape: 'Sort Area Shape',
+        prompt_location: 'Prompt Position',
+        stim_starts_inside: 'Start Inside the Area',
         button_text: 'Button Text',
         check_answers: 'Check Answers',
         allow_blanks: 'Allow Blank Answers',
@@ -1496,7 +1526,7 @@ function _applyI18n() {
             // badge below follows.
             var respComps = t.components.filter(function (c) {
               return ['keyboard', 'button', 'slider', 'textInput', 'likert',
-                      'multiChoice', 'multiSelect', 'htmlForm', 'cloze']
+                      'multiChoice', 'multiSelect', 'htmlForm', 'cloze', 'freeSort']
                 .indexOf(c.type) >= 0;
             });
             var animComp = t.components.filter(function (c) { return c.type === 'animation'; })[0];
@@ -1703,6 +1733,10 @@ function _applyI18n() {
         if (c.type === 'fixation') {
           return (c.trial_duration || 500) + 'ms' +
             (c.durationMax > c.durationMin && c.durationMax > 0 ? ' ~ ' + c.durationMax + 'ms' : '');
+        }
+        if (c.type === 'freeSort') {
+          var nimg = (c.stimuli || []).filter(function (f) { return f && f.fileData; }).length;
+          return nimg + ' image' + (nimg === 1 ? '' : 's');
         }
         if (c.type === 'cloze') {
           var blanks = Math.floor((String(c.text || '').match(/%/g) || []).length / 2);
@@ -2213,6 +2247,7 @@ function _applyI18n() {
             stimulus_height: 'Image height in px. 0 = work it out from the width.',
             maintain_aspect_ratio: 'true = scale by width without distorting. Only used by the image plugins.',
             render_on_canvas: 'true = draw the image to a canvas. Only used by the image plugins.',
+            freeSort: 'Runs on the jsPsych free-sort plugin — pictures on a canvas the participant drags around. It owns the trial. Data records final_locations (where every picture ended up, as x/y per image), the moves made, and rt — there is no single `response`.',
             cloze: 'Runs on the jsPsych cloze plugin — a page of text with %%blanks%% for the participant to fill in, and the plugin\'s own submit button. It owns the trial: there is no stimulus for anything else to share. Data records response as an ARRAY of strings, one per blank.',
             animation: 'Runs on the jsPsych animation plugin — a flipbook of frames played at a fixed rate. The trial ends on its own after sequence_reps, and every key pressed during playback is recorded. It takes over the whole screen, so it cannot share a trial with other components. Data records response as an ARRAY of {stimulus, rt, key_press} — one entry per frame, so there is no single rt — plus animation_sequence and plugin_version, and NOT stimulus: the plugin records the frames it played instead.',
             audio: 'Upload MP3/WAV audio (≤16MB). Playable in fullscreen preview. Ideal for auditory stimulus experiments.',
@@ -2248,6 +2283,9 @@ function _applyI18n() {
             trial_duration: 'Trial Duration (ms). 0=no limit. If >0, auto-judges as timeout and records RT when exceeded.',
             choices: 'Comma-separated button labels, e.g. Yes,No. Exported as the jsPsych `choices` array.',
             frames: 'Upload the frames in playback order. They are played as a flipbook, one image at a time.',
+            stimuli: 'The pictures the participant drags around. Uploaded and emitted in the order shown.',
+            sort_area_shape: 'The shape of the region the pictures are sorted into.',
+            stim_starts_inside: 'Off, the pictures open outside the area and are dragged in. On, they start inside it.',
             text: 'The page text. A word between two single % signs is one blank, and several accepted answers for it are separated by /. That is the plugin\'s own notation and is emitted as written.',
             check_answers: 'Off, the page always submits. On, the answers are compared with the ones between the % signs and a wrong one keeps the page open.',
             allow_blanks: 'Off, a blank left empty stops the page from submitting.',
@@ -2339,6 +2377,15 @@ function _applyI18n() {
               h += '<input value="' + (Array.isArray(v) ? v.join(', ') : (v || '')).replace(/"/g, '&quot;') +
                 '" onchange="_setChoices(\'' + t.id + '\',\'' + c.id + '\',this.value)"' +
                 ' placeholder="' + (c.type === 'keyboard' ? 'a, l — leave empty for any key' : 'Yes, No') + '">';
+            // Free-sort's three enums get real dropdowns; without these they
+            // fall through to the plain text box and the researcher types
+            // "ellipse" by hand.
+            else if (k === 'sort_area_shape')
+              h += sel(k, [['ellipse', 'Ellipse'], ['square', 'Square']], v, t.id, c.id);
+            else if (k === 'prompt_location')
+              h += sel(k, [['above', 'Above'], ['below', 'Below']], v, t.id, c.id);
+            else if (k === 'stim_starts_inside')
+              h += sel(k, [['false', 'Outside'], ['true', 'Inside']], String(v), t.id, c.id);
             else if (k === 'button_layout')
               h += sel(k, ['grid', 'flex'], v || 'grid', t.id, c.id);
             else if (k === 'matchValue') {
@@ -2462,28 +2509,20 @@ function _applyI18n() {
               '<p style="font-size:0.6rem;color:var(--text2);margin:0 0 4px">MP4/WebM/OGG/MOV, max 64MB</p>';
           }
           if (c.type === 'animation') {
-            var frList = (Array.isArray(c.frames) ? c.frames : []).filter(function (f) { return f && f.fileData; });
-            h +=
-              '<div class="prop-row"><label>Frames</label><label id="anim-upload-label" style="padding:6px 12px;background:#f97316;color:#ffffff;border-radius:6px;cursor:pointer;font-size:0.75rem;display:inline-block">🎞️ Add frames</label><input type="file" id="anim-file-input" accept="image/*" multiple data-tid="' +
-              t.id + '" data-cid="' + c.id +
-              '" style="display:none"><span id="anim-file-name" style="font-size:0.7rem;color:var(--text2);margin-left:8px">' +
-              frList.length + ' frame' + (frList.length === 1 ? '' : 's') +
-              '</span></div><p style="font-size:0.6rem;color:var(--text2);margin:0 0 6px">Played in order, one image at a time. JPG/PNG/WebP, max 4MB each. Select several at once to append.</p>';
-            if (frList.length) {
-              h += _assetPathRow(frList.map(function (f) { return paths[f.fileData]; }));
-              h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">';
-              frList.forEach(function (f, fi) {
-                h += '<div style="position:relative;width:48px;height:48px">' +
-                  '<img src="' + f.fileData + '" title="' + (f.fileName || '') +
-                  '" style="width:48px;height:48px;object-fit:cover;border-radius:5px;border:1px solid var(--border)">' +
-                  '<span style="position:absolute;left:2px;top:1px;font-size:0.55rem;background:rgba(0,0,0,0.6);color:#fff;border-radius:3px;padding:0 3px">' +
-                  (fi + 1) + '</span>' +
-                  '<span onclick="_removeFrame(\'' + t.id + '\',\'' + c.id + '\',' + fi +
-                  ')" title="Remove frame" style="position:absolute;right:-5px;top:-5px;width:15px;height:15px;line-height:14px;text-align:center;border-radius:50%;background:var(--red);color:#fff;font-size:0.62rem;cursor:pointer">×</span>' +
-                  '</div>';
-              });
-              h += '</div>';
-            }
+            h += _assetPathRow((Array.isArray(c.frames) ? c.frames : [])
+              .filter(function (f) { return f && f.fileData; })
+              .map(function (f) { return paths[f.fileData]; }));
+            h += _multiImageUploader(t, c, 'frames', 'Frames',
+              'Played in order, one image at a time. JPG/PNG/WebP, max 4MB each. ' +
+              'Select several at once to append.', '#f97316', '🎞️');
+          }
+          if (c.type === 'freeSort') {
+            h += _assetPathRow((Array.isArray(c.stimuli) ? c.stimuli : [])
+              .filter(function (f) { return f && f.fileData; })
+              .map(function (f) { return paths[f.fileData]; }));
+            h += _multiImageUploader(t, c, 'stimuli', 'Images to sort',
+              'The pictures the participant drags around. JPG/PNG/WebP, max 4MB each.',
+              '#7c3aed', '🧩');
           }
           // The question list the four question-list survey plugins share. Its
           // own block rather than a row in the generic loop, because a question
@@ -2576,9 +2615,10 @@ function _applyI18n() {
             ['video/mp4', 'video/webm', 'video/ogg', '.mp4', '.webm', '.ogg', '.mov'],
             64,
           );
-          // Animation frames are uploaded many at a time and are appended, so
-          // they get their own handler rather than the single-file bindUpload.
-          var afi = document.getElementById('anim-file-input');
+          // A list of images is uploaded many at a time and appended, so it gets
+          // its own handler rather than the single-file bindUpload. One handler
+          // for every such list — the element carries which field it fills.
+          var afi = document.getElementById('multi-file-input');
           if (afi) {
             afi.onchange = function () {
               var files = Array.prototype.slice.call(afi.files || []);
@@ -2587,6 +2627,7 @@ function _applyI18n() {
               if (!t1) return;
               var c1 = t1.components.find(function (x) { return x.id === afi.getAttribute('data-cid'); });
               if (!c1) return;
+              var field = afi.getAttribute('data-field') || 'frames';
               var imgOk = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
                 '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
               var pending = files.length, accepted = [];
@@ -2612,29 +2653,68 @@ function _applyI18n() {
               function finishFrames() {
                 if (!accepted.length) return;
                 saveState();
-                if (!Array.isArray(c1.frames)) c1.frames = [];
+                if (!Array.isArray(c1[field])) c1[field] = [];
                 // Reading is async, so restore the order the user picked.
                 accepted.sort(function (a, b) {
                   return files.map(function (f) { return f.name; }).indexOf(a.fileName) -
                          files.map(function (f) { return f.name; }).indexOf(b.fileName);
                 });
-                c1.frames = c1.frames.concat(accepted);
+                c1[field] = c1[field].concat(accepted);
                 renderAll();
               }
             };
-            var alf = document.getElementById('anim-upload-label');
+            var alf = document.getElementById('multi-upload-label');
             if (alf) alf.onclick = function () { afi.click(); };
           }
         }, 0);
       }
-      function _removeFrame(trialId, compId, idx) {
+      // Remove one entry from any component's list of images. `frames` and
+      // `stimuli` are the same kind of thing — an ordered list of pictures — so
+      // one function serves both, told which field it is editing.
+      function _removeArrItem(trialId, compId, field, idx) {
         var t = findTrial(trialId);
         if (!t) return;
         var c = t.components.find(function (x) { return x.id === compId; });
-        if (!c || !Array.isArray(c.frames)) return;
+        if (!c || !Array.isArray(c[field])) return;
         saveState();
-        c.frames.splice(idx, 1);
+        c[field].splice(idx, 1);
         renderAll();
+      }
+
+      // The uploader for any component holding a list of images: animation's
+      // frames, free-sort's stimuli. One widget parameterised by field name, so
+      // the two cannot drift apart in behaviour or in look.
+      function _multiImageUploader(t, c, field, label, hint, accent, icon) {
+        var list = (Array.isArray(c[field]) ? c[field] : [])
+          .filter(function (f) { return f && f.fileData; });
+        var h = '<div class="prop-row"><label>' + label + '</label>' +
+          '<label id="multi-upload-label" style="padding:6px 12px;background:' + accent +
+          ';color:#ffffff;border-radius:6px;cursor:pointer;font-size:0.75rem;' +
+          'display:inline-block">' + icon + ' Add images</label>' +
+          '<input type="file" id="multi-file-input" accept="image/*" multiple data-tid="' +
+          t.id + '" data-cid="' + c.id + '" data-field="' + field + '" style="display:none">' +
+          '<span style="font-size:0.7rem;color:var(--text2);margin-left:8px">' + list.length +
+          ' image' + (list.length === 1 ? '' : 's') + '</span></div>' +
+          '<p style="font-size:0.6rem;color:var(--text2);margin:0 0 6px">' + hint + '</p>';
+        if (list.length) {
+          h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">';
+          list.forEach(function (f, fi) {
+            h += '<div style="position:relative;width:48px;height:48px">' +
+              '<img src="' + f.fileData + '" title="' + (f.fileName || '') +
+              '" style="width:48px;height:48px;object-fit:cover;border-radius:5px;' +
+              'border:1px solid var(--border)">' +
+              '<span style="position:absolute;left:2px;top:1px;font-size:0.55rem;' +
+              'background:rgba(0,0,0,0.6);color:#fff;border-radius:3px;padding:0 3px">' +
+              (fi + 1) + '</span>' +
+              '<span onclick="_removeArrItem(\'' + t.id + '\',\'' + c.id + '\',\'' + field +
+              '\',' + fi + ')" title="Remove" style="position:absolute;right:-5px;top:-5px;' +
+              'width:15px;height:15px;line-height:14px;text-align:center;border-radius:50%;' +
+              'background:var(--red);color:#fff;font-size:0.62rem;cursor:pointer">×</span>' +
+              '</div>';
+          });
+          h += '</div>';
+        }
+        return h;
       }
 
       function sel(field, opts, v, tid, cid) {
@@ -3903,6 +3983,7 @@ function _applyI18n() {
           htmlForm: 'jsPsychSurveyHtmlForm',
           animation: 'jsPsychAnimation',
           cloze: 'jsPsychCloze',
+          freeSort: 'jsPsychFreeSort',
         };
         function pluginName(rt, forImage) {
           if (forImage && _imagePlugins[rt]) {
@@ -4307,7 +4388,8 @@ function _applyI18n() {
         // before that guard can, and silently generating a broken trial from it
         // is not a thing to leave lying around.
         if (respType && ['keyboard', 'button', 'slider', 'textInput', 'animation',
-                          'likert', 'multiChoice', 'multiSelect', 'htmlForm', 'cloze']
+                          'likert', 'multiChoice', 'multiSelect', 'htmlForm', 'cloze',
+                          'freeSort']
             .indexOf(c.type) >= 0) {
           return;
         }
@@ -4379,6 +4461,23 @@ function _applyI18n() {
           respInfo.renderOnCanvas = !(c.render_on_canvas === false ||
             c.render_on_canvas === 'false');
           respInfo.prompt = c.prompt || '';
+        } else if (c.type === 'freeSort') {
+          // A task plugin like cloze: its own area, its own drag behaviour,
+          // its own submit button, and a list of images rather than a stimulus.
+          if (!respType) respType = 'freeSort';
+          respInfo = respInfo || {};
+          respInfo.fsStimuli = (Array.isArray(c.stimuli) ? c.stimuli : [])
+            .filter(function (f) { return f && f.fileData; });
+          respInfo.fsStimWidth = Number(c.stim_width) || 100;
+          respInfo.fsStimHeight = Number(c.stim_height) || 100;
+          respInfo.fsAreaWidth = Number(c.sort_area_width) || 700;
+          respInfo.fsAreaHeight = Number(c.sort_area_height) || 700;
+          respInfo.fsAreaShape = c.sort_area_shape || 'ellipse';
+          respInfo.fsPrompt = c.prompt || '';
+          respInfo.fsPromptLocation = c.prompt_location || 'above';
+          respInfo.fsButtonLabel = c.button_label || '';
+          respInfo.fsStartsInside =
+            (c.stim_starts_inside === true || c.stim_starts_inside === 'true');
         } else if (c.type === 'cloze') {
           // A task plugin: the page is the plugin's own, blanks and all. It has
           // no `stimulus` and no `choices` — the submit button is the response.
@@ -4471,7 +4570,7 @@ function _applyI18n() {
             // instead of dropping the rest silently.
             var respComps = t.components.filter(function (c) {
               return ['keyboard', 'button', 'slider', 'textInput', 'likert',
-                      'multiChoice', 'multiSelect', 'htmlForm', 'cloze']
+                      'multiChoice', 'multiSelect', 'htmlForm', 'cloze', 'freeSort']
                 .indexOf(c.type) >= 0;
             });
             if (respComps.length > 1) {
@@ -4586,6 +4685,44 @@ function _applyI18n() {
               // name, and without one the declaration below is emitted and never
               // referenced — the animation is declared and never runs.
               phaseParts.push({kind: 'raw', text: _out, name: trialName});
+              return; // this trial is complete
+            }
+
+            // ---- jsPsychFreeSort builds its own sorting area and drags the
+            // images around it. Emitted whole, like animation and cloze. ----
+            if (respType === 'freeSort') {
+              var _fs = '';
+              if (!respInfo.fsStimuli.length) {
+                logic.hints.push('// !! This free-sort has no images uploaded — the ' +
+                  'sorting area would open empty.');
+              }
+              logic.hints.forEach(function (h) { _fs += h + '\n'; });
+              var _fb = '  ';
+              _fs += 'var ' + trialName + ' = {\n';
+              _fs += _fb + 'type: jsPsychFreeSort,\n';
+              _fs += _fb + 'stimuli: [' + respInfo.fsStimuli.map(function (f) {
+                return "'" + _assetHref(f.fileName, 'image', f.fileData) + "'";
+              }).join(', ') + '],\n';
+              if (respInfo.fsStimWidth !== 100)
+                _fs += _fb + 'stim_width: ' + respInfo.fsStimWidth + ',\n';
+              if (respInfo.fsStimHeight !== 100)
+                _fs += _fb + 'stim_height: ' + respInfo.fsStimHeight + ',\n';
+              if (respInfo.fsAreaWidth !== 700)
+                _fs += _fb + 'sort_area_width: ' + respInfo.fsAreaWidth + ',\n';
+              if (respInfo.fsAreaHeight !== 700)
+                _fs += _fb + 'sort_area_height: ' + respInfo.fsAreaHeight + ',\n';
+              if (respInfo.fsAreaShape !== 'ellipse')
+                _fs += _fb + "sort_area_shape: '" + respInfo.fsAreaShape + "',\n";
+              if (respInfo.fsPrompt)
+                _fs += _fb + "prompt: '" + _jsStr(String(respInfo.fsPrompt)) + "',\n";
+              if (respInfo.fsPromptLocation !== 'above')
+                _fs += _fb + "prompt_location: '" + respInfo.fsPromptLocation + "',\n";
+              if (respInfo.fsButtonLabel)
+                _fs += _fb + "button_label: '" + _jsStr(String(respInfo.fsButtonLabel)) + "',\n";
+              if (respInfo.fsStartsInside) _fs += _fb + 'stim_starts_inside: true,\n';
+              _fs = _fs.replace(/,\n$/, '\n');
+              _fs += '};\n\n';
+              phaseParts.push({kind: 'raw', text: _fs, name: trialName});
               return; // this trial is complete
             }
 
@@ -5809,6 +5946,7 @@ function _applyI18n() {
         jsPsychPreload: {pkg: '@jspsych/plugin-preload', ver: '2.1.0'},
         jsPsychAnimation: {pkg: '@jspsych/plugin-animation', ver: '2.1.0'},
         jsPsychCloze: {pkg: '@jspsych/plugin-cloze', ver: '2.2.0'},
+        jsPsychFreeSort: {pkg: '@jspsych/plugin-free-sort', ver: '2.1.0'},
         jsPsychImageKeyboardResponse: {pkg: '@jspsych/plugin-image-keyboard-response', ver: '2.2.0'},
         jsPsychImageButtonResponse: {pkg: '@jspsych/plugin-image-button-response', ver: '2.2.0'},
         jsPsychImageSliderResponse: {pkg: '@jspsych/plugin-image-slider-response', ver: '2.1.0'},
