@@ -1013,6 +1013,11 @@ function _applyI18n() {
           // Card header
           var hdr = document.createElement('div');
           hdr.className = 'phase-card-header';
+          // The dot has to cover every setting the dialog holds. A phase whose
+          // only setting is a loop or a condition would otherwise look untouched
+          // — and a feature that is reachable but not visible may as well not be
+          // there.
+          var configured = !!(ph.sample || Number(ph.repetitions) > 1 || ph.loop || ph.cond);
           hdr.innerHTML =
             '<span class="drag-handle" draggable="true" title="Drag to reorder phase">⋮⋮</span><span class="phase-index">' +
             (i + 1) +
@@ -1025,11 +1030,11 @@ function _applyI18n() {
             '</span><button data-phase="' +
             ph.id +
             '" class="phase-settings-btn' +
-            (ph.sample || Number(ph.repetitions) > 1 ? ' configured' : '') +
-            '" style="margin-left:auto" title="Repetitions, sampling and randomisation for this phase' +
-            (ph.sample || Number(ph.repetitions) > 1 ? ' — configured' : '') + '">Settings' +
-            (ph.sample || Number(ph.repetitions) > 1
-              ? '<span class="phase-settings-dot"></span>' : '') +
+            (configured ? ' configured' : '') +
+            '" style="margin-left:auto" title="Repetitions, sampling, randomisation and ' +
+            'conditions for this phase' +
+            (configured ? ' — configured' : '') + '">Settings' +
+            (configured ? '<span class="phase-settings-dot"></span>' : '') +
             '</button><button data-phase="' +
             ph.id +
             '" class="phase-delete-btn" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;padding:2px 8px;border-radius:4px" title="Delete this phase">✕ Delete</button>';
@@ -1594,6 +1599,103 @@ function _applyI18n() {
             'A statement such as `if (…) { … }` or a bare `return` is not an ' +
             'expression. Put it inside a function.';
         }
+      }
+
+      // A researcher who writes `data` by hand REPLACES the generated
+      // `{correct_response: …}` — but the on_finish the editor generates still
+      // reads `data.correct_response`. Left alone, the trial runs, scores every
+      // response incorrect, and says nothing. So the scoring key goes back in.
+      // A correct_response they wrote themselves wins; if what they wrote is not
+      // a literal this can rewrite, the merge happens at run time instead.
+      function _withCorrectResponse(src, expr) {
+        var s = String(src).trim();
+        if (/correct_response\s*:/.test(s)) return s;
+        var add = 'correct_response: ' + expr;
+        if (s.charAt(0) === '{' && s.charAt(s.length - 1) === '}') {
+          var inner = s.slice(1, -1);
+          return inner.trim() ? '{' + inner.replace(/\s+$/, '') + ', ' + add + '}'
+                              : '{' + add + '}';
+        }
+        return 'Object.assign({' + add + '}, ' + s + ')';
+      }
+
+      // --- loop_function / conditional_function ---
+      // The two node parameters that take a function, built from the phase's
+      // settings rather than written by hand. They differ in a way the shared
+      // controls have to hide: loop_function is handed the data of the CURRENT
+      // round — jsPsych resets it on every iteration — and returns true to go
+      // round again, while conditional_function takes no argument at all and
+      // reads the whole experiment's data. So one "field is value" wording
+      // becomes two accessors, and only the loop's answer is negated.
+      //
+      // These live out here rather than beside _phaseNodeParams (which calls
+      // them) because the settings dialog validates with them before writing
+      // anything, and that dialog is not inside the compiler.
+      var _COND_OPS = {
+        'is': '===', 'is not': '!==',
+        'more than': '>', 'at most': '<=',
+        'less than': '<', 'at least': '>='
+      };
+      // A condition value is written into a single-quoted string only for the
+      // response comparison; everywhere else it is emitted as written, so
+      // `rt is more than 2 * 500` works.
+      function _condQuote(s) {
+        return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+      }
+      // `v` is the row the condition reads. That row is `.last(1)`, never the
+      // docs' `values()[0]`: one round of an ExpVis node can hold several trials
+      // (a fixation, then the screen), and the FIRST row is then the fixation —
+      // no response, no score. `data.last(1)` on an empty collection is
+      // undefined, so the row itself is checked before its fields are read.
+      function _condExpr(v, spec) {
+        var field = String((spec && spec.field) || 'correct');
+        var op = (spec && spec.op) || 'is';
+        var value = String(spec && spec.value == null ? '' : spec.value).trim();
+        var expr;
+        if (field === 'response' && (op === 'is' || op === 'is not')) {
+          // The docs' own comparison, and the only one that works when the
+          // plugin records an array (a button index, an animation sequence).
+          expr = 'jsPsych.pluginAPI.compareKeys(' + v + '.response, ' +
+            _condQuote(value) + ')';
+          if (op === 'is not') expr = '!' + expr;
+        } else {
+          expr = v + '.' + field + ' ' + (_COND_OPS[op] || '===') + ' ' + value;
+        }
+        return '(' + v + ' && ' + expr + ')';
+      }
+      // jsPsych puts no limit on loop_function: a condition that never becomes
+      // true repeats the node forever and hangs the session. The cap is
+      // ExpVis's guard, and it is a setting the researcher can see and turn
+      // off rather than one added behind their back — with no cap the output is
+      // the plain function literal the docs use.
+      function _loopFunctionSrc(ph) {
+        var l = (ph && ph.loop) || {};
+        var cap = Math.round(Number(l.cap) || 0);
+        if (cap <= 0) {
+          return 'function (data) {\n' +
+            '    var last = data.last(1).values()[0];\n' +
+            '    return !' + _condExpr('last', l) + ';\n' +
+            '  }';
+        }
+        // `>=`, not `>`: jsPsych's `do { … } while (t(data))` calls this once
+        // per round, so the call that returns false ends a round that already
+        // ran. `> cap` would let one more through and make "at most 10" mean 11.
+        return '(function () {\n' +
+          '    var rounds = 0;\n' +
+          '    return function (data) {\n' +
+          '      if (++rounds >= ' + cap + ') return false;\n' +
+          '      var last = data.last(1).values()[0];\n' +
+          '      return !' + _condExpr('last', l) + ';\n' +
+          '    };\n' +
+          '  })()';
+      }
+      // No cap here: jsPsych asks this one at most once per node run.
+      function _conditionalFunctionSrc(ph) {
+        var c = (ph && ph.cond) || {};
+        return 'function () {\n' +
+          '    var last = jsPsych.data.get().last(1).values()[0];\n' +
+          '    return ' + _condExpr('last', c) + ';\n' +
+          '  }';
       }
 
       function _addNodeCustom(pid) {
@@ -3632,6 +3734,11 @@ function _applyI18n() {
           if (factored && ph.randomize_order) out.push('randomize_order: true');
           var reps = Number(ph.repetitions);
           if (reps > 1) out.push('repetitions: ' + Math.round(reps));
+          // A loop or a condition belongs to the NODE, and jsPsych reads both
+          // whether or not the phase was factored into a table — unlike sample
+          // and randomize_order above, which mean nothing without one.
+          if (ph.loop) out.push('loop_function: ' + _loopFunctionSrc(ph));
+          if (ph.cond) out.push('conditional_function: ' + _conditionalFunctionSrc(ph));
           return out;
         }
 
@@ -3675,8 +3782,13 @@ function _applyI18n() {
 
         // A custom node parameter REPLACES the generated one of the same name.
         // Two keys in one object literal is valid JavaScript that keeps the
-        // last, so a `loop_function` written by hand must overwrite the emitted
-        // `repetitions` rather than sit beside it and quietly win.
+        // last, so a written parameter has to overwrite rather than sit beside
+        // it and quietly win.
+        // The match is by key, and `repetitions`, `loop_function` and
+        // `conditional_function` are three different keys. jsPsych nests them
+        // — loop_function repeats INSIDE each repetition — so none of them can
+        // displace another. This is also what keeps a written `loop_function`
+        // to a single key when the phase settings generate one.
         function _applyCustomProps(props, list) {
           if (!Array.isArray(list)) return props;
           var out = props.slice();
@@ -4199,6 +4311,10 @@ function _applyI18n() {
                 slots.forEach(function (sl) { if (sl.key === key) hit = sl; });
                 if (hit) {
                   for (var i = hit.from + 1; i < hit.to; i++) lines[i] = null;
+                  // The scoring key the generated on_finish reads has to survive
+                  // a `data` override, or every response scores incorrect.
+                  if (key === 'data' && correctResponseExpr)
+                    src = _withCorrectResponse(src, correctResponseExpr);
                   lines[hit.from] = '  '.repeat(hit.indent) + key + ': ' + src + ',';
                   hit.val = src;
                 } else {
@@ -4508,6 +4624,60 @@ function _applyI18n() {
         return out;
       }
 
+      // A loop or a condition fails QUIETLY by construction, so the dialog has
+      // to say out loud what would otherwise show up only as a participant stuck
+      // on one screen, or a block that never ran and left no sign it was meant
+      // to. These describe the condition the researcher just built — they do not
+      // rewrite it, because "the last trial" is the researcher's choice.
+      function _condWarnings(draft, ph) {
+        var out = [];
+        if (!draft.loop.on && !draft.cond.on) return out;
+        var scores = ph.timeline.some(function (t) {
+          return (t.components || []).some(function (c) { return !!c.correctKey; });
+        });
+        if (!scores) {
+          var usesCorrect = (draft.loop.on && draft.loop.field === 'correct') ||
+            (draft.cond.on && draft.cond.field === 'correct');
+          if (usesCorrect) {
+            out.push('No trial in this phase has a Correct Key, so `correct` is ' +
+              'never recorded. The condition can never come true' +
+              (draft.loop.on ? ' — the block will run to its cap every time.' : '.'));
+          }
+        }
+        // A fixation placed AFTER the first visual stimulus is emitted as its
+        // own trial at the end of the node's timeline, so it becomes the last
+        // row the condition reads — and it carries no response and no score.
+        var trailingFixation = ph.timeline.some(function (t) {
+          var seenVisual = false;
+          return (t.components || []).some(function (c) {
+            if (c.type === 'fixation') return seenVisual;
+            if (['text', 'shape', 'image', 'audio', 'video'].indexOf(c.type) >= 0) {
+              seenVisual = true;
+            }
+            return false;
+          });
+        });
+        if (trailingFixation) {
+          out.push('A trial here ends with a fixation, and that is the last row ' +
+            'the condition reads. It records no response and no score — move the ' +
+            'fixation before the stimulus, or the condition will read the wrong row.');
+        }
+        if (draft.loop.on && !(Number(draft.loop.cap) > 0)) {
+          out.push('No cap on the loop. jsPsych has none of its own, so a ' +
+            'condition that never comes true hangs the session with no way out.');
+        }
+        if (draft.cond.on && editor.phases.indexOf(ph) === 0) {
+          out.push('This is the first phase, so there is no earlier trial for the ' +
+            'condition to read. It is false and the whole block is skipped.');
+        }
+        if (draft.loop.on && Number(draft.repetitions) > 1) {
+          out.push('Repetitions and the loop nest: the block runs ' +
+            draft.repetitions + ' times, and the loop repeats inside each one. ' +
+            'The cap counts across the whole node, not once per repetition.');
+        }
+        return out;
+      }
+
       // The jsPsych node-level parameters for a phase. They belong to the node,
       // not to a trial or a component, which is why they are not in the trial
       // inspector — and why a phase with no variable table is told to its face
@@ -4529,6 +4699,21 @@ function _applyI18n() {
           fn: sample.fn || 'function (order) { return order; }',
           groups: ph.timeline.map(function (t) { return t.group == null ? 0 : t.group; }),
           weights: ph.timeline.map(function (t) { return t.weight == null ? 1 : t.weight; }),
+          // The two node conditions, as the constructor's own state. `on` lives
+          // only here — on the phase, an absent `loop` IS off.
+          loop: {
+            on: !!ph.loop,
+            field: (ph.loop && ph.loop.field) || 'correct',
+            op: (ph.loop && ph.loop.op) || 'is',
+            value: ph.loop && ph.loop.value != null ? String(ph.loop.value) : 'true',
+            cap: ph.loop && ph.loop.cap != null ? ph.loop.cap : 10,
+          },
+          cond: {
+            on: !!ph.cond,
+            field: (ph.cond && ph.cond.field) || 'correct',
+            op: (ph.cond && ph.cond.op) || 'is',
+            value: ph.cond && ph.cond.value != null ? String(ph.cond.value) : 'true',
+          },
         };
 
         var overlay = document.createElement('div');
@@ -4646,10 +4831,62 @@ function _applyI18n() {
             'condition list when nothing is sampled. Separate from sampling, not instead ' +
             'of it — jsPsych applies both.</div></div></div>';
 
+          // --- the node's own conditions ---
+          // Built by the dialog rather than written by hand: both take a
+          // function, both fail quietly when wrong, and one of them hangs the
+          // session outright. jsPsych offers no limit on a loop, so the cap
+          // below is ExpVis's — deliberately visible rather than added behind
+          // the researcher's back.
+          function _condOpOptions(sel) {
+            return ['is', 'is not', 'more than', 'at least', 'less than', 'at most']
+              .map(function (o) {
+                return '<option value="' + o + '"' + (sel === o ? ' selected' : '') +
+                  '>' + o + '</option>';
+              }).join('');
+          }
+          function _condRow(prefix, spec, label, extra, hint) {
+            var h = '<div style="' + ROW + '"><div style="' + LBL +
+              '"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">' +
+              '<input type="checkbox" id="' + prefix + '-on"' +
+              (spec.on ? ' checked' : '') + '>' + label + '</label></div>' +
+              '<div style="flex:1">';
+            if (spec.on) {
+              h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+                '<input id="' + prefix + '-field" list="ps-cond-fields" value="' +
+                _escAttr(spec.field) + '" placeholder="correct" style="' + NUM +
+                ';width:104px">' +
+                '<select id="' + prefix + '-op" style="' + NUM + ';width:110px">' +
+                _condOpOptions(spec.op) + '</select>' +
+                '<input id="' + prefix + '-value" value="' + _escAttr(spec.value) +
+                '" style="' + NUM + ';width:84px">' + extra + '</div>' +
+                '<div style="' + HINT + '">' + hint + '</div>';
+            }
+            return h + '</div></div>';
+          }
+          h += '<div style="border-top:1px solid var(--border);margin:12px 0 0"></div>';
+          h += '<datalist id="ps-cond-fields"><option value="correct"></option>' +
+            '<option value="response"></option><option value="rt"></option></datalist>';
+          h += _condRow('ps-loop', draft.loop, 'Repeat this block until',
+            (draft.loop.on
+              ? '<span style="font-size:0.76rem">at most</span>' +
+                '<input id="ps-loop-cap" type="number" min="0" value="' +
+                _escAttr(String(draft.loop.cap)) + '" style="' + NUM + '">' +
+                '<span style="font-size:0.76rem">times</span>'
+              : ''),
+            'Repeats while the condition is FALSE, so it reads as “until”. ' +
+            'The cap is ExpVis’s: jsPsych has no limit, and a condition that ' +
+            'never comes true would hang the session. 0 = no cap. Counted per ' +
+            'node, not per repetition.');
+          h += _condRow('ps-cond', draft.cond, 'Run this block only when', '',
+            'Reads the whole experiment’s data — jsPsych passes this function ' +
+            'nothing. A false answer skips the block entirely, including its ' +
+            'on_timeline_start / on_timeline_finish hooks.');
+
           // --- node parameters written as JavaScript ---
           // The same control the trial has, one level up. loop_function and
           // conditional_function are NODE parameters: a trial is not a node, so
-          // they have nowhere to live in Trial Settings.
+          // they have nowhere to live in Trial Settings. A name written here
+          // replaces whatever the conditions above generate.
           var nodeRows = Array.isArray(ph.custom) ? ph.custom : [];
           h += '<div style="border-top:1px solid var(--border);margin:12px 0 4px"></div>';
           h += '<div style="padding-bottom:8px;display:flex;align-items:center;' +
@@ -4736,7 +4973,7 @@ function _applyI18n() {
             ' → <b style="color:var(--accent)">' +
             (total == null ? 'as many as the function returns' : plural(total, 'trial')) + '</b>' +
             (reps > 1 ? ' (' + per + ' × ' + plural(reps, 'repetition') + ')' : '') + '</div>';
-          _sampleWarnings(draft, n).forEach(function (w) {
+          _sampleWarnings(draft, n).concat(_condWarnings(draft, ph)).forEach(function (w) {
             h += '<div style="margin-top:8px;background:#fef2f2;border:1px solid rgba(239,68,68,0.25);' +
               'border-radius:8px;padding:9px 11px;font-size:0.7rem;line-height:1.5;color:#991b1b">' +
               '⚠ ' + w + '</div>';
@@ -4775,6 +5012,18 @@ function _applyI18n() {
           box.querySelectorAll('[data-weight]').forEach(function (el) {
             draft.weights[Number(el.getAttribute('data-weight'))] = el.value;
           });
+          ['loop', 'cond'].forEach(function (k) {
+            var on = document.getElementById('ps-' + k + '-on');
+            if (on) draft[k].on = on.checked;
+            var f = document.getElementById('ps-' + k + '-field');
+            if (f) draft[k].field = f.value.trim();
+            var o = document.getElementById('ps-' + k + '-op');
+            if (o) draft[k].op = o.value;
+            var v = document.getElementById('ps-' + k + '-value');
+            if (v) draft[k].value = v.value;
+          });
+          var cap = document.getElementById('ps-loop-cap');
+          if (cap) draft.loop.cap = Math.max(0, Math.round(Number(cap.value) || 0));
         }
         function refreshNotes() {
           var el = document.getElementById('ps-notes');
@@ -4807,6 +5056,21 @@ function _applyI18n() {
           box.querySelectorAll('[data-group], [data-weight]').forEach(function (el) {
             el.oninput = function () { readFields(); refreshNotes(); };
           });
+          // A checkbox brings its sub-controls in and out, so it repaints;
+          // the rest only change what the condition reads, so they do not.
+          ['ps-loop-on', 'ps-cond-on'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.onchange = function () { readFields(); repaint(); };
+          });
+          ['ps-loop-field', 'ps-cond-field', 'ps-loop-value', 'ps-cond-value',
+           'ps-loop-cap'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.oninput = function () { readFields(); refreshNotes(); };
+          });
+          ['ps-loop-op', 'ps-cond-op'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.onchange = function () { readFields(); refreshNotes(); };
+          });
         }
 
         function apply() {
@@ -4835,7 +5099,29 @@ function _applyI18n() {
               s.fn = draft.fn;
             }
           }
+          var loopSpec = draft.loop.on ? {
+            field: draft.loop.field, op: draft.loop.op,
+            value: draft.loop.value, cap: draft.loop.cap
+          } : null;
+          var condSpec = draft.cond.on ? {
+            field: draft.cond.field, op: draft.cond.op, value: draft.cond.value
+          } : null;
+          // Refuse a condition that will not compile rather than writing it into
+          // the experiment: the error would otherwise surface in the
+          // participant's browser, at run time, as a blank screen.
+          if (loopSpec) {
+            var loopErr = _jsExpressionError(
+              _loopFunctionSrc({loop: loopSpec}), 'loop_function');
+            if (loopErr) { alert(loopErr); return; }
+          }
+          if (condSpec) {
+            var condErr = _jsExpressionError(
+              _conditionalFunctionSrc({cond: condSpec}), 'conditional_function');
+            if (condErr) { alert(condErr); return; }
+          }
           saveState();
+          ph.loop = loopSpec;
+          ph.cond = condSpec;
           ph.conditions = asConditions || undefined;
           if (!asConditions) {
             // The mode is the reason these existed; leaving them behind would be

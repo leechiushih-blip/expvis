@@ -6,7 +6,7 @@
 
 来源: <https://shaobin-jiang.github.io/jsPsych-Chinese-Documentation/v8/overview/timeline/>
 
-**19 条已实现 · 8 条手写可达 · 7 条做不到 · 34 条合计。**
+**24 条已实现 · 7 条手写可达 · 3 条做不到 · 34 条合计。**
 
 **✍️ 手写可达** = 编辑器不会自己写,但研究者可以 —— 在试次或节点上写一条自定义参数。
 **❌ 做不到** = 怎么都表达不了。
@@ -74,15 +74,15 @@
 |---|---|---|
 | repetitions | ✅ 有 |  |
 | repetitions alongside timeline_variables | ✅ 有 |  |
-| repetitions alongside loop_function | ✍️ 手写可达 | no loop_function |
-| repetitions alongside conditional_function | ✍️ 手写可达 | no conditional_function |
+| repetitions alongside loop_function | ✅ 有 |  |
+| repetitions alongside conditional_function | ✅ 有 |  |
 
 ## 循环与条件时间线
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| loop_function | ❌ 做不到 | the editor never writes one. Reachable by hand: node parameters in the phase settings take a JavaScript expression |
-| conditional_function | ❌ 做不到 | same — a node parameter in the phase settings |
+| loop_function | ✅ 有 |  |
+| conditional_function | ✅ 有 |  |
 
 ## 在运行时修改时间线
 
@@ -95,8 +95,8 @@
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| on_timeline_start | ❌ 做不到 | a node parameter; write one in the phase settings |
-| on_timeline_finish | ❌ 做不到 | same |
+| on_timeline_start | ✍️ 手写可达 | the editor never writes one; a node parameter in the phase settings does |
+| on_timeline_finish | ✍️ 手写可达 | same — a node parameter in the phase settings |
 
 ## 文档示例里的其它 API
 
@@ -104,7 +104,7 @@
 |---|---|---|
 | initJsPsych() | ✅ 有 |  |
 | jsPsych.pluginAPI.compareKeys() | ✅ 有 |  |
-| jsPsych.data.get().last(1).values()[0] | ✍️ 手写可达 | that is how a branch reads the previous trial; ExpVis has no branching |
+| jsPsych.data.get().last(1).values()[0] | ✅ 有 |  |
 
 ## 怎么用这张表
 

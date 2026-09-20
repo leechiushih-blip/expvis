@@ -36,14 +36,19 @@ PROBE = """
 var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
   'jsPsychHtmlSliderResponse', 'jsPsychSurveyText', 'jsPsychPreload', 'jsPsychAnimation',
   'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
-// Node-level parameters ExpVis has no way to set at all, and so must never
-// appear. Everything else a node can carry — timeline_variables, sample,
-// randomize_order, repetitions — is now either derived from the canvas or set
-// in the phase settings, and is asserted per case in phaseCases() instead of
-// banned outright. `loop_function` in particular would need a function the GUI
-// has nowhere to put, and `conditional_function` needs a condition it cannot
-// express.
-var __FORBIDDEN = ['conditional_function', 'loop_function'];
+// Node-level parameters that jsPsych reads but ExpVis does not derive from the
+// canvas. Everything else a node can carry — timeline_variables, sample,
+// randomize_order, repetitions — is derived or set in the phase settings and is
+// asserted per case in phaseCases() instead.
+//
+// A case may carry one of these ONLY by declaring it in `expectParams`, and the
+// check runs both ways: an undeclared parameter fails (something leaked), and a
+// declared one that never appears fails too (a feature stopped working). The
+// phase-settings dialog builds loop_function and conditional_function, so those
+// two are declared by the cases that ask for them; on_timeline_start /
+// on_timeline_finish are still hand-written only, and so are declared by nobody.
+var __NODE_PARAMS = ['name', 'loop_function', 'conditional_function',
+                     'on_timeline_start', 'on_timeline_finish'];
 function inspectStructure(code) {
   var stub = {
     run: function (tl) { stub._timeline = tl; },
@@ -56,15 +61,21 @@ function inspectStructure(code) {
     __PLUGINS.map(function (p) { return 'var ' + p + ' = {};'; }).join('\\n') + '\\n' + code;
   new Function('__stub', src)(stub);
   var tl = stub._timeline || [];
-  var forbidden = [];
-  JSON.stringify(tl, function (k, v) {
-    if (__FORBIDDEN.indexOf(k) >= 0 && forbidden.indexOf(k) < 0) forbidden.push(k);
-    return v;
+  var observed = [];
+  // Own keys of each NODE. Not a walk of the whole object: a trial's own
+  // parameters are not node parameters, and a plugin's nested `questions[].name`
+  // is neither — `name` on a node means something quite different from `name`
+  // inside a survey question.
+  tl.forEach(function (n) {
+    if (!n || !n.timeline) return;      // a bare trial is not a node
+    Object.keys(n).forEach(function (k) {
+      if (__NODE_PARAMS.indexOf(k) >= 0 && observed.indexOf(k) < 0) observed.push(k);
+    });
   });
   return {
     // one entry per phase node; the number is how many trials it collects
     trialsPerNode: tl.map(function (n) { return n && n.timeline ? n.timeline.length : null; }),
-    forbiddenParams: forbidden
+    observedParams: observed.sort()
   };
 }
 
@@ -130,7 +141,8 @@ function phaseCases() {
       uniform: !!m.uniform,
       // a factored node holds the one procedure, not one entry per condition
       trialsPerNode: st.trialsPerNode,
-      forbiddenParams: st.forbiddenParams,
+      observedParams: st.observedParams,
+      expectParams: [],
       noTokens: code.indexOf('@@') < 0,
       // `type` selects the plugin and is read when the trial is instantiated,
       // before any timeline variable has a value. Whatever the phase, the plugin
@@ -196,7 +208,7 @@ function phaseCases() {
       factored: false,
       uniform: false,
       trialsPerNode: inspectStructure(code).trialsPerNode,
-      forbiddenParams: [],
+      expectParams: [],
       noTokens: code.indexOf('@@') < 0,
       replacesGenerated: code.indexOf("stimulus: '<div") < 0,
       emitsTheSource: code.indexOf('evaluateTimelineVariable') >= 0,
@@ -217,7 +229,7 @@ function phaseCases() {
     out['custom parameter (append)'] = {
       factored: false, uniform: false,
       trialsPerNode: inspectStructure(code).trialsPerNode,
-      forbiddenParams: [], noTokens: code.indexOf('@@') < 0,
+      expectParams: [], noTokens: code.indexOf('@@') < 0,
       emitsTheSource: code.indexOf('console.log("loaded")') >= 0,
       stimulusKeys: (code.match(/^\\s*stimulus:/gm) || []).length,
       stillParses: true
@@ -251,16 +263,181 @@ function phaseCases() {
       {name: 'repetitions', src: '2'}
     ];
     var code = _compileExperiment({}).code;
+    var stCustom = inspectStructure(code);
     out['custom node parameter'] = {
       factored: false, uniform: false,
-      trialsPerNode: inspectStructure(code).trialsPerNode,
-      // declared on purpose, so the forbidden-parameter sweep is told to skip it
-      forbiddenParams: [],
+      trialsPerNode: stCustom.trialsPerNode,
+      // A hand-written loop_function is the whole point of this case.
+      observedParams: stCustom.observedParams,
+      expectParams: ['loop_function'],
       noTokens: code.indexOf('@@') < 0,
       // trailing comma off, and sorted: the point is which keys exist and what
       // they say, not the order the node happens to list them in
       emitted: (code.match(/^\\s*(loop_function|repetitions):.*$/gm) || [])
         .map(function (x) { return x.trim().replace(/,$/, ''); }).sort()
+    };
+  })();
+  // The phase settings build the two node parameters that take a function.
+  // These cases pin that they reach the node, the exact shape they take, and —
+  // separately, because text can be right while the meaning is inverted — how
+  // they behave when actually driven.
+  (function () {
+    function buildWith(loop, cond) {
+      resetEditor();
+      addPhase('trials');
+      addTrial(editor.phases[0].id);
+      var t = findTrial(editor.selectedTrial);
+      addComponent(t.id, 'text', 's');
+      addComponent(t.id, 'keyboard', 'r');
+      t.components[1].choices = ['a', 'l'];
+      t.components[1].correctKey = 'a';
+      if (loop) editor.phases[0].loop = loop;
+      if (cond) editor.phases[0].cond = cond;
+      var code = _compileExperiment({}).code;
+      return {code: code, st: inspectStructure(code)};
+    }
+    var LOOP = {field: 'correct', op: 'is', value: 'true', cap: 10};
+    var COND = {field: 'correct', op: 'is', value: 'true'};
+    var both = buildWith(LOOP, COND);
+    out['phase conditions'] = {
+      factored: false, uniform: false,
+      trialsPerNode: both.st.trialsPerNode,
+      observedParams: both.st.observedParams,
+      expectParams: ['conditional_function', 'loop_function'],
+      noTokens: both.code.indexOf('@@') < 0,
+      // The loop is asked "go round again?", so the researcher's "until" comes
+      // out negated. The condition is asked "run at all?", so it does not.
+      loopNegated: /loop_function:[\\s\\S]*?return !\\(last && last\\.correct === true\\);/
+        .test(both.code),
+      condNotNegated: /conditional_function:[\\s\\S]*?return \\(last && last\\.correct === true\\);/
+        .test(both.code),
+      // `.last(1)`, never the docs' `.values()[0]`: a round can open with a
+      // fixation, and the first row would then carry no score. Asserted against
+      // the generator's own output, not the assembled file — a regex running
+      // from `loop_function:` would happily match the conditional's accessor
+      // further down and pass on a broken loop.
+      loopReadsLastRow:
+        _loopFunctionSrc({loop: LOOP}).indexOf('data.last(1).values()[0]') >= 0,
+      // jsPsych passes this one nothing, so it has to reach for jsPsych.data.
+      condTakesNoArg: /conditional_function: function \\(\\) \\{/.test(both.code),
+      condReadsGlobal: /conditional_function:[\\s\\S]*?jsPsych\\.data\\.get\\(\\)/
+        .test(both.code),
+      // `>=`, so a cap of ten runs ten rounds and not eleven
+      capIsExact: /if \\(\\+\\+rounds >= 10\\) return false;/.test(both.code)
+    };
+    // With no cap the output is the plain function literal the docs use.
+    var uncapped = buildWith({field: 'correct', op: 'is', value: 'true', cap: 0}, null);
+    out['uncapped loop'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: uncapped.st.observedParams,
+      expectParams: ['loop_function'],
+      noTokens: true,
+      plainLiteral: /loop_function: function \\(data\\) \\{/.test(uncapped.code),
+      noCounter: uncapped.code.indexOf('rounds') < 0
+    };
+    // Drive the emitted function. Dropping the `!` or reading the first row
+    // instead of the last both leave the text looking perfectly reasonable.
+    (function () {
+      // A fresh closure per assertion: the cap counts inside the closure, so a
+      // shared instance would spend its rounds on the first assertion and the
+      // rest would fail for the wrong reason.
+      function make(cap) {
+        return new Function('return (' +
+          _loopFunctionSrc({loop: {field: 'correct', op: 'is', value: 'true', cap: cap}}) +
+          ');')();
+      }
+      // `last(1)` slices, as the real DataCollection does, and `values()` is
+      // there too so that an implementation reaching for `.values()[0]` reads
+      // the FIRST row instead of throwing "not a function" — which would look
+      // like a crash rather than the wrong row. The stub has to model the whole
+      // surface, or the wrong implementation finds a path the right one never
+      // takes.
+      function round(rows) {
+        return {
+          last: function (n) { return {values: function () { return rows.slice(-n); }}; },
+          values: function () { return rows; }
+        };
+      }
+      var stopsOnCorrect = make(3)(round([{correct: true}])) === false;
+      var calls = 0, r = true;
+      var capped = make(3);
+      while (r && calls < 50) { r = capped(round([{correct: false}])); calls++; }
+      // LAST row, not first: a fixation, then the scored response
+      var lastRowDecides =
+        make(3)(round([{correct: true}, {correct: false}])) === true &&
+        make(3)(round([{correct: false}, {correct: true}])) === false;
+      var emptyRoundSafe = make(3)(round([])) === true;
+      out['loop behaviour'] = {
+        factored: false, uniform: false, trialsPerNode: [],
+        observedParams: [], expectParams: [], noTokens: true,
+        stopsOnCorrect: stopsOnCorrect,
+        cappedAtThree: r === false && calls === 3,
+        capCalls: calls,
+        lastRowDecides: lastRowDecides,
+        emptyRoundSafe: emptyRoundSafe
+      };
+    })();
+    // A hand-written loop_function still replaces the generated one: one key in
+    // the object literal, and it is the researcher's. This pins the replace rule
+    // at the node level for the very parameter the dialog now generates.
+    (function () {
+      resetEditor();
+      addPhase('trials');
+      addTrial(editor.phases[0].id);
+      var t = findTrial(editor.selectedTrial);
+      addComponent(t.id, 'text', 's');
+      addComponent(t.id, 'keyboard', 'r');
+      t.components[1].choices = ['a', 'l'];
+      t.components[1].correctKey = 'a';
+      editor.phases[0].loop = LOOP;
+      editor.phases[0].custom = [{name: 'loop_function',
+                                  src: 'function (data) { return false; }'}];
+      var code = _compileExperiment({}).code;
+      out['hand-written loop overrides'] = {
+        factored: false, uniform: false, trialsPerNode: [],
+        observedParams: inspectStructure(code).observedParams,
+        expectParams: ['loop_function'],
+        noTokens: true,
+        keyCount: (code.match(/loop_function:/g) || []).length,
+        generatedOneGone: code.indexOf('rounds') < 0,
+        isTheWrittenOne: /loop_function: function \\(data\\) \\{ return false; \\}/.test(code)
+      };
+    })();
+  })();
+  // A `data` override must keep the scoring key. The on_finish the editor
+  // generates reads data.correct_response; an override that drops it leaves an
+  // experiment that runs, writes a `correct` column, and marks every row false.
+  // The researcher's own correct_response wins; anything that is not a literal
+  // the compiler can rewrite is merged at run time instead.
+  (function () {
+    function compileWithData(src) {
+      resetEditor();
+      addPhase('Trials');
+      addTrial(editor.phases[0].id);
+      var t = findTrial(editor.selectedTrial);
+      addComponent(t.id, 'text', 's');
+      addComponent(t.id, 'keyboard', 'r');
+      t.components[1].choices = ['a', 'l'];
+      t.components[1].correctKey = 'a';
+      t.custom = [{name: 'data', src: src}];
+      return _compileExperiment({}).code;
+    }
+    function dataLine(src) {
+      var m = compileWithData(src).match(/^\\s*data: .*$/m);
+      return m ? m[0].trim() : '';
+    }
+    var plain = dataLine("{stimulus_type: 'congruent'}");
+    out['data override keeps the scoring key'] = {
+      factored: false, uniform: false, trialsPerNode: [], expectParams: [],
+      noTokens: true,
+      merged: plain,
+      keyCount: (plain.match(/correct_response\\s*:/g) || []).length,
+      researcherWins: dataLine("{correct_response: 'x'}"),
+      emptyLiteral: dataLine("{}"),
+      notALiteral: dataLine('myData'),
+      // the researcher's own line breaks have to survive the merge
+      multilineKept: /data: \\{[^}]*\\n[^}]*\\}/.test(
+        compileWithData("{\\n    a: 1,\\n    b: 2\\n  }"))
     };
   })();
   // The custom-parameter controls take an expression, and the common mistake is
@@ -275,7 +452,7 @@ function phaseCases() {
     var errArrow = _jsExpressionError('(data) => data.values().length < 3', 'loop_function');
     window.alert = realAlert;
     out['expression validation'] = {
-      factored: false, uniform: false, trialsPerNode: [], forbiddenParams: [],
+      factored: false, uniform: false, trialsPerNode: [], expectParams: [],
       noTokens: true,
       rejectsStatement: !!errStatement,
       namesTheValue: !!errStatement && errStatement.indexOf('loop_function: <your text>') >= 0,
@@ -291,7 +468,7 @@ function phaseCases() {
     // localSave lives on DataCollection: jsPsych.data.get().localSave(...)
     var call = (code.match(/jsPsych\\.data\\.get\\(\\)\\.localSave\\(([^\\n]*)/) || [])[1] || '';
     out['data is saved'] = {
-      factored: false, uniform: false, trialsPerNode: [], forbiddenParams: [],
+      factored: false, uniform: false, trialsPerNode: [], expectParams: [],
       noTokens: true,
       callsLocalSave: !!call,
       // format first: localSave(format, filename), not the other way round
@@ -329,7 +506,8 @@ function phaseCases() {
       nodeParams: (code.match(/^  (?:sample|randomize_order|repetitions):.*$/gm) || [])
         .map(function (s) { return s.trim().replace(/,$/, ''); }),
       trialsPerNode: inspectStructure(code).trialsPerNode,
-      forbiddenParams: inspectStructure(code).forbiddenParams,
+      observedParams: inspectStructure(code).observedParams,
+      expectParams: [],
       noTokens: code.indexOf('@@') < 0
     };
   }
@@ -625,7 +803,20 @@ function timelineDocCases() {
     "var t=findTrial(editor.selectedTrial); addComponent(t.id,'text','s');" +
     "addComponent(t.id,'keyboard','r');");
 
-  var all = [rich, withoutReplacement, fixedReps, custom, alternate, jitter, plain].join('\\n');
+  // A phase carrying both node conditions, so the loop_function /
+  // conditional_function checks below have something to find. Without it they
+  // would pass on a sample that deliberately contains neither — which is what
+  // they used to do.
+  var conditions = build(
+    "addPhase('Trials'); addTrial(editor.phases[0].id);" +
+    "var t=findTrial(editor.selectedTrial); addComponent(t.id,'text','s');" +
+    "addComponent(t.id,'keyboard','r');" +
+    "t.components[1].choices=['a','l']; t.components[1].correctKey='a';" +
+    "editor.phases[0].repetitions=4;" +
+    "editor.phases[0].loop={field:'correct',op:'is',value:'true',cap:10};" +
+    "editor.phases[0].cond={field:'correct',op:'is',value:'true'};");
+  var all = [rich, withoutReplacement, fixedReps, custom, alternate, jitter, plain,
+             conditions].join('\\n');
   var shape = nodeShape(rich);
   var NODE_KEYS = ['randomize_order', 'repetitions', 'sample', 'timeline', 'timeline_variables'];
 
@@ -712,16 +903,13 @@ function timelineDocCases() {
   check('reps', 'repetitions', true, /repetitions: 4/.test(all));
   check('repsvar', 'repetitions alongside timeline_variables', true,
     /timeline_variables: \\w+[\\s\\S]{0,200}repetitions: 4/.test(rich));
-  check('repsloop', 'repetitions alongside loop_function', 'byhand',
-    /repetitions: \\d[\\s\\S]{0,80}loop_function/.test(all), 'no loop_function');
-  check('repscond', 'repetitions alongside conditional_function', 'byhand',
-    /repetitions: \\d[\\s\\S]{0,80}conditional_function/.test(all), 'no conditional_function');
+  check('repsloop', 'repetitions alongside loop_function', true,
+    /repetitions: \\d[\\s\\S]{0,400}loop_function: /.test(all));
+  check('repscond', 'repetitions alongside conditional_function', true,
+    /repetitions: \\d[\\s\\S]{0,400}conditional_function: /.test(all));
   section = '循环与条件时间线';
-  check('loopfn', 'loop_function', false, /loop_function/.test(all),
-    'the editor never writes one. Reachable by hand: node parameters in the phase ' +
-    'settings take a JavaScript expression');
-  check('condfn', 'conditional_function', false, /conditional_function/.test(all),
-    'same — a node parameter in the phase settings');
+  check('loopfn', 'loop_function', true, /loop_function: /.test(all));
+  check('condfn', 'conditional_function', true, /conditional_function: /.test(all));
   section = '在运行时修改时间线';
   check('runtimepush', 'on_finish pushing onto the timeline', 'byhand',
     /addNodeToEndOfTimeline|main_timeline\\.push/.test(all),
@@ -729,17 +917,26 @@ function timelineDocCases() {
   check('runtimepop', 'main_timeline.pop()', false, /main_timeline\\.pop/.test(all),
     'same');
   section = '时间线开始/结束回调';
-  check('tlstart', 'on_timeline_start', false, /on_timeline_start/.test(all),
-    'a node parameter; write one in the phase settings');
-  check('tlfinish', 'on_timeline_finish', false, /on_timeline_finish/.test(all),
-    'same');
+  // 'byhand', not absent. The editor never writes these, but a node parameter
+  // in the phase settings reaches them exactly as it reaches loop_function —
+  // having no constructor of its own is what puts a mechanism in this column,
+  // not what keeps it out of the table. They were marked absent while the
+  // reason beside them said "write one in the phase settings", which is the
+  // definition of the column next door.
+  check('tlstart', 'on_timeline_start', 'byhand', /on_timeline_start/.test(all),
+    'the editor never writes one; a node parameter in the phase settings does');
+  check('tlfinish', 'on_timeline_finish', 'byhand', /on_timeline_finish/.test(all),
+    'same — a node parameter in the phase settings');
   section = '文档示例里的其它 API';
   check('init', 'initJsPsych()', true, /initJsPsych\\(/.test(all));
   check('comparekeys', 'jsPsych.pluginAPI.compareKeys()', true,
     /jsPsych\\.pluginAPI\\.compareKeys\\(/.test(all));
-  check('lookback', 'jsPsych.data.get().last(1).values()[0]', 'byhand',
-    /data\\.get\\(\\)\\.last\\(/.test(all),
-    'that is how a branch reads the previous trial; ExpVis has no branching');
+  // Was 'byhand' ("that is how a branch reads the previous trial; ExpVis has no
+  // branching"). Still true of branching — but the phase settings now emit
+  // exactly this to build a conditional_function, which jsPsych hands no
+  // argument at all, so the editor writes it itself.
+  check('lookback', 'jsPsych.data.get().last(1).values()[0]', true,
+    /data\\.get\\(\\)\\.last\\(/.test(all));
   return out;
 }
 
@@ -1015,8 +1212,17 @@ def cmd_check():
             if got != want:
                 broken_cases.append(f"phase case {name}: emitted {got}, expected {want}")
         for name, c in cases.items():
-            if c["forbiddenParams"]:
-                broken_cases.append(f"phase case {name}: {c['forbiddenParams']}")
+            # Both directions. An undeclared node parameter means one leaked in
+            # from somewhere nobody asked; a declared one that never appeared
+            # means the feature that emits it quietly stopped.
+            observed = set(c.get("observedParams") or [])
+            declared = set(c.get("expectParams") or [])
+            for k in sorted(observed - declared):
+                broken_cases.append(
+                    f"phase case {name}: node parameter {k!r} was emitted but not declared")
+            for k in sorted(declared - observed):
+                broken_cases.append(
+                    f"phase case {name}: {k!r} was declared but never emitted")
             if not c["noTokens"]:
                 broken_cases.append(f"phase case {name}: an @@TOKEN@@ survived")
             if name == "custom node parameter":
@@ -1026,6 +1232,52 @@ def cmd_check():
                     broken_cases.append(
                         f"phase case {name}: emitted {c['emitted']}, expected {want_props} "
                         f"— one key each, the custom one winning")
+            if name == "data override keeps the scoring key":
+                checks = [
+                    ("correct_response: 'a'" in c["merged"], "merged",
+                     "the scoring key did not survive the override"),
+                    (c["keyCount"] == 1, "keyCount",
+                     f"{c['keyCount']} correct_response keys, expected 1"),
+                    ("correct_response: 'x'" in c["researcherWins"], "researcherWins",
+                     "the researcher's own correct_response was overwritten"),
+                    ("correct_response: 'a'" in c["emptyLiteral"], "emptyLiteral",
+                     "an empty literal did not gain the key"),
+                    ("Object.assign" in c["notALiteral"], "notALiteral",
+                     "a non-literal was rewritten as if it were one"),
+                    (c["multilineKept"], "multilineKept",
+                     "a multi-line literal was flattened"),
+                ]
+                for ok, field, why in checks:
+                    if not ok:
+                        broken_cases.append(
+                            f"phase case {name}: {why} — {c[field]}")
+            if name == "phase conditions":
+                for k in ("loopNegated", "condNotNegated", "loopReadsLastRow",
+                          "condTakesNoArg", "condReadsGlobal", "capIsExact"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "uncapped loop":
+                if not c["plainLiteral"] or not c["noCounter"]:
+                    broken_cases.append(
+                        f"phase case {name}: plainLiteral={c['plainLiteral']}, "
+                        f"noCounter={c['noCounter']}")
+            if name == "loop behaviour":
+                # text can be right while the meaning is inverted, so drive it
+                for k in ("stopsOnCorrect", "cappedAtThree", "lastRowDecides",
+                          "emptyRoundSafe"):
+                    if not c[k]:
+                        broken_cases.append(
+                            f"phase case {name}: {k} is false (capCalls={c['capCalls']})")
+            if name == "hand-written loop overrides":
+                if c["keyCount"] != 1:
+                    broken_cases.append(
+                        f"phase case {name}: {c['keyCount']} loop_function keys, expected 1")
+                if not c["generatedOneGone"]:
+                    broken_cases.append(
+                        f"phase case {name}: the generated one is still in the output")
+                if not c["isTheWrittenOne"]:
+                    broken_cases.append(
+                        f"phase case {name}: the written source did not survive")
             if name == "expression validation":
                 for k, want in (("rejectsStatement", True), ("namesTheValue", True),
                                 ("suggestsAFunction", True), ("acceptsFunction", True),
@@ -1089,8 +1341,9 @@ def cmd_check():
     for name, t in res["templates"].items():
         struct = t["structure"]
         # Invariants that must hold whatever the bytes are.
-        if struct["forbiddenParams"]:
-            broken.append(f"{name}: node-level parameter(s) {struct['forbiddenParams']}")
+        if struct["observedParams"]:
+            broken.append(f"{name}: node-level parameter(s) {struct['observedParams']} "
+                          "that no built-in template should carry")
         if any(n is None or n == 0 for n in struct["trialsPerNode"]):
             broken.append(f"{name}: a phase node collects no trials ({struct['trialsPerNode']})")
         if not t.get("publishedMatches"):
