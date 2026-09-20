@@ -204,7 +204,6 @@ var _i18n = {
   'comp.delay':       {en:'Delay', zh:'延迟'},
   'comp.delay.desc':  {en:'Insert Wait (ms)', zh:'插入等待 ms'},
   // --- Toolbar ---
-  'toolbar.quick_layout':     {en:'⚡ Quick Layout', zh:'⚡ 快速布局'},
   'toolbar.ai_generate':      {en:'🤖 AI Generate', zh:'🤖 AI 生成'},
   'toolbar.hint':             {en:'Drop components onto nodes above', zh:'拖入组件到节点上方释放'},
   // --- Empty state ---
@@ -293,7 +292,7 @@ function _applyI18n() {
  *   Section 3:  Flow Canvas Rendering
  *   Section 5:  Inspector Panel
  *   Section 6:  Preview System (inline + visual editor + fullscreen)
- *   Section 7:  Undo & Quick Layout
+ *   Section 7:  Undo
  *   Section 8:  jsPsych Code Generation
  *   Section 9:  AI Experiment Generation
  *   Section 10: Version Management & Publishing
@@ -2802,37 +2801,6 @@ function _applyI18n() {
         editor.hi = -1;
         var b = document.getElementById('undo-btn');
         if (b) b.disabled = true;
-        renderAll();
-      }
-
-      // Under flow layout the order of the components array IS the order they
-      // appear on screen, so "quick layout" means moving the response components
-      // below the display ones. Logic components keep their position relative to
-      // the display components — `randomize` in particular has to stay above the
-      // stimuli it picks from.
-      function quickLayout() {
-        if (!editor.selectedTrial) {
-          alert('Please select a trial first');
-          return;
-        }
-        var t = findTrial(editor.selectedTrial);
-        if (!t || t.components.length === 0) {
-          alert('Trial is empty');
-          return;
-        }
-        if (!t.components.some(function (c) { return c.cat !== 'r'; })) {
-          alert('No visual elements to arrange');
-          return;
-        }
-        saveState();
-        t.components = t.components
-          .filter(function (c) { return c.cat !== 'r'; })
-          .concat(t.components.filter(function (c) { return c.cat === 'r'; }));
-        // Alignment is the only positional control left.
-        t.components.forEach(function (c) {
-          if (['text', 'shape', 'image'].indexOf(c.type) >= 0) c.position = 'center';
-        });
-        autoSave();
         renderAll();
       }
 
