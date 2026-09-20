@@ -911,11 +911,26 @@ function timelineDocCases() {
   check('loopfn', 'loop_function', true, /loop_function: /.test(all));
   check('condfn', 'conditional_function', true, /conditional_function: /.test(all));
   section = '在运行时修改时间线';
+  // Both rows are the docs' EXAMPLE CODE, not jsPsych API: `main_timeline` is
+  // the name that page gave its own top-level array, which the editor also has
+  // and calls `timeline`. Neither needs an API call — an `on_finish` that
+  // writes to that array IS the mechanism — so both are reachable by hand.
+  // `pop` was marked absent only because its reason had been copied from the
+  // row above it.
+  //
+  // The patterns look for the write INSIDE a callback, and `[^}]` is what keeps
+  // them there: a bare `timeline.push` at the top level is how the editor
+  // assembles the experiment in the first place, so a pattern that could run
+  // past the closing brace would match it and pass on every experiment while
+  // proving nothing. That is what the previous patterns did — neither
+  // `addNodeToEndOfTimeline` (no such API in jsPsych v8) nor `main_timeline`
+  // ever appears in the output, so both rows were permanently, silently false.
   check('runtimepush', 'on_finish pushing onto the timeline', 'byhand',
-    /addNodeToEndOfTimeline|main_timeline\\.push/.test(all),
-    'on_finish is emitted only to score a trial; a node parameter can add more');
-  check('runtimepop', 'main_timeline.pop()', false, /main_timeline\\.pop/.test(all),
-    'same');
+    /function\\s*\\([^)]*\\)\\s*\\{[^}]{0,300}?timeline\\.push\\(/.test(all),
+    'the editor never writes one; a node parameter can push onto the top-level timeline');
+  check('runtimepop', 'main_timeline.pop()', 'byhand',
+    /function\\s*\\([^)]*\\)\\s*\\{[^}]{0,300}?timeline\\.pop\\(/.test(all),
+    'same — that is the top-level timeline array, which the editor also has');
   section = '时间线开始/结束回调';
   // 'byhand', not absent. The editor never writes these, but a node parameter
   // in the phase settings reaches them exactly as it reaches loop_function —

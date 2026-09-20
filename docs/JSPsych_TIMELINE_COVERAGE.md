@@ -6,7 +6,7 @@
 
 来源: <https://shaobin-jiang.github.io/jsPsych-Chinese-Documentation/v8/overview/timeline/>
 
-**24 条已实现 · 7 条手写可达 · 3 条做不到 · 34 条合计。**
+**24 条已实现 · 8 条手写可达 · 2 条做不到 · 34 条合计。**
 
 **✍️ 手写可达** = 编辑器不会自己写,但研究者可以 —— 在试次或节点上写一条自定义参数。
 **❌ 做不到** = 怎么都表达不了。
@@ -88,8 +88,8 @@
 
 | 功能点 | ExpVis | 说明 |
 |---|---|---|
-| on_finish pushing onto the timeline | ✍️ 手写可达 | on_finish is emitted only to score a trial; a node parameter can add more |
-| main_timeline.pop() | ❌ 做不到 | same |
+| on_finish pushing onto the timeline | ✍️ 手写可达 | the editor never writes one; a node parameter can push onto the top-level timeline |
+| main_timeline.pop() | ✍️ 手写可达 | same — that is the top-level timeline array, which the editor also has |
 
 ## 时间线开始/结束回调
 
