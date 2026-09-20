@@ -1286,8 +1286,23 @@ function _applyI18n() {
               // trial rather than part of the screen that follows it.
               var steps = [];
               var curSimul = null;
+              var seenVisual = false;
+              var trailing = null;
               visualComps.forEach(function (c) {
+                // Where a fixation lands is decided by the compiler, on whether a
+                // visual stimulus has already gone by: before one it is emitted
+                // as its own trial ahead of the screen, after one it goes to the
+                // END of the trial. Grouping by position instead drew
+                // [shape, fixation, shape] as three steps, while the code ran
+                // both shapes on one screen and the fixation after them — the
+                // canvas promising a sequence the experiment does not run.
+                if (c.type === 'fixation' && seenVisual) {
+                  if (!trailing) trailing = {simul: false, comps: [], trailing: true};
+                  trailing.comps.push(c);
+                  return;
+                }
                 var isStim = c.cat === 's' && c.type !== 'fixation';
+                if (isStim) seenVisual = true;
                 if (isStim && curSimul && curSimul.simul) {
                   curSimul.comps.push(c);
                 } else {
@@ -1295,6 +1310,7 @@ function _applyI18n() {
                   steps.push(curSimul);
                 }
               });
+              if (trailing) steps.push(trailing);
 
               // One row per presentation step, numbered down a gutter, so the
               // ORDER reads top-to-bottom. Components that share a step stay side
@@ -1316,14 +1332,20 @@ function _applyI18n() {
                 stepRow.appendChild(num);
 
                 var box;
-                if (step.simul && step.comps.length > 1) {
+                // A group earns a tag when it needs explaining: several things
+                // sharing one screen, or a fixation the compiler moved to the
+                // end. Both are cases where the picture would otherwise lie.
+                if ((step.simul && step.comps.length > 1) || step.trailing) {
                   box = document.createElement('div');
                   box.className = 'flow-step-simul';
                   var tag = document.createElement('span');
                   tag.className = 'flow-step-tag';
-                  tag.textContent = '同时呈现';
-                  tag.title = step.comps.length +
-                    ' components rendered together in one jsPsych stimulus';
+                  tag.textContent = step.trailing ? 'After the screen' : 'Shown together';
+                  tag.title = step.trailing
+                    ? 'A fixation that follows a visual stimulus runs after the screen, ' +
+                      'not in the middle of it — one jsPsych trial shows one screen.'
+                    : step.comps.length +
+                      ' components rendered together in one jsPsych stimulus';
                   box.appendChild(tag);
                   step.comps.forEach(function (c) { box.appendChild(makeNode(c, true)); });
                 } else {

@@ -454,6 +454,44 @@ function phaseCases() {
                    .data.uuid === jas.data.uuid,
     };
   })();
+  // A fixation that follows a visual stimulus is emitted at the END of the
+  // node, not where it sits in the component list — so [shape, fixation, shape]
+  // is ONE screen holding both shapes plus a trailing fixation trial, two
+  // trials and not three. The canvas groups by this same rule, which is why it
+  // is pinned here: without it the canvas is free to promise a sequence the
+  // experiment does not run.
+  (function () {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    addComponent(t.id, 'shape', 's');
+    t.components[0].shape = 'circle';
+    t.components[0].color = '#ff0000';
+    addComponent(t.id, 'fixation', 's');
+    t.components[1].trial_duration = 500;
+    addComponent(t.id, 'shape', 's');
+    t.components[2].shape = 'square';
+    t.components[2].color = '#00ff00';
+    var code = _compileExperiment({}).code;
+    var st = inspectStructure(code);
+    var node = (code.match(/var trials_timeline = \\{[\\s\\S]*?\\n\\};/) || [''])[0];
+    out['fixation after a stimulus'] = {
+      factored: false, uniform: false,
+      trialsPerNode: st.trialsPerNode,
+      observedParams: st.observedParams, expectParams: [], noTokens: true,
+      // the screen, then the fixation — not shape / fixation / shape
+      holdsTwoTrials: st.trialsPerNode.length === 1 && st.trialsPerNode[0] === 2,
+      // Both shapes reached the one screen, in component order. Identified by
+      // their colours: a square carries no shape CSS at all, so the styling
+      // cannot tell them apart.
+      bothStimuliOnIt: node.indexOf('#ff0000') >= 0 && node.indexOf('#00ff00') >= 0 &&
+                       node.indexOf('#ff0000') < node.indexOf('#00ff00'),
+      // the fixation is the timed trial, and it is emitted after that screen
+      fixationIsTheTimedTrial: /choices: 'NO_KEYS'/.test(node) &&
+                               node.lastIndexOf('NO_KEYS') > node.lastIndexOf('#00ff00'),
+    };
+  })();
   // A `data` override must keep the scoring key. The on_finish the editor
   // generates reads data.correct_response; an override that drops it leaves an
   // experiment that runs, writes a `correct` column, and marks every row false.
@@ -1353,6 +1391,12 @@ def cmd_check():
                           "localDoesNotLoadJatos", "idsStable"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "fixation after a stimulus":
+                for k in ("holdsTwoTrials", "bothStimuliOnIt", "fixationIsTheTimedTrial"):
+                    if not c[k]:
+                        broken_cases.append(
+                            f"phase case {name}: {k} is false "
+                            f"(trialsPerNode={c['trialsPerNode']})")
             if name == "expression validation":
                 for k, want in (("rejectsStatement", True), ("namesTheValue", True),
                                 ("suggestsAFunction", True), ("acceptsFunction", True),
