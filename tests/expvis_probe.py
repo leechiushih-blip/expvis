@@ -1075,6 +1075,117 @@ function phaseCases() {
     [['text', {content: 'A'}], ['keyboard', {choices: ['a']}]],
     [['text', {content: 'B'}]]
   ], {sample: {type: 'with-replacement', size: 1}, repetitions: 2});
+
+  // The AI's prompt surface is three texts that have to agree with each other
+  // and with the editor. Rewriting the system prompt alone left the quick-fill
+  // templates and the optimiser still asking for randomize / delay / branch /
+  // loop — so one request carried a system prompt forbidding exactly what its
+  // own user message requested. Nothing caught it, because all three lived
+  // inside showAIGenerate where no test could reach them. They are top-level
+  // now, and this asserts what the rewrites kept missing.
+  (function () {
+    var dev = {w: 1280, h: 720};
+    // The four deleted components, plus delay. Their names belong in the system
+    // prompt's FORBIDDEN list and nowhere else.
+    var DEAD = ['randomize', 'branch', 'variable', 'loop', 'delay'];
+    // Whole identifiers only. A substring test calls `randomize_question_order`
+    // — a real jsPsych survey parameter — a mention of the deleted `randomize`
+    // component, and `_` is part of an identifier, so it is not a boundary.
+    function namesAny(text) {
+      var words = String(text).toLowerCase().split(/[^a-z0-9_]+/);
+      return DEAD.filter(function (d) { return words.indexOf(d) >= 0; });
+    }
+    // `to` is searched AFTER `from`: the optimiser's own text has a `)` in item
+    // 1, so looking for the first one in the whole string closes the slice
+    // before it opens.
+    function between(text, from, to) {
+      var i = text.indexOf(from);
+      if (i < 0) return '';
+      var j = text.indexOf(to, i + from.length);
+      return j > i ? text.slice(i + from.length, j) : '';
+    }
+    var tplHits = [];
+    Object.keys(_aiTemplates).forEach(function (k) {
+      var hits = namesAny(_aiTemplates[k]);
+      if (hits.length) tplHits.push(k + '=' + hits.join('+'));
+    });
+    var meta = _aiMetaPrompt('a stroop task', dev);
+    var sys = _aiSystemPrompt(dev);
+    // The vocabulary the optimiser hands on as the required component types,
+    // and the schema the generator is told to emit. Both are enumerations, so a
+    // deleted name in either is an instruction, not a caveat.
+    var metaTypes = between(meta, 'Required component types (', ')');
+    var schema = between(sys, 'Full Component Schema', '【Color Rules');
+    out['ai prompts name no retired mechanism'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      templatesAreClean: tplHits.length === 0,
+      metaTypesAreReal: metaTypes.length > 0 && namesAny(metaTypes).length === 0,
+      schemaHasNoRetiredType: schema.length > 0 && namesAny(schema).length === 0,
+      // …and the prohibition itself survives, so this cannot be satisfied by
+      // deleting the FORBIDDEN section instead of fixing the templates. `delay`
+      // is not required here: that section forbids the four components, and
+      // names the blank pause by what it does rather than by the old name.
+      stillForbidden: ['loop', 'branch', 'randomize', 'variable'].every(function (d) {
+        return namesAny(between(sys, 'FORBIDDEN', '❌ JSON trailing')).indexOf(d) >= 0;
+      }),
+      // every template key still has a button in the panel
+      templatesMatchButtons: ['stroop', 'simon', 'flanker', 'custom'].every(function (k) {
+        return typeof _aiTemplates[k] === 'string' && _aiTemplates[k].length > 40;
+      })
+    };
+  })();
+
+  // Anthropic does not read `Authorization`; it wants `x-api-key`, and a call
+  // from a page is refused at the preflight unless the caller opts in. The
+  // provider used to hand its key to the shared `Authorization` path, so every
+  // Anthropic request was wrong in two ways at once.
+  (function () {
+    var h = _aiProviders.anthropic.requestHeaders('sk-ant-test');
+    var others = Object.keys(_aiProviders).filter(function (k) {
+      var p = _aiProviders[k];
+      return k !== 'anthropic' && !p.isCustom;
+    });
+    // The headers above are only correct if _callAI actually asks for them.
+    // Building them is synchronous — the promise chain starts after `fetch` is
+    // called — so a stubbed fetch captures the real request without a network
+    // call, and without an await.
+    var sent = null;
+    var realFetch = window.fetch;
+    localStorage.setItem('ve_ai_key_anthropic', 'sk-ant-test');
+    window.fetch = function (url, init) {
+      sent = {url: url, headers: init.headers};
+      return Promise.reject(new Error('stub'));
+    };
+    try {
+      _callAI('anthropic', 'claude-opus-5', [{role: 'user', content: 'x'}], 16)
+        .catch(function () {});
+    } catch (e) { /* reported through `sent` */ }
+    window.fetch = realFetch;
+    out['ai provider headers'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      anthropicUsesApiKey: h['x-api-key'] === 'sk-ant-test',
+      // no stray Authorization — the key must not go out twice, in the wrong one
+      anthropicSendsNoAuthorization: !('Authorization' in h),
+      // and the request that really goes out carries them
+      requestGoesToTheRightPlace: !!sent && sent.url === _aiProviders.anthropic.endpoint,
+      requestCarriesApiKey: !!sent && sent.headers['x-api-key'] === 'sk-ant-test',
+      requestOptsInToBrowser: !!sent &&
+        sent.headers['anthropic-dangerous-direct-browser-access'] === 'true',
+      browserAccessOptIn: h['anthropic-dangerous-direct-browser-access'] === 'true',
+      versionPinned: h['anthropic-version'] === '2023-06-01',
+      // the rest still take the Bearer path they share
+      restUseBearer: others.every(function (k) {
+        var p = _aiProviders[k];
+        return typeof p.authHeader === 'function' && !p.requestHeaders;
+      }),
+      // and the header is never empty for a provider that uses the shared path
+      noEmptyBearer: others.filter(function (k) { return k !== 'gemini'; }).every(function (k) {
+        return _aiProviders[k].authHeader('k') === 'Bearer k';
+      })
+    };
+  })();
   return out;
 }
 
@@ -1875,6 +1986,19 @@ def cmd_check():
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "correct key is editable":
                 for k in ("hasInput", "labelled", "retiredHintGone"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "ai prompts name no retired mechanism":
+                for k in ("templatesAreClean", "metaTypesAreReal",
+                          "schemaHasNoRetiredType", "stillForbidden",
+                          "templatesMatchButtons"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "ai provider headers":
+                for k in ("anthropicUsesApiKey", "anthropicSendsNoAuthorization",
+                          "browserAccessOptIn", "versionPinned", "restUseBearer",
+                          "noEmptyBearer", "requestGoesToTheRightPlace",
+                          "requestCarriesApiKey", "requestOptsInToBrowser"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "cloze page":

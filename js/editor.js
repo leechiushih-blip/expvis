@@ -29,11 +29,23 @@ var _aiProviders = {
   },
   anthropic: {
     name: 'Anthropic Claude',
-    models: ['claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5'],
-    defaultModel: 'claude-sonnet-4-6',
+    models: ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    defaultModel: 'claude-opus-5',
     endpoint: 'https://api.anthropic.com/v1/messages',
-    authHeader: function(key) { return key; },
-    extraHeaders: function() { return {'anthropic-version': '2023-06-01', 'anthropic-beta': 'messages-2023-12-15'}; },
+    // Anthropic does not read `Authorization`. It wants `x-api-key`, and a call
+    // made from a page needs an explicit opt-in before the API will answer it
+    // at all — a browser request without that header never leaves the CORS
+    // preflight. The header's name is the warning: the key sits in the page, so
+    // anyone who opens devtools can read it. That is the bargain this editor
+    // already strikes with the user, who supplies their own key and keeps it in
+    // their own browser.
+    requestHeaders: function(key) {
+      return {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      };
+    },
     buildBody: function(model, messages, maxTokens) {
       var systemMsg = '';
       var userMsgs = [];
@@ -137,9 +149,14 @@ function _callAI(providerId, model, messages, maxTokens) {
     });
   }
 
-  var headers = {'Content-Type': 'application/json', 'Authorization': provider.authHeader(key)};
-  var extraH = provider.extraHeaders ? provider.extraHeaders() : {};
-  for (var k in extraH) headers[k] = extraH[k];
+  // Most of these providers take the key in `Authorization: Bearer …`. A
+  // provider that does not describes its own headers instead — see the
+  // `requestHeaders` on anthropic.
+  var headers = {'Content-Type': 'application/json'};
+  var authH = provider.requestHeaders
+    ? provider.requestHeaders(key)
+    : {'Authorization': provider.authHeader(key)};
+  for (var k in authH) headers[k] = authH[k];
 
   return fetch(provider.endpoint, {
     method: 'POST',
@@ -156,6 +173,139 @@ function _callAI(providerId, model, messages, maxTokens) {
 function _getAIProviderKeys() {
   return Object.keys(_aiProviders);
 }
+
+// ---- The AI's prompt surface -------------------------------------------------
+// These three used to live inside showAIGenerate as local variables, where
+// nothing could reach them -- not the probe, and, as it turned out, not the
+// round that rewrote the other two. The templates and the optimiser's own
+// instructions kept describing randomize / delay / branch / loop for weeks
+// after the system prompt stopped allowing them, because a text nobody can
+// read is a text nobody updates. They are here so the probe can assert on
+// them.
+
+// Template quick-fill. These are USER messages, and they used to describe the
+// experiment in the vocabulary of the four components that no longer exist —
+// "use randomize to shuffle the variants", "fixation→delay→randomize→…→loop",
+// "add branch for error feedback". The system prompt forbids exactly those, so
+// the two halves of one request contradicted each other, and the concrete,
+// specific half is the one a model tends to follow. They now describe the
+// design the way the editor actually builds it: one trial per condition,
+// scored by its correct key, with the block repeated and ordered through the
+// PHASE's settings.
+var _aiTemplates = {
+  stroop:'Design a classic Stroop colour-word interference experiment. Red is answered with A, blue with L, green with K.\n1. Instructions: explain the rules, with a button that starts the experiment.\n2. Trials: one trial per condition — a fixation, then a colour word, then a keyboard response. Write one trial for each word × ink-colour combination, each with its correct key set so the trial is scored (including the incongruent ones, where the word and the ink disagree). Repeat this block many times and shuffle the order, through the phase settings.\n3. Feedback: thank the participant.',
+  simon:'Design a Simon effect experiment. A red circle is answered with A, a green circle with L; the participant responds to the colour and ignores which side it appears on.\n1. Instructions: explain the rules, with a button that starts the experiment.\n2. Trials: one trial per condition — a fixation, then a shape on the left or the right, then a keyboard response. Write one trial for each colour × side combination, each with its correct key set so the trial is scored. Repeat this block many times and shuffle the order, through the phase settings.\n3. Feedback: thank the participant.',
+  flanker:'Design an Eriksen flanker task. The middle arrow decides the answer: F for left, J for right, and the flanking arrows are to be ignored.\n1. Instructions: explain the rules, with a button that starts the experiment.\n2. Trials: one trial per condition — a fixation, then a row of five arrows, then a keyboard response. Write one trial for each arrangement (congruent and incongruent, with the incongruent rows in a distinct colour), each with its correct key set so the trial is scored. Repeat this block many times and shuffle the order, through the phase settings.\n3. Feedback: thank the participant.',
+  custom:'Design a [experiment name]. [Purpose and background]. Include:\n1. [What the participant reads first, and how they start]\n2. [The trials: one trial per condition, the stimuli, the response and which key is correct. Say how many times the block repeats and in what order — repetition and ordering belong to the phase, not to a component.]\n3. [What happens at the end]'
+};
+
+function _aiMetaPrompt(prompt, dev) {
+  return 'You are an experiment design assistant. The user wants to create an online behavioral experiment but their description may be unclear.\n' +
+  'Rewrite their description into a clear, complete experiment specification including:\n' +
+  '1. Experiment type (Stroop/Simon/Flanker/game/memory/dialogue etc.)\n' +
+  '2. The phases and what each is for — as many as the design needs; "instructions, trials, feedback" is conventional, not required\n' +
+  '3. Specific content for each phase\n' +
+  '4. How many trials, and how the block repeats and orders itself (this belongs to the phase, not to a component)\n' +
+  '5. Required component types (text, shape, image, audio, video, fixation, animation, keyboard, button, slider, textInput, likert, multiChoice, multiSelect, htmlForm, cloze, freeSort)\n' +
+  '6. Whether any trial is scored, and against which key — and whether a feedback message is wanted\n' +
+  '7. Color scheme and key mappings\n' +
+  '8. Device resolution ' + dev.w + '×' + dev.h + '\n\n' +
+  'The experiment builder this feeds has no looping, branching or randomizing component, and no delay component: a trial shows ONE screen with at most one response component, and inter-trial timing comes from the fixation duration. Describe the design in those terms.\n\n' +
+  'Return the optimized description in plain text (no JSON). Keep it concise but complete, under 300 words.\n\n' +
+  'User description: ' + prompt;
+}
+
+function _aiSystemPrompt(dev) {
+  return 'You are an online behavioral experiment builder. Generate a complete experiment structure JSON based on the user\'s description.\n\n' +
+  '⚠ IMPORTANT: Output all text content, labels, and instructions in ENGLISH. Use English for all user-facing text.\n\n' +
+  '【Output Format】Strict JSON only - no markdown code blocks, no comments.\n' +
+  '{"phases":[\n' +
+  '  {"name":"Instructions","timeline":[{"id":"t1","components":[text(instructions)+button(start)]}]},\n' +
+  '  {"name":"Trials","timeline":[{"id":"t2","components":[fixation+stimulus×N+response]}]},\n' +
+  '  {"name":"Feedback","timeline":[{"id":"tN","components":[text(thanks)]}]}\n' +
+  ']}\n' +
+  'A phase has a NAME and a `timeline` of trials. There is no phase type and no colour.\n' +
+  'Instructions and Feedback as above are conventional, not required — use as many phases as the design needs.\n\n' +
+  '【Full Component Schema】(cat: s=stimulus r=response x=owns the whole trial)\n\n' +
+  'text:       {type:"text",content:"text",fontSize:32,color:"#333333",position:"center",fontWeight:"bold",cat:"s"}\n' +
+  'shape:      {type:"shape",shape:"circle|square|triangle|diamond|star",size:80,color:"#6366f1",position:"center",cat:"s"}\n' +
+  'fixation:   {type:"fixation",trial_duration:500,durationMin:0,durationMax:0,durationStep:250,cat:"s"}\n' +
+  'image:      {type:"image",fileData:"",fileName:"",stimulus_width:200,stimulus_height:0,maintain_aspect_ratio:true,render_on_canvas:true,cat:"s"}\n' +
+  'animation:  {type:"animation",frames:[],frame_time:250,frame_isi:0,sequence_reps:1,choices:[],prompt:"",render_on_canvas:true,cat:"x"}  // OWNS the trial; never combine with anything\n' +
+  'audio:      {type:"audio",fileData:"",fileName:"",trial_ends_after_audio:false,response_allowed_while_playing:true,cat:"s"}\n' +
+  'video:      {type:"video",fileData:"",fileName:"",width:320,height:0,autoplay:true,controls:false,start:0,stop:0,cat:"s"}\n' +
+  'keyboard:   {type:"keyboard",choices:["a","l"],correctKey:"",prompt:"Press a key",trial_duration:0,stimulus_duration:0,response_ends_trial:true,wait_for_key_release:false,cat:"r"}\n' +
+  'button:     {type:"button",choices:["Yes","No"],prompt:"",button_layout:"grid",grid_rows:1,grid_columns:0,trial_duration:0,stimulus_duration:0,response_ends_trial:true,enable_button_after:0,cat:"r"}\n' +
+  'slider:     {type:"slider",min:0,max:100,step:1,slider_start:50,labels:[],button_label:"Continue",slider_width:0,require_movement:false,prompt:"",trial_duration:0,stimulus_duration:0,response_ends_trial:true,cat:"r"}\n' +
+  'textInput:  {type:"textInput",prompt:"",placeholder:"Type here",name:"Q0",required:false,rows:1,columns:40,button_label:"Continue",autocomplete:false,cat:"r"}  // no right answer, no timeout\n' +
+  'textInput:  {type:"textInput",questions:[{prompt:"",placeholder:"Enter text",required:false}],button_label:"Continue",preamble:"",autocomplete:false,cat:"r"}\n' +
+  'likert:     {type:"likert",questions:[{prompt:"",labels:["Disagree","Neutral","Agree"],required:false}],scale_width:0,randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
+  'multiChoice:{type:"multiChoice",questions:[{prompt:"",options:["A","B"],required:false,horizontal:false}],randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
+  'multiSelect:{type:"multiSelect",questions:[{prompt:"",options:["A","B"],required:false,horizontal:false}],randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
+  'htmlForm:   {type:"htmlForm",html:"<input name=answer type=text>",button_label:"Continue",preamble:"",cat:"r"}\n' +
+  'cloze:      {type:"cloze",text:"The capital of France is %Paris%.",button_text:"OK",check_answers:false,allow_blanks:true,case_sensitivity:true,cat:"x"}  // OWNS the trial\n' +
+  'freeSort:   {type:"freeSort",stimuli:[],stim_width:100,stim_height:100,sort_area_width:700,sort_area_height:700,sort_area_shape:"ellipse",prompt:"",prompt_location:"above",button_label:"Continue",stim_starts_inside:false,cat:"x"}  // OWNS the trial\n\n' +
+  'NOTE: textInput and the four survey-* components all carry a `questions` ARRAY — a page may ask several.\n' +
+  'NOTE: text/shape/image/audio/video carry EMPTY fileData — the researcher uploads the file afterwards.\n\n' +
+  '【Color Rules — CRITICAL! Preview background is WHITE #fff】\n' +
+  '  Text color must use DARK colors (#333, #1a1a2e, #1e293b). NEVER use #fff/#ffffff/white/light gray!\n' +
+  '  Button color: medium-dark (#6366f1, #ef4444, #3b82f6). Do NOT use white!\n' +
+  '  Shape color: vivid dark (#ef4444, #22c55e, #3b82f6, #6366f1). Do NOT use white!\n' +
+  '  Keyboard: `choices` is an ARRAY of key strings, e.g. ["a","l"]. Write "space" for the spacebar.\n' +
+  '    An EMPTY array means any key (jsPsych ALL_KEYS). `correctKey` scores the trial.\n\n' +
+  '【Standard Trial Structure】\n' +
+  '[fixation] → [stimulus(text/shape/image/audio/video)×N] → [response(keyboard/button/slider/survey)]\n' +
+  '  ⚠ A trial shows ONE screen, and every visual component in it appears at once.\n' +
+  '    To show A then B, make two trials — or put a fixation between them, which becomes a timed trial of its own.\n' +
+  '  ⚠ Set the fixation duration (e.g. 500-700) to control the inter-stimulus interval\n' +
+  '  ⚠ For a button trial, `choices` is an ARRAY of button labels, not a comma-separated string\n' +
+  '  ⚠ A trial holds at most ONE response component — one plugin runs per trial.\n' +
+  '  ⚠ animation / cloze / freeSort OWN the trial: nothing may sit beside them.\n' +
+  '  ⚠ There is no loop, branch, randomize or variable component. A phase repeats via its own settings\n' +
+  '    (repetitions / sample / randomize_order), not via a component.\n\n' +
+  '【Layout】Components stack in document flow — there are NO x/y coordinates.\n' +
+  '  `position` is alignment only: "center" (default), "left", or "right".\n' +
+  '  Order in the components array IS the vertical order on screen.\n' +
+  '  There is no way to overlap two components; put them in sequence instead.\n' +
+  '  Target screen: ' + dev.w + '×' + dev.h + '\n' +
+  '  Font sizes — MUST scale to device size (' + dev.w + '×' + dev.h + '):\n' +
+  '    Instructions: ' + Math.round(dev.h * 0.025) + '-' + Math.round(dev.h * 0.035) + 'px (≈2.5-3.5% of device height)\n' +
+  '    Stimuli (key text): ' + Math.round(dev.h * 0.05) + '-' + Math.round(dev.h * 0.08) + 'px (≈5-8% of height, bold, centered)\n' +
+  '    Feedback/thank-you: ' + Math.round(dev.h * 0.03) + '-' + Math.round(dev.h * 0.045) + 'px (≈3-4.5% of height)\n' +
+  '    Error messages: slightly smaller than stimuli (~' + Math.round(dev.h * 0.04) + 'px)\n' +
+  '    Small devices (w<500): reduce all sizes by ~30%\n' +
+  '    Large screens (w>1500): increase stimuli up to ' + Math.round(dev.h * 0.1) + 'px\n\n' +
+  '【ID System】Trials "t1","t2"... Components "c1","c2"... globally sequential across all phases\n\n' +
+  '【Scoring and feedback】\n' +
+  '  Set `correctKey` on a keyboard component to score it: the exported trial records\n' +
+  '  `correct` per response. Leave it empty for a trial that is not scored.\n' +
+  '  Writing `correct_text` / `incorrect_text` on that keyboard component switches the trial\n' +
+  '  onto jsPsych\'s categorize plugin, which shows the message itself — and then `correctKey`\n' +
+  '  must name exactly ONE key, because that plugin scores against a single one.\n' +
+  '  There is no in-trial branching: to react to a response, score it and use a later trial.\n\n' +
+  '【Experiment Patterns】\n' +
+  '  Stroop: one trial per condition — text(word, coloured) + keyboard(choices, correctKey) — then a phase\n' +
+  '    whose settings repeat it and sample the order. The varying word lives in the phase\'s\n' +
+  '    condition table (one trial per condition, values filled in per condition).\n' +
+  '  Flanker: text("<<<<<") + keyboard(choices:["f","j"], correctKey:"f"), and a trial per arrow direction.\n' +
+  '  Simon: shape(colour, position:"left"|"right") + keyboard(choices:["a","l"], correctKey).\n' +
+  '  Memory / Survey: a single trial with text + textInput(questions:[...]) — several questions on one page.\n' +
+  '  Rating: text(instructions) + slider(min,max,step,labels).\n\n' +
+  '【FORBIDDEN — common causes of invalid JSON】\n' +
+  '  ❌ text color = #fff/white → invisible on white background\n' +
+  '  ❌ Two components expected to overlap → impossible, they stack in flow\n' +
+  '  ❌ randomize present but text/shape missing key mapping → keyboard has no correct key\n' +
+  '  ❌ A loop / branch / randomize / variable component → they do not exist; a phase repeats through its settings\n' +
+// `%n%` and `%s%` belong to the cloze and free-sort plugins' own counter text,
+// not to this prompt — it is not a percent-format.
+  '  ❌ A `step_duration`, `newStep` or "映射按键" field → removed; a trial shows one screen\n' +
+  '  ❌ No blank-pause component exists → use the fixation duration instead\n' +
+  '  ❌ Two response components in one trial → only the first is generated\n' +
+  '  ❌ Anything beside an animation / cloze / freeSort → those own the whole trial\n' +
+  '  ❌ JSON trailing commas or comments\n' +
+  '  ❌ Single quotes instead of double quotes';
+}
+
 
 
 // ============ i18n (Internationalization) ============
@@ -6274,13 +6424,7 @@ function _applyI18n() {
 
         var promptEl = document.getElementById('ai-prompt');
 
-        // Template quick-fill
-        var templates = {
-          stroop:'Design a classic Stroop color-word interference experiment. Use randomize to shuffle text variants (different colors and word meanings). Red mapped to key:a, Blue to key:l. Include:\n1. Instructions phase: explain task rules (red→A, blue→L, green→K), click to start\n2. Trials phase: 48 trials, each: fixation→delay→randomize→texts(different colors/meanings, each with color-key mapping)→keyboard(choices:["a","l","k"])→loop. Add branch for error feedback if needed\n3. Feedback phase: thank participant',
-          simon:'Design a Simon effect experiment. Each trial uses randomize(pick-one) to select 1 shape variant. Red circle→key:a, Green circle→key:l. Include:\n1. Instructions: task rules (red→A, green→L, ignore position), click to start\n2. Trials: 60 trials, fixation→delay→randomize→shapes(red/green × left/right = 4 variants, each with key mapping)→keyboard(choices:["a","l"])→loop. Add branch for error feedback\n3. Feedback: thank participant',
-          flanker:'Design a Flanker task. Each trial uses randomize(pick-one) to select 1 arrow variant. Left arrow→key:f, Right arrow→key:j. Include:\n1. Instructions: title + rules (press F for left middle arrow, J for right, ignore flankers), click to start\n2. Trials: 80 trials, fixation→delay→randomize→texts(5 arrow types: congruent <<<<<, incongruent >><>> red, congruent >>>>>, incongruent <><<< red, incongruent >>><> green, each with key mapping)→keyboard(choices:["f","j"],trial_duration:1500)→branch(correct)→error feedback→loop\n3. Feedback: thank participant',
-          custom:'Design a [experiment name]. [Purpose and background]. Include:\n1. Instructions phase: [content]\n2. Trials phase: [N] trials, [stimuli and response details]\n3. Feedback phase: [content]'
-        };
+        var templates = _aiTemplates;
         Object.keys(templates).forEach(function (key) {
           var btn = document.getElementById('ai-template-' + key);
           if (btn) btn.onclick = function () { promptEl.value = templates[key]; };
@@ -6307,19 +6451,7 @@ function _applyI18n() {
           optBtn.disabled = true; optBtn.textContent = '⏳ ...';
           statusEl.innerHTML = '<span style="color:var(--amber)">🔧 Optimizing prompt via ' + _getAIProvider(pid).name + '...</span>';
 
-          var metaPrompt = 'You are an experiment design assistant. The user wants to create an online behavioral experiment but their description may be unclear.\n' +
-            'Rewrite their description into a clear, complete experiment specification including:\n' +
-            '1. Experiment type (Stroop/Simon/Flanker/game/memory/dialogue etc.)\n' +
-            '2. Phase structure: Instructions→Trials→Feedback\n' +
-            '3. Specific content for each phase\n' +
-            '4. Trial count and loop iterations\n' +
-            '5. Required component types (text, shape, keyboard, button, slider, textInput, fixation, delay, randomize, branch, variable, loop)\n' +
-            '6. Whether randomization, conditional branching, or scoring variables are needed\n' +
-            '7. Color scheme and key mappings\n' +
-            '8. Device resolution ' + (editor.device || { w: 1280, h: 720 }).w + '×' + (editor.device || { w: 1280, h: 720 }).h + '\n\n' +
-            'Return the optimized description in plain text (no JSON). Keep it concise but complete, under 300 words.\n\n' +
-            'User description: ' + prompt;
-
+          var metaPrompt = _aiMetaPrompt(prompt, dev);
           _callAI(pid, mod, [{role:'user',content:metaPrompt}], 800).then(function(result) {
             promptEl.value = result.trim();
             statusEl.innerHTML = '<span style="color:var(--green)">✅ Prompt optimized! Edit further or click Generate</span>';
@@ -6351,100 +6483,17 @@ function _applyI18n() {
           genBtn.disabled = true; genBtn.textContent = '⏳ ...';
           statusEl.innerHTML = '<span style="color:var(--accent)">' + i18n('ai.status.generating') + ' (' + _getAIProvider(pid).name + ')</span>';
 
-          var sysPrompt =
-            'You are an online behavioral experiment builder. Generate a complete experiment structure JSON based on the user\'s description.\n\n' +
-            '⚠ IMPORTANT: Output all text content, labels, and instructions in ENGLISH. Use English for all user-facing text.\n\n' +
-            '【Output Format】Strict JSON only - no markdown code blocks, no comments.\n' +
-            '{"phases":[\n' +
-            '  {"name":"Instructions","timeline":[{"id":"t1","components":[text(instructions)+button(start)]}]},\n' +
-            '  {"name":"Trials","timeline":[{"id":"t2","components":[fixation+stimulus×N+response]}]},\n' +
-            '  {"name":"Feedback","timeline":[{"id":"tN","components":[text(thanks)]}]}\n' +
-            ']}\n' +
-            'A phase has a NAME and a `timeline` of trials. There is no phase type and no colour.\n' +
-            'Instructions and Feedback as above are conventional, not required — use as many phases as the design needs.\n\n' +
-            '【Full Component Schema】(cat: s=stimulus r=response x=owns the whole trial)\n\n' +
-            'text:       {type:"text",content:"text",fontSize:32,color:"#333333",position:"center",fontWeight:"bold",cat:"s"}\n' +
-            'shape:      {type:"shape",shape:"circle|square|triangle|diamond|star",size:80,color:"#6366f1",position:"center",cat:"s"}\n' +
-            'fixation:   {type:"fixation",trial_duration:500,durationMin:0,durationMax:0,durationStep:250,cat:"s"}\n' +
-            'image:      {type:"image",fileData:"",fileName:"",stimulus_width:200,stimulus_height:0,maintain_aspect_ratio:true,render_on_canvas:true,cat:"s"}\n' +
-            'animation:  {type:"animation",frames:[],frame_time:250,frame_isi:0,sequence_reps:1,choices:[],prompt:"",render_on_canvas:true,cat:"x"}  // OWNS the trial; never combine with anything\n' +
-            'audio:      {type:"audio",fileData:"",fileName:"",trial_ends_after_audio:false,response_allowed_while_playing:true,cat:"s"}\n' +
-            'video:      {type:"video",fileData:"",fileName:"",width:320,height:0,autoplay:true,controls:false,start:0,stop:0,cat:"s"}\n' +
-            'keyboard:   {type:"keyboard",choices:["a","l"],correctKey:"",prompt:"Press a key",trial_duration:0,stimulus_duration:0,response_ends_trial:true,wait_for_key_release:false,cat:"r"}\n' +
-            'button:     {type:"button",choices:["Yes","No"],prompt:"",button_layout:"grid",grid_rows:1,grid_columns:0,trial_duration:0,stimulus_duration:0,response_ends_trial:true,enable_button_after:0,cat:"r"}\n' +
-            'slider:     {type:"slider",min:0,max:100,step:1,slider_start:50,labels:[],button_label:"Continue",slider_width:0,require_movement:false,prompt:"",trial_duration:0,stimulus_duration:0,response_ends_trial:true,cat:"r"}\n' +
-            'textInput:  {type:"textInput",prompt:"",placeholder:"Type here",name:"Q0",required:false,rows:1,columns:40,button_label:"Continue",autocomplete:false,cat:"r"}  // no right answer, no timeout\n' +
-            'textInput:  {type:"textInput",questions:[{prompt:"",placeholder:"Enter text",required:false}],button_label:"Continue",preamble:"",autocomplete:false,cat:"r"}\n' +
-            'likert:     {type:"likert",questions:[{prompt:"",labels:["Disagree","Neutral","Agree"],required:false}],scale_width:0,randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
-            'multiChoice:{type:"multiChoice",questions:[{prompt:"",options:["A","B"],required:false,horizontal:false}],randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
-            'multiSelect:{type:"multiSelect",questions:[{prompt:"",options:["A","B"],required:false,horizontal:false}],randomize_question_order:false,button_label:"Continue",preamble:"",cat:"r"}\n' +
-            'htmlForm:   {type:"htmlForm",html:"<input name=answer type=text>",button_label:"Continue",preamble:"",cat:"r"}\n' +
-            'cloze:      {type:"cloze",text:"The capital of France is %Paris%.",button_text:"OK",check_answers:false,allow_blanks:true,case_sensitivity:true,cat:"x"}  // OWNS the trial\n' +
-            'freeSort:   {type:"freeSort",stimuli:[],stim_width:100,stim_height:100,sort_area_width:700,sort_area_height:700,sort_area_shape:"ellipse",prompt:"",prompt_location:"above",button_label:"Continue",stim_starts_inside:false,cat:"x"}  // OWNS the trial\n\n' +
-            'NOTE: textInput and the four survey-* components all carry a `questions` ARRAY — a page may ask several.\n' +
-            'NOTE: text/shape/image/audio/video carry EMPTY fileData — the researcher uploads the file afterwards.\n\n' +
-            '【Color Rules — CRITICAL! Preview background is WHITE #fff】\n' +
-            '  Text color must use DARK colors (#333, #1a1a2e, #1e293b). NEVER use #fff/#ffffff/white/light gray!\n' +
-            '  Button color: medium-dark (#6366f1, #ef4444, #3b82f6). Do NOT use white!\n' +
-            '  Shape color: vivid dark (#ef4444, #22c55e, #3b82f6, #6366f1). Do NOT use white!\n' +
-            '  Keyboard: `choices` is an ARRAY of key strings, e.g. ["a","l"]. Write "space" for the spacebar.\n' +
-            '    An EMPTY array means any key (jsPsych ALL_KEYS). `correctKey` scores the trial.\n\n' +
-            '【Standard Trial Structure】\n' +
-            '[fixation] → [stimulus(text/shape/image/audio/video)×N] → [response(keyboard/button/slider/survey)]\n' +
-            '  ⚠ A trial shows ONE screen, and every visual component in it appears at once.\n' +
-            '    To show A then B, make two trials — or put a fixation between them, which becomes a timed trial of its own.\n' +
-            '  ⚠ Set the fixation duration (e.g. 500-700) to control the inter-stimulus interval\n' +
-            '  ⚠ For a button trial, `choices` is an ARRAY of button labels, not a comma-separated string\n' +
-            '  ⚠ A trial holds at most ONE response component — one plugin runs per trial.\n' +
-            '  ⚠ animation / cloze / freeSort OWN the trial: nothing may sit beside them.\n' +
-            '  ⚠ There is no loop, branch, randomize or variable component. A phase repeats via its own settings\n' +
-            '    (repetitions / sample / randomize_order), not via a component.\n\n' +
-            '【Layout】Components stack in document flow — there are NO x/y coordinates.\n' +
-            '  `position` is alignment only: "center" (default), "left", or "right".\n' +
-            '  Order in the components array IS the vertical order on screen.\n' +
-            '  There is no way to overlap two components; put them in sequence instead.\n' +
-            '  Target screen: ' + dev.w + '×' + dev.h + '\n' +
-            '  Font sizes — MUST scale to device size (' + dev.w + '×' + dev.h + '):\n' +
-            '    Instructions: ' + Math.round(dev.h * 0.025) + '-' + Math.round(dev.h * 0.035) + 'px (≈2.5-3.5% of device height)\n' +
-            '    Stimuli (key text): ' + Math.round(dev.h * 0.05) + '-' + Math.round(dev.h * 0.08) + 'px (≈5-8% of height, bold, centered)\n' +
-            '    Feedback/thank-you: ' + Math.round(dev.h * 0.03) + '-' + Math.round(dev.h * 0.045) + 'px (≈3-4.5% of height)\n' +
-            '    Error messages: slightly smaller than stimuli (~' + Math.round(dev.h * 0.04) + 'px)\n' +
-            '    Small devices (w<500): reduce all sizes by ~30%\n' +
-            '    Large screens (w>1500): increase stimuli up to ' + Math.round(dev.h * 0.1) + 'px\n\n' +
-            '【ID System】Trials "t1","t2"... Components "c1","c2"... globally sequential across all phases\n\n' +
-            '【Scoring and feedback】\n' +
-            '  Set `correctKey` on a keyboard component to score it: the exported trial records\n' +
-            '  `correct` per response. Leave it empty for a trial that is not scored.\n' +
-            '  Writing `correct_text` / `incorrect_text` on that keyboard component switches the trial\n' +
-            '  onto jsPsych\'s categorize plugin, which shows the message itself — and then `correctKey`\n' +
-            '  must name exactly ONE key, because that plugin scores against a single one.\n' +
-            '  There is no in-trial branching: to react to a response, score it and use a later trial.\n\n' +
-            '【Experiment Patterns】\n' +
-            '  Stroop: one trial per condition — text(word, coloured) + keyboard(choices, correctKey) — then a phase\n' +
-            '    whose settings repeat it and sample the order. The varying word lives in the phase\'s\n' +
-            '    condition table (one trial per condition, values filled in per condition).\n' +
-            '  Flanker: text("<<<<<") + keyboard(choices:["f","j"], correctKey:"f"), and a trial per arrow direction.\n' +
-            '  Simon: shape(colour, position:"left"|"right") + keyboard(choices:["a","l"], correctKey).\n' +
-            '  Memory / Survey: a single trial with text + textInput(questions:[...]) — several questions on one page.\n' +
-            '  Rating: text(instructions) + slider(min,max,step,labels).\n\n' +
-            '【FORBIDDEN — common causes of invalid JSON】\n' +
-            '  ❌ text color = #fff/white → invisible on white background\n' +
-            '  ❌ Two components expected to overlap → impossible, they stack in flow\n' +
-            '  ❌ randomize present but text/shape missing key mapping → keyboard has no correct key\n' +
-            '  ❌ A loop / branch / randomize / variable component → they do not exist; a phase repeats through its settings\n' +
-          // `%n%` and `%s%` belong to the cloze and free-sort plugins' own counter text,
-          // not to this prompt — it is not a percent-format.
-            '  ❌ A `step_duration`, `newStep` or "映射按键" field → removed; a trial shows one screen\n' +
-            '  ❌ No blank-pause component exists → use the fixation duration instead\n' +
-            '  ❌ Two response components in one trial → only the first is generated\n' +
-            '  ❌ Anything beside an animation / cloze / freeSort → those own the whole trial\n' +
-            '  ❌ JSON trailing commas or comments\n' +
-            '  ❌ Single quotes instead of double quotes';
+          var sysPrompt = _aiSystemPrompt(dev);
 
           _callAI(pid, mod, [
             {role:'system',content:sysPrompt},
             {role:'user',content:prompt}
-          ], 4096).then(function(text) {
+          // A component object per trial, and the model echoes the schema back
+          // as it writes. At 4096 a design with a trial per condition ran out
+          // mid-object and the reply arrived as unparseable JSON — the failure
+          // looked like a malformed answer rather than a truncated one. This is
+          // a ceiling, not a spend: it costs nothing unless it is used.
+          ], 8192).then(function(text) {
             var m = text.match(/\{[\s\S]*\}/);
             if (!m) throw new Error('AI did not return valid JSON');
             var exp = JSON.parse(m[0]);
