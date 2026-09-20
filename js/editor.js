@@ -936,9 +936,10 @@ var _compDefaults = {
   },
   likert: {
     type: 'likert',
-    // One set of scale labels, emitted as a single row. The plugin also
-    // accepts several rows (a subscale per row), which the editor does
-    // not offer — the flat case is what a Likert item usually is.
+    // One set of scale labels. `labels` is a FLAT array of strings — the
+    // plugin declares it `STRING, array: true` and draws one radio per
+    // element, so a nested array (which this comment used to claim the plugin
+    // accepted) yields a single radio labelled with the whole list.
     questions: [{
       prompt: '',
       labels: ['Strongly disagree', 'Neutral', 'Strongly agree'],
@@ -4109,11 +4110,38 @@ var _compDefaults = {
         // for a build that has to stand alone, to the bytes themselves. Both
         // outputs are the same experiment written the same way; only the spelling
         // of an asset differs.
+        // A value on its way into a single-quoted JS string literal.
+        //
+        // Everything here is load-bearing, and the newline is the one that bit:
+        // the default `htmlForm` html is '<p>Question</p>\n<input …>', and with
+        // only the quote escaped that newline landed in the generated file as a
+        // real line break — inside a string literal. The file did not parse at
+        // all, so every experiment holding a form component was generated
+        // broken. Nothing caught it because no template uses htmlForm and the
+        // probe never builds one.
+        //
+        // U+2028 and U+2029 are line terminators to a JS parser even though they
+        // look like ordinary spaces, so text pasted from a document can carry
+        // them. The backslash goes first, or it would escape what the later
+        // rules add.
+        function _jsEscape(s) {
+          return String(s)
+            .replace(/\\/g, '\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '\\r')
+            .replace(/\n/g, '\\n')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029');
+        }
         function _jsStr(html) {
-          return html.replace(/'/g, "\\'").replace(/@@ASSET_(\d+)@@/g, function (_, i) {
-            var a = _assets[Number(i)];
-            return _inlineAssets ? a.data : a.path;
-          });
+          // Assets resolve first so that the path or data URI is escaped along
+          // with everything else — a file name is researcher-supplied text too.
+          return _jsEscape(
+            html.replace(/@@ASSET_(\d+)@@/g, function (_, i) {
+              var a = _assets[Number(i)];
+              return _inlineAssets ? a.data : a.path;
+            })
+          );
         }
         var code = '';
         // The data has to leave the browser, or it is gone when the tab closes.
@@ -4904,8 +4932,16 @@ var _compDefaults = {
             // Categorize-image takes the picture as `stimulus` exactly as the image
             // plugins do, so it rides on the same decision; anything else — including
             // an audio or video trial — takes the rendered screen as HTML.
+            //
+            // Which is what the line below used to get wrong: it asked whether a
+            // media plugin existed, and one does for audio and video too, so an
+            // audio-only feedback trial was routed to CategorizeImage and handed
+            // `snd/….wav` to draw as a picture. It has to ask whether the medium
+            // IS an image.
+            var useCategorizeImage = !!(useCategorize && mediaOnlyComp &&
+              mediaOnlyComp.type === 'image');
             var pname = useCategorize
-              ? (mediaPlugin ? 'jsPsychCategorizeImage' : 'jsPsychCategorizeHtml')
+              ? (useCategorizeImage ? 'jsPsychCategorizeImage' : 'jsPsychCategorizeHtml')
               : pluginName(respType, mediaPlugin);
             if (useCategorize) _usedPlugins[pname] = true;
 
@@ -5148,7 +5184,14 @@ var _compDefaults = {
             // `preamble`, the HTML shown above the questions.
             var _stimKey = _surveyTypes.indexOf(respType) >= 0 ? 'preamble' : 'stimulus';
             {
-              if (mediaPlugin) {
+              // The file goes in as `stimulus` when a medium's own plugin is
+              // running, and when CategorizeImage is — it takes the picture the
+              // way they do. Not otherwise: an audio trial with feedback runs on
+              // CategorizeHtml, which writes the value into the page as HTML, so
+              // handing it a path would put the words "snd/t.wav" on screen. Its
+              // <audio> element is in the staged HTML instead, and that is what
+              // makes it still audible.
+              if (useCategorizeImage || (mediaPlugin && !useCategorize)) {
                 // The medium itself, as its plugin expects. A video plugin takes a
                 // LIST, which is why this is wrapped even for one clip.
                 var _mref = "'" + _assetHref(mediaOnlyComp.fileName, mediaOnlyComp.type,
@@ -5206,10 +5249,18 @@ var _compDefaults = {
                   (respInfo.questions || []).forEach(function (q, i) {
                     var bits = ["prompt: '" + _jsStr(q.prompt) + "'"];
                     if (q.placeholder) bits.push("placeholder: '" + _jsStr(q.placeholder) + "'");
+                    // A FLAT array, like `options` below it. This used to be
+                    // wrapped in a second pair of brackets, and the plugin
+                    // declares `labels` as a flat STRING array — so the scale
+                    // arrived as one element and rendered as a single radio
+                    // whose label was the comma-joined list. Every Likert item
+                    // was unanswerable. Measured, plugin-level: the nested form
+                    // gives one radio reading "No,Neutral,Yes"; this gives
+                    // three reading No, Neutral, Yes.
                     if (q.labels && q.labels.length) {
-                      bits.push('labels: [[' + q.labels.map(function (x) {
+                      bits.push('labels: [' + q.labels.map(function (x) {
                         return "'" + _jsStr(x) + "'";
-                      }).join(', ') + ']]');
+                      }).join(', ') + ']');
                     }
                     if (q.options && q.options.length) {
                       bits.push('options: [' + q.options.map(function (x) {
@@ -5231,7 +5282,12 @@ var _compDefaults = {
                 P(indent, 'button_label', "'" + _jsStr(String(respInfo.buttonLabel)) + "'");
               if (respInfo.autocomplete) P(indent, 'autocomplete', 'true');
             }
-            if (mediaPlugin) {
+            // Only when a medium's own plugin is running. Neither categorize
+            // variant declares stimulus_width, maintain_aspect_ratio or the
+            // playback parameters, so writing them on that path puts inert
+            // fields in the file — the same shape of problem as a medium
+            // sharing the screen losing its parameters to the HTML path.
+            if (mediaPlugin && !useCategorize) {
               var _imc = mediaOnlyComp;
               if (_imc.type === 'image') {
                 if (_imc.stimulus_width) P(indent, 'stimulus_width', String(_imc.stimulus_width));

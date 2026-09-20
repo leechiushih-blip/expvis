@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    name: behaviour tests + regression probe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Only the behavioural tests need these. The editor itself still ships as
+      # index.html + js/editor.js with no build step and no runtime
+      # dependencies, so nothing here reaches a generated experiment.
+      - name: Install test dependencies
+        run: npm ci
+
+      # Runs each component the editor offers against the real jsPsych, drives
+      # it, and asserts the recorded data.
+      - name: Behavioural tests
+        run: npm test -- --ci
+
+      # The text layer: five templates byte-compared against their golden
+      # files, plus the structural assertions that keep the generated source
+      # shaped the way jsPsych expects. Chrome is preinstalled on the runner;
+      # tests/expvis_probe.py finds it.
+      - name: Regression probe
+        run: python3 tests/expvis_probe.py check

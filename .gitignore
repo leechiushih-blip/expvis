@@ -6,6 +6,18 @@ docs/*
 tests/*
 !tests/expvis_probe.py
 !tests/golden/
+# The behavioural tests: the layer the probe has no equivalent of. Same reason
+# as the probe — a verification that does not travel with the code is not a
+# verification.
+!tests/behavior/
+!tests/setup/
+# node_modules/ is covered by the rule below; this is the dev-only manifest the
+# behavioural tests need. The editor itself still ships as index.html +
+# js/editor.js with no build step and no runtime dependencies.
+!package.json
+!package-lock.json
+!jest.config.js
+node_modules/
 .DS_Store
 *.docx
 *.md

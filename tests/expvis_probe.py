@@ -19,7 +19,29 @@ import re
 import subprocess
 import sys
 
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+# Where Chrome lives. The macOS path used to be the whole of it, which meant
+# the probe could not run anywhere else — including CI, where Chrome is at
+# /usr/bin/google-chrome. CHROME overrides, for anything neither list knows.
+def _find_chrome():
+    import shutil
+
+    override = os.environ.get("CHROME")
+    if override:
+        return override
+    for path in (
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+    ):
+        if os.path.exists(path):
+            return path
+    found = shutil.which("google-chrome") or shutil.which("chromium")
+    return found or "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+
+CHROME = _find_chrome()
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GOLDEN = os.path.join(ROOT, "tests", "golden")
 TEMPLATES = ["stroop", "simon", "flanker", "branch-demo", "randomize-demo"]
@@ -610,7 +632,14 @@ function phaseCases() {
       choiceTwoQuestions: promptCount(choice) === 2,
       textTwoQuestions: promptCount(text) === 2,
       // the per-type fields that make each plugin what it is
-      labelsAsOneRow: /labels: \\[\\['No', 'Maybe', 'Yes'\\]\\]/.test(likert),
+      //
+      // FLAT, and this assertion used to demand the nested form. The plugin
+      // declares `labels` as a flat STRING array and draws one radio per
+      // element, so `[['No','Maybe','Yes']]` is one element: the scale rendered
+      // as a single radio reading "No,Maybe,Yes". Measured plugin-level; the
+      // behaviour tests in tests/behavior/ carry the rendered result.
+      labelsAsOneRow: /labels: \\['No', 'Maybe', 'Yes'\\]/.test(likert) &&
+                      likert.indexOf("labels: [[") < 0,
       optionsReached: /options: \\['A', 'B'\\]/.test(choice) &&
                       /options: \\['C', 'D'\\]/.test(choice),
       horizontalReached: /horizontal: true/.test(choice),

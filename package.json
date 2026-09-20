@@ -1,0 +1,38 @@
+{
+  "name": "expvis-editor",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dev-only tooling. The editor itself has no build step and no runtime dependencies \u2014 it ships as index.html + js/editor.js, and everything here is a test-time dependency that never reaches a generated experiment.",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@jspsych/plugin-animation": "^2.1.0",
+    "@jspsych/plugin-audio-button-response": "^2.1.1",
+    "@jspsych/plugin-audio-keyboard-response": "^2.2.0",
+    "@jspsych/plugin-audio-slider-response": "^2.1.1",
+    "@jspsych/plugin-categorize-html": "^2.1.0",
+    "@jspsych/plugin-categorize-image": "^2.1.0",
+    "@jspsych/plugin-cloze": "^2.2.0",
+    "@jspsych/plugin-free-sort": "^2.1.0",
+    "@jspsych/plugin-html-button-response": "^2.1.0",
+    "@jspsych/plugin-html-keyboard-response": "^2.2.0",
+    "@jspsych/plugin-html-slider-response": "^2.1.0",
+    "@jspsych/plugin-image-button-response": "^2.2.0",
+    "@jspsych/plugin-image-keyboard-response": "^2.2.0",
+    "@jspsych/plugin-image-slider-response": "^2.1.0",
+    "@jspsych/plugin-preload": "^2.1.0",
+    "@jspsych/plugin-survey-html-form": "^2.1.0",
+    "@jspsych/plugin-survey-likert": "^2.2.0",
+    "@jspsych/plugin-survey-multi-choice": "^2.2.1",
+    "@jspsych/plugin-survey-multi-select": "^2.1.1",
+    "@jspsych/plugin-survey-text": "^2.1.1",
+    "@jspsych/plugin-video-button-response": "^2.1.1",
+    "@jspsych/plugin-video-keyboard-response": "^2.2.0",
+    "@jspsych/plugin-video-slider-response": "^2.1.1",
+    "jest": "^29.7.0",
+    "jest-canvas-mock": "^2.5.2",
+    "jest-environment-jsdom": "^29.7.0",
+    "jspsych": "^8.3.0"
+  }
+}
