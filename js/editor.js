@@ -744,6 +744,25 @@ function _applyI18n() {
             button_label: 'Continue',
             preamble: '',
           },
+          // ---- Task plugins -------------------------------------------------
+          // A page the plugin builds itself, with its own inputs and its own
+          // submit button. It takes no `stimulus`, so there is no screen for
+          // another component to share — it owns the trial outright, the same
+          // category animation is in.
+          //
+          // `text` carries the blanks: the plugin splits it on single percent
+          // signs, taking even pieces as prose and odd pieces as blanks (with
+          // / separating several accepted answers for one blank). That is its
+          // own notation, read off its source — the docs' examples double the
+          // percent sign for their own escaping and are misleading here.
+          cloze: {
+            type: 'cloze',
+            text: 'The capital of France is %Paris%.',
+            button_text: 'OK',
+            check_answers: false,
+            allow_blanks: true,
+            case_sensitivity: true,
+          },
           // The odd one out: this plugin takes a block of HTML rather than a
           // question list, so the researcher writes the form themselves and the
           // editor only supplies the frame around it.
@@ -773,8 +792,12 @@ function _applyI18n() {
         // next to a stimulus either. Anything that breaks a rule lands in a
         // trial of its own. Every path that adds a component comes through here,
         // both drops and the inspector's buttons.
-        var ownsTrial = type === 'animation';
-        var hasOwner = t.components.some(function (x) { return x.type === 'animation'; });
+        // `cat === 'x'` means "owns the whole trial" — animation, and now the
+        // task plugins. Keyed on the CATEGORY rather than on the type, so a new
+        // task component inherits the rule instead of quietly escaping it, which
+        // is exactly how animation got past the one-response guard.
+        var ownsTrial = cat === 'x';
+        var hasOwner = t.components.some(function (x) { return x.cat === 'x'; });
         if (ownsTrial ? t.components.length > 0
                       : hasOwner || (cat === 'r' &&
                           t.components.some(function (x) { return x.cat === 'r'; }))) {
@@ -937,6 +960,7 @@ function _applyI18n() {
         keyboard: '⌨️',
         button: '🔘',
         slider: '🎚️',
+        cloze: '🔤',
         textInput: '✏️',
         likert: '📊',
         multiChoice: '⚪',
@@ -954,6 +978,7 @@ function _applyI18n() {
         keyboard: 'Keyboard',
         button: 'Button',
         slider: 'Slider',
+        cloze: 'Cloze',
         textInput: 'Survey Text',
         likert: 'Survey Likert',
         multiChoice: 'Survey Multiple Choice',
@@ -996,6 +1021,11 @@ function _applyI18n() {
         max: 'Max',
         step: 'Step',
         frames: 'Frames',
+        text: 'Text',
+        button_text: 'Button Text',
+        check_answers: 'Check Answers',
+        allow_blanks: 'Allow Blank Answers',
+        case_sensitivity: 'Case Sensitive',
         correct_text: 'Correct Message',
         incorrect_text: 'Incorrect Message',
         feedback_duration: 'Feedback Duration (ms)',
@@ -1466,7 +1496,8 @@ function _applyI18n() {
             // badge below follows.
             var respComps = t.components.filter(function (c) {
               return ['keyboard', 'button', 'slider', 'textInput', 'likert',
-                      'multiChoice', 'multiSelect', 'htmlForm'].indexOf(c.type) >= 0;
+                      'multiChoice', 'multiSelect', 'htmlForm', 'cloze']
+                .indexOf(c.type) >= 0;
             });
             var animComp = t.components.filter(function (c) { return c.type === 'animation'; })[0];
             var clash = null;
@@ -1672,6 +1703,10 @@ function _applyI18n() {
         if (c.type === 'fixation') {
           return (c.trial_duration || 500) + 'ms' +
             (c.durationMax > c.durationMin && c.durationMax > 0 ? ' ~ ' + c.durationMax + 'ms' : '');
+        }
+        if (c.type === 'cloze') {
+          var blanks = Math.floor((String(c.text || '').match(/%/g) || []).length / 2);
+          return blanks + ' blank' + (blanks === 1 ? '' : 's');
         }
         if (c.type === 'animation') {
           var nfr = (c.frames || []).filter(function (f) { return f && f.fileData; }).length;
@@ -2178,6 +2213,7 @@ function _applyI18n() {
             stimulus_height: 'Image height in px. 0 = work it out from the width.',
             maintain_aspect_ratio: 'true = scale by width without distorting. Only used by the image plugins.',
             render_on_canvas: 'true = draw the image to a canvas. Only used by the image plugins.',
+            cloze: 'Runs on the jsPsych cloze plugin — a page of text with %%blanks%% for the participant to fill in, and the plugin\'s own submit button. It owns the trial: there is no stimulus for anything else to share. Data records response as an ARRAY of strings, one per blank.',
             animation: 'Runs on the jsPsych animation plugin — a flipbook of frames played at a fixed rate. The trial ends on its own after sequence_reps, and every key pressed during playback is recorded. It takes over the whole screen, so it cannot share a trial with other components. Data records response as an ARRAY of {stimulus, rt, key_press} — one entry per frame, so there is no single rt — plus animation_sequence and plugin_version, and NOT stimulus: the plugin records the frames it played instead.',
             audio: 'Upload MP3/WAV audio (≤16MB). Playable in fullscreen preview. Ideal for auditory stimulus experiments.',
             video: 'Upload MP4/WebM video (≤64MB). Playable in fullscreen preview.',
@@ -2212,6 +2248,9 @@ function _applyI18n() {
             trial_duration: 'Trial Duration (ms). 0=no limit. If >0, auto-judges as timeout and records RT when exceeded.',
             choices: 'Comma-separated button labels, e.g. Yes,No. Exported as the jsPsych `choices` array.',
             frames: 'Upload the frames in playback order. They are played as a flipbook, one image at a time.',
+            text: 'The page text. A word between two single % signs is one blank, and several accepted answers for it are separated by /. That is the plugin\'s own notation and is emitted as written.',
+            check_answers: 'Off, the page always submits. On, the answers are compared with the ones between the % signs and a wrong one keeps the page open.',
+            allow_blanks: 'Off, a blank left empty stops the page from submitting.',
             correct_text: 'Shown after a correct response. Writing a message here switches this trial onto jsPsych\'s categorize plugin, which scores the response and shows the message itself. Needs a single Correct Key.',
             incorrect_text: 'Shown after a wrong response. Leave both messages empty for the trial to end silently, as it does now.',
             frame_time: 'How long each frame is shown, in ms. jsPsych default is 250.',
@@ -2350,7 +2389,7 @@ function _applyI18n() {
                 '\',this.value)" style="width:50px">';
             // `html` is the html-form plugin's whole payload — a block of markup,
             // so it gets the same multi-line box the text stimulus uses.
-            else if (k === 'content' || k === 'html')
+            else if (k === 'content' || k === 'html' || k === 'text')
               h +=
                 '<textarea onchange="updateComponent(\'' +
                 t.id +
@@ -3863,6 +3902,7 @@ function _applyI18n() {
           multiSelect: 'jsPsychSurveyMultiSelect',
           htmlForm: 'jsPsychSurveyHtmlForm',
           animation: 'jsPsychAnimation',
+          cloze: 'jsPsychCloze',
         };
         function pluginName(rt, forImage) {
           if (forImage && _imagePlugins[rt]) {
@@ -4267,7 +4307,7 @@ function _applyI18n() {
         // before that guard can, and silently generating a broken trial from it
         // is not a thing to leave lying around.
         if (respType && ['keyboard', 'button', 'slider', 'textInput', 'animation',
-                          'likert', 'multiChoice', 'multiSelect', 'htmlForm']
+                          'likert', 'multiChoice', 'multiSelect', 'htmlForm', 'cloze']
             .indexOf(c.type) >= 0) {
           return;
         }
@@ -4339,6 +4379,19 @@ function _applyI18n() {
           respInfo.renderOnCanvas = !(c.render_on_canvas === false ||
             c.render_on_canvas === 'false');
           respInfo.prompt = c.prompt || '';
+        } else if (c.type === 'cloze') {
+          // A task plugin: the page is the plugin's own, blanks and all. It has
+          // no `stimulus` and no `choices` — the submit button is the response.
+          if (!respType) respType = 'cloze';
+          respInfo = respInfo || {};
+          respInfo.clozeText = c.text == null ? '' : String(c.text);
+          respInfo.buttonText = c.button_text || '';
+          respInfo.checkAnswers = (c.check_answers === true || c.check_answers === 'true');
+          // These two default to TRUE in the plugin, so they are stored as
+          // "on by default" and only emitted when turned off.
+          respInfo.allowBlanks = !(c.allow_blanks === false || c.allow_blanks === 'false');
+          respInfo.caseSensitivity =
+            !(c.case_sensitivity === false || c.case_sensitivity === 'false');
         } else if (c.type === 'slider') {
           // Runs on jsPsychHtmlSliderResponse — every field below is emitted
           // verbatim as the plugin parameter of the same name.
@@ -4418,7 +4471,8 @@ function _applyI18n() {
             // instead of dropping the rest silently.
             var respComps = t.components.filter(function (c) {
               return ['keyboard', 'button', 'slider', 'textInput', 'likert',
-                      'multiChoice', 'multiSelect', 'htmlForm'].indexOf(c.type) >= 0;
+                      'multiChoice', 'multiSelect', 'htmlForm', 'cloze']
+                .indexOf(c.type) >= 0;
             });
             if (respComps.length > 1) {
               logic.hints.push('// !! This trial has ' + respComps.length +
@@ -4532,6 +4586,35 @@ function _applyI18n() {
               // name, and without one the declaration below is emitted and never
               // referenced — the animation is declared and never runs.
               phaseParts.push({kind: 'raw', text: _out, name: trialName});
+              return; // this trial is complete
+            }
+
+            // ---- jsPsychCloze builds the whole page: the text, a field per %%
+            // blank, and its own submit button. Like the animation it is emitted
+            // as a complete trial, because there is no stimulus for anything else
+            // to share the screen with. ----
+            if (respType === 'cloze') {
+              var _co = '';
+              // The plugin reads blanks out of the text. With none, the page is
+              // plain prose and a button — legal, but never what was meant.
+              if (respInfo.clozeText.indexOf('%') < 0) {
+                logic.hints.push('// !! This cloze has no % blank in its text — the page ' +
+                  'will show the text and a submit button with nothing to fill in.');
+              }
+              logic.hints.forEach(function (h) { _co += h + '\n'; });
+              var _cb = '  ';
+              _co += 'var ' + trialName + ' = {\n';
+              _co += _cb + 'type: jsPsychCloze,\n';
+              _co += _cb + "text: '" + _jsStr(respInfo.clozeText) + "',\n";
+              if (respInfo.buttonText) {
+                _co += _cb + "button_text: '" + _jsStr(String(respInfo.buttonText)) + "',\n";
+              }
+              if (respInfo.checkAnswers) _co += _cb + 'check_answers: true,\n';
+              if (!respInfo.allowBlanks) _co += _cb + 'allow_blanks: false,\n';
+              if (!respInfo.caseSensitivity) _co += _cb + 'case_sensitivity: false,\n';
+              _co = _co.replace(/,\n$/, '\n');
+              _co += '};\n\n';
+              phaseParts.push({kind: 'raw', text: _co, name: trialName});
               return; // this trial is complete
             }
 
@@ -5725,6 +5808,7 @@ function _applyI18n() {
         jsPsychCategorizeHtml: {pkg: '@jspsych/plugin-categorize-html', ver: '2.1.0'},
         jsPsychPreload: {pkg: '@jspsych/plugin-preload', ver: '2.1.0'},
         jsPsychAnimation: {pkg: '@jspsych/plugin-animation', ver: '2.1.0'},
+        jsPsychCloze: {pkg: '@jspsych/plugin-cloze', ver: '2.2.0'},
         jsPsychImageKeyboardResponse: {pkg: '@jspsych/plugin-image-keyboard-response', ver: '2.2.0'},
         jsPsychImageButtonResponse: {pkg: '@jspsych/plugin-image-button-response', ver: '2.2.0'},
         jsPsychImageSliderResponse: {pkg: '@jspsych/plugin-image-slider-response', ver: '2.1.0'},

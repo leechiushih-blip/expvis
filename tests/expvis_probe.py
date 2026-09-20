@@ -37,6 +37,7 @@ var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
   'jsPsychHtmlSliderResponse', 'jsPsychSurveyText', 'jsPsychPreload', 'jsPsychAnimation',
   'jsPsychSurveyLikert', 'jsPsychSurveyMultiChoice', 'jsPsychSurveyMultiSelect',
   'jsPsychSurveyHtmlForm', 'jsPsychCategorizeImage', 'jsPsychCategorizeHtml',
+  'jsPsychCloze',
   'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
 // Node-level parameters that jsPsych reads but ExpVis does not derive from the
 // canvas. Everything else a node can carry — timeline_variables, sample,
@@ -676,6 +677,55 @@ function phaseCases() {
                                 /data: \\{correct_response: 'f'\\}/.test(plain),
       // two correct keys: categorize cannot score it, so it is not used
       severalKeysRefuse: /type: jsPsychImageKeyboardResponse/.test(twoKeys),
+    };
+  })();
+  // The first task plugin. Cloze builds its own page — the text, a field per
+  // blank, and the submit button — so it has no `stimulus` and owns the trial.
+  // Its blanks use the plugin's own %%notation%%, which is passed through as
+  // written rather than translated into anything of ExpVis's.
+  (function () {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    addComponent(t.id, 'cloze', 'x');
+    // Doubled percents: this text goes through the same format, so what JS
+    // receives is the plugin's own notation — ONE percent sign per marker,
+    // which is what its source splits on. The docs' examples double it.
+    t.components[0].text = 'The %%capital%% of France is %%Paris/Lyon%%.';
+    t.components[0].button_text = 'Done';
+    t.components[0].check_answers = true;
+    t.components[0].case_sensitivity = false;
+    var code = _compileExperiment({}).code;
+    var trial = (code.match(/var trials_trial_1 = \\{[\\s\\S]*?\\n\\};/) || [''])[0];
+    // a cloze with no blank at all: legal, but never what was meant
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t2 = findTrial(editor.selectedTrial);
+    addComponent(t2.id, 'cloze', 'x');
+    t2.components[0].text = 'No blanks here.';
+    var bare = _compileExperiment({}).code;
+    out['cloze page'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      plugin: /type: jsPsychCloze/.test(trial),
+      // the %% notation reaches the file unchanged — it is the plugin's syntax,
+      // including the / between two accepted answers
+      notationKept: /%%capital%%/.test(trial) && /%%Paris\\/Lyon%%/.test(trial),
+      paramsEmitted: /button_text: 'Done'/.test(trial) &&
+                     /check_answers: true/.test(trial) &&
+                     /case_sensitivity: false/.test(trial),
+      // defaults are left out so jsPsych applies its own documented ones.
+      // `stimulus` must be absent: this plugin has no such parameter.
+      defaultsOmitted: trial.indexOf('allow_blanks') < 0 &&
+                       trial.indexOf('stimulus') < 0,
+      // a page with nothing to fill in says so rather than shipping silently
+      // Doubled, because PROBE goes through a percent-format: this reaches JS
+      // as two percent signs. And no bare percent ANYWHERE in this string,
+      // comments included — a percent followed by a dash reads as a format
+      // spec, and the probe dies before it ever runs.
+      noBlankWarns: /has no %% blank/.test(bare),
     };
   })();
   // A `data` override must keep the scoring key. The on_finish the editor
@@ -1611,6 +1661,11 @@ def cmd_check():
                 for k in ("imageUsesImagePlugin", "htmlUsesHtmlPlugin", "feedbackEmitted",
                           "keyAnswerEmitted", "pluginDoesTheScoring",
                           "withoutFeedbackUnchanged", "severalKeysRefuse"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "cloze page":
+                for k in ("plugin", "notationKept", "paramsEmitted",
+                          "defaultsOmitted", "noBlankWarns"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "expression validation":
