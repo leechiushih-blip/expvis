@@ -41,7 +41,7 @@
           <select
             id="device-select"
             onchange="setDevice(this.value)"
-            title="Stage size — drives the exported experiment and every preview"
+            title="Design size — the width is written into the exported experiment; the height is the target screen, which drives the preview and the AI's type scale"
             style="
               border: none;
               background: transparent;
@@ -55,7 +55,7 @@
           <input
             type="number"
             id="device-w"
-            title="Stage width in px"
+            title="Stage width in px — written into the export as experiment_width"
             onchange="setDeviceSize(this.value, document.getElementById('device-h').value)"
             style="width: 58px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 0.72rem; text-align: center"
           />
@@ -63,7 +63,7 @@
           <input
             type="number"
             id="device-h"
-            title="Stage height in px"
+            title="Target screen height in px — drives the preview and the AI's type scale. NOT written into the exported experiment: the content is centred in whatever viewport the participant has"
             onchange="setDeviceSize(document.getElementById('device-w').value, this.value)"
             style="width: 58px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 0.72rem; text-align: center"
           />

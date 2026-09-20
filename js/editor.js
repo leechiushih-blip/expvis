@@ -2638,9 +2638,14 @@ function _applyI18n() {
              'font-family:inherit">\u2715</button>';
         h += '</div>';
         h += '<div style="flex:1;overflow:auto;background:#f4f4f8;padding:24px">';
-        // Same stage the exported experiment builds: device width, device height,
-        // content centred inside it. The product gets the centring from jsPsych's
-        // own display area; here there is no jsPsych, so it is done inline.
+        // The design canvas: the device's box, with the content centred in it.
+        // The export only half-matches this — the width is `experiment_width`,
+        // but there is no height over there, so the product centres its content
+        // in whatever viewport the participant actually has. What this draws is
+        // the design target, not a picture of the exported experiment opened in
+        // a short window.
+        //
+        // No jsPsych here, so the centring is done inline.
         h += '<div id="exp-prev-stage" style="margin:0 auto;background:#fff;' +
              'border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.12);' +
              'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
@@ -5951,7 +5956,7 @@ function showVersionHistory() {
         var h = '<div style="font-size:2.5rem;margin-bottom:8px">📱</div>';
         h += '<h2 style="font-size:1.3rem;margin-bottom:4px;color:#1a1a2e">Select Device</h2>';
         h +=
-          '<p style="font-size:0.82rem;color:#888;margin-bottom:28px">Select the screen device participants will use. Experiment layout will be designed for this resolution.</p>';
+          '<p style="font-size:0.82rem;color:#888;margin-bottom:28px">Select the screen device participants will use. The width sets the layout in the exported experiment; the height is the target screen the preview and the AI type scale are built from.</p>';
         h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">';
         devicePresets.forEach(function (d, i) {
           h +=
