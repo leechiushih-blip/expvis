@@ -712,7 +712,17 @@ function _applyI18n() {
         // the canvas showed nothing wrong. Put it in a trial of its own, which
         // is what the researcher needs anyway. Every path that adds a component
         // comes through here — both drops and the inspector's buttons.
-        if (cat === 'r' && t.components.some(function (x) { return x.cat === 'r'; })) {
+        // What may share a trial: one response component (a jsPsych trial runs
+        // one response plugin), and nothing at all beside an animation — that
+        // plugin owns the display and clears it every frame, so it cannot sit
+        // next to a stimulus either. Anything that breaks a rule lands in a
+        // trial of its own. Every path that adds a component comes through here,
+        // both drops and the inspector's buttons.
+        var ownsTrial = type === 'animation';
+        var hasOwner = t.components.some(function (x) { return x.type === 'animation'; });
+        if (ownsTrial ? t.components.length > 0
+                      : hasOwner || (cat === 'r' &&
+                          t.components.some(function (x) { return x.cat === 'r'; }))) {
           var ph = null;
           editor.phases.forEach(function (p) {
             if (p.timeline.indexOf(t) >= 0) ph = p;
@@ -1189,7 +1199,10 @@ function _applyI18n() {
               // becomes a jsPsych trial. Loop / randomize / branch / delay /
               // variable are *parameters* of the trial, shown as badges instead.
               var visualComps = t.components.filter(function (c) {
-                return c.cat === 's' || c.cat === 'r';
+                // 'x' is a component that owns the whole trial (animation). It
+                // is drawn like the rest, but it is not a stimulus: it must not
+                // be merged into a shared screen.
+                return c.cat === 's' || c.cat === 'r' || c.cat === 'x';
               });
               // Build one node for a component (extracted so it can be nested
               // inside a "simultaneous" group box).
@@ -1382,17 +1395,31 @@ function _applyI18n() {
             // rather than dropping them quietly — the same rule the custom-parameter
             // badge below follows.
             var respComps = t.components.filter(function (c) {
-              return ['keyboard', 'button', 'slider', 'textInput', 'animation']
-                .indexOf(c.type) >= 0;
+              return ['keyboard', 'button', 'slider', 'textInput'].indexOf(c.type) >= 0;
             });
-            if (respComps.length > 1) {
-              var extra = document.createElement('div');
-              extra.textContent = '⚠ ' + (respComps.length - 1) + ' response component' +
+            var animComp = t.components.filter(function (c) { return c.type === 'animation'; })[0];
+            var clash = null;
+            var clashTip = null;
+            if (animComp && t.components.length > 1) {
+              // Animation owns the display: it clears it every frame, so whatever
+              // shares the trial is compiled away entirely.
+              var n = t.components.length - 1;
+              clash = '⚠ animation owns this trial — ' + n + ' other component' +
+                (n > 1 ? 's' : '') + ' not generated';
+              clashTip = 'jsPsychAnimation clears the display element on every frame, so it ' +
+                'cannot share a trial. Only the animation is generated; the rest is ignored. ' +
+                'Split them into trials of their own.';
+            } else if (respComps.length > 1) {
+              clash = '⚠ ' + (respComps.length - 1) + ' response component' +
                 (respComps.length > 2 ? 's' : '') + ' not generated';
-              extra.title = 'A jsPsych trial runs one response plugin, so only "' +
+              clashTip = 'A jsPsych trial runs one response plugin, so only "' +
                 respComps[0].type + '" is generated and the others are ignored. ' +
-                'Delete them and add them to a trial of their own — a trial can only ' +
-                'hold one response.';
+                'Delete them and add them to a trial of their own.';
+            }
+            if (clash) {
+              var extra = document.createElement('div');
+              extra.textContent = clash;
+              extra.title = clashTip;
               extra.style.cssText = 'align-self:flex-end;font-size:0.62rem;padding:2px 8px;' +
                 'border-radius:999px;cursor:help;color:#9a3412;' +
                 'background:#fff7ed;border:1px solid rgba(249,115,22,0.35)';

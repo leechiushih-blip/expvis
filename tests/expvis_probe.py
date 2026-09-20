@@ -526,6 +526,36 @@ function phaseCases() {
       scoresAgainstIt: /correct_response: 'a'/.test(trial),
     };
   })();
+  // What a trial may hold: one response component, and nothing beside an
+  // animation. jsPsychAnimation clears the display element every frame, so it
+  // cannot sit next to a stimulus either — before this rule, adding one beside
+  // a text silently compiled the text away, and adding it beside a keyboard
+  // dropped whichever came second. addComponent enforces both by giving the
+  // newcomer a trial of its own.
+  (function () {
+    function shapeAfter(spec) {
+      resetEditor();
+      addPhase('trials');
+      addTrial(editor.phases[0].id);
+      var t = findTrial(editor.selectedTrial);
+      spec.forEach(function (s) { addComponent(t.id, s[0], s[1]); });
+      return editor.phases[0].timeline.map(function (tr) {
+        return tr.components.map(function (c) { return c.type; }).join('+');
+      }).join(' | ');
+    }
+    out['one owner per trial'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      // an animation added beside a stimulus gets its own trial
+      animAfterStim: shapeAfter([['text', 's'], ['animation', 'x']]),
+      // and a stimulus added beside an animation
+      stimAfterAnim: shapeAfter([['animation', 'x'], ['text', 's']]),
+      // a second response component, as before
+      secondResponse: shapeAfter([['keyboard', 'r'], ['button', 'r']]),
+      // two stimuli still share a screen: the rules are not a blanket ban
+      twoStimuli: shapeAfter([['text', 's'], ['shape', 's']]),
+    };
+  })();
   // A `data` override must keep the scoring key. The on_finish the editor
   // generates reads data.correct_response; an override that drops it leaves an
   // experiment that runs, writes a `correct` column, and marks every row false.
@@ -1438,6 +1468,15 @@ def cmd_check():
                         broken_cases.append(
                             f"phase case {name}: {k} is false — plugin and parameters "
                             f"must come from the same component")
+            if name == "one owner per trial":
+                want = {"animAfterStim": "text | animation",
+                        "stimAfterAnim": "animation | text",
+                        "secondResponse": "keyboard | button",
+                        "twoStimuli": "text+shape"}
+                for k, expect in want.items():
+                    if c[k] != expect:
+                        broken_cases.append(
+                            f"phase case {name}: {k} = {c[k]!r}, expected {expect!r}")
             if name == "expression validation":
                 for k, want in (("rejectsStatement", True), ("namesTheValue", True),
                                 ("suggestsAFunction", True), ("acceptsFunction", True),
