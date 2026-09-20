@@ -22,8 +22,13 @@
     var jsPsych = initJsPsych({
       experiment_width: 1280,
       on_finish: function() {
-        jsPsych.data.displayData();
-        jsPsych.data.get().localSave('csv', 'experiment_' + Date.now() + '.csv');
+        if (window.jatos) {
+          jatos.submitResultData(jsPsych.data.get().csv())
+            .then(function () { jatos.endStudy(); });
+        } else {
+          jsPsych.data.displayData();
+          jsPsych.data.get().localSave('csv', 'experiment_' + Date.now() + '.csv');
+        }
       }
     });
 

@@ -404,6 +404,56 @@ function phaseCases() {
       };
     })();
   })();
+  // The .jzip layout, asserted without an unzipper: buildJatosFiles() returns
+  // the entry list, so the names and the manifest can be read directly. What
+  // the zip wrapper then does with them is _zipBytes' job, tested by using it.
+  (function () {
+    resetEditor();
+    editor.projectName = 'Probe Project';
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    addComponent(t.id, 'text', 's');
+    addComponent(t.id, 'image', 's');
+    t.components[1].fileData = 'data:image/png;base64,iVBORw0KGgo=';
+    t.components[1].fileName = 'blue.png';
+    t.components[1].stimulus_width = 0;
+    var r = _compileExperiment({});
+    var files = buildJatosFiles(r);
+    var names = files.map(function (f) { return f.name; });
+    var j = _jatosIds();
+    var doc = String.fromCharCode.apply(null, files[1].data);
+    var local = _buildJsPsychHTML(r.code, r.usedPlugins);
+    var jas = JSON.parse(String.fromCharCode.apply(null, files[0].data));
+    out['jzip layout'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      manifestName: names[0],
+      htmlPath: names[1],
+      assetPath: names[2],
+      // the manifest and the directory it names have to agree, or JATOS looks
+      // for the assets somewhere that does not exist
+      dirMatchesStudy: jas.data.dirName === j.study && jas.data.uuid === j.study,
+      htmlNamedAfterComponent: names[1] === j.study + '/' + j.component + '.html',
+      // and the component's htmlFilePath has to be relative to that directory
+      componentPathMatches:
+        jas.data.componentList[0].htmlFilePath === j.component + '.html',
+      // The stimulus src is a relative path, so the assets must sit in the SAME
+      // directory as the HTML — not merely under the same study folder. Derived
+      // from the HTML's own directory rather than from j.study, so pushing the
+      // HTML one level deeper fails here instead of passing on a technicality.
+      assetsBesideHtml: names[2] ===
+        names[1].split('/').slice(0, -1).join('/') + '/' + r.assets[0].path,
+      everyEntryIsBytes: files.every(function (f) { return f.data instanceof Uint8Array; }),
+      htmlLoadsJatos: doc.indexOf('/assets/javascripts/jatos.js') >= 0,
+      // the plain download must NOT carry the platform tag
+      localDoesNotLoadJatos: local.indexOf('jatos.js') < 0,
+      // minted once: a re-export has to reuse them, or JATOS gets a new study
+      idsStable: buildJatosFiles(r)[1].name === names[1] &&
+                 JSON.parse(String.fromCharCode.apply(null, buildJatosFiles(r)[0].data))
+                   .data.uuid === jas.data.uuid,
+    };
+  })();
   // A `data` override must keep the scoring key. The on_finish the editor
   // generates reads data.correct_response; an override that drops it leaves an
   // experiment that runs, writes a `correct` column, and marks every row false.
@@ -1293,6 +1343,16 @@ def cmd_check():
                 if not c["isTheWrittenOne"]:
                     broken_cases.append(
                         f"phase case {name}: the written source did not survive")
+            if name == "jzip layout":
+                if c["manifestName"] != "info.jas":
+                    broken_cases.append(
+                        f"phase case {name}: manifest is {c['manifestName']!r}, expected 'info.jas'")
+                for k in ("dirMatchesStudy", "htmlNamedAfterComponent",
+                          "componentPathMatches", "assetsBesideHtml",
+                          "everyEntryIsBytes", "htmlLoadsJatos",
+                          "localDoesNotLoadJatos", "idsStable"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
             if name == "expression validation":
                 for k, want in (("rejectsStatement", True), ("namesTheValue", True),
                                 ("suggestsAFunction", True), ("acceptsFunction", True),

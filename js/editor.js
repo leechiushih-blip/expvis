@@ -358,6 +358,14 @@ function _applyI18n() {
         versions: [],
         projectName: '',
         projectId: '',
+        // The JATOS identity of this project — {study, component}, both uuids.
+        // Minted on the first .jzip export and then kept, so exporting again and
+        // importing again overwrites the same study on the JATOS server rather
+        // than piling up a new one per revision. Null until then; nothing reads
+        // it except the export, which is what makes it safe to leave out of the
+        // undo and version snapshots (they hold experiment content; this is
+        // project identity, like projectId).
+        jatos: null,
       };
 
       // Phase/device labels: storage keeps plain text so that generated jsPsych
@@ -933,6 +941,7 @@ function _applyI18n() {
               cc: editor.cc,
               pn: editor.projectName,
               pid: editor.projectId,
+              jatos: editor.jatos,
             };
             localStorage.setItem(_vek('task_editor'), JSON.stringify(data));
             localStorage.setItem(_vek('task_versions'), JSON.stringify(editor.versions));
@@ -3464,11 +3473,24 @@ function _applyI18n() {
         // filename carries a timestamp so two sessions cannot overwrite each
         // other. Note the argument order: format first.
         var _saveName = (editor.projectName || 'experiment').replace(/[^a-zA-Z0-9_-]/g, '_');
+        // One file that works in both places. JATOS injects `window.jatos`;
+        // anywhere else the check is false and the researcher gets the file they
+        // always got. The download stays the default because an experiment
+        // opened from an email still has to leave a copy with the participant.
+        //
+        // Ending the study right after submitting is deliberate: JATOS discards
+        // already-submitted result data when a component is aborted, so there is
+        // nothing to gain by leaving the component running once the data is in.
         var onFinishBody = opts.onFinish || (
-          'jsPsych.data.displayData();\n' +
+          'if (window.jatos) {\n' +
+          '  jatos.submitResultData(jsPsych.data.get().csv())\n' +
+          '    .then(function () { jatos.endStudy(); });\n' +
+          '} else {\n' +
+          '  jsPsych.data.displayData();\n' +
           // localSave lives on DataCollection, not on JsPsychData — it is
           // `jsPsych.data.get().localSave(...)`.
-          "jsPsych.data.get().localSave('csv', '" + _saveName + "_' + Date.now() + '.csv');");
+          "  jsPsych.data.get().localSave('csv', '" + _saveName + "_' + Date.now() + '.csv');\n" +
+          '}');
         code += 'var jsPsych = initJsPsych({\n';
         if (opts.displayElement) {
           code += "  display_element: '" + opts.displayElement + "',\n";
@@ -5269,8 +5291,10 @@ function _applyI18n() {
 
       // Styles for the published file (participant-facing shell + data panel).
       // Shared <head> for both outputs, so the code export and the published file
-      // differ only where they must (an extra <style> block for the data layer's UI).
-      function _htmlHead(usedPlugins, extraStyle) {
+      // differ only where they must. `extraStyle` adds a <style> block, and
+      // `extraHead` any other tag — the JATOS export is the one caller today,
+      // passing the platform's own script tag.
+      function _htmlHead(usedPlugins, extraStyle, extraHead) {
         var devName = editor.device ? _stripEmoji(editor.device.name) : 'Default 1280×720';
         var today = new Date().toISOString().slice(0, 10);
         var title = (editor.projectName || 'ExpVis Experiment').replace(/</g, '&lt;');
@@ -5287,6 +5311,7 @@ function _applyI18n() {
         h += '    Only the jsPsych plugins used by this experiment are loaded below.\n';
         h += '  -->\n';
         _cdnTags(usedPlugins).forEach(function (t) { h += '  ' + t + '\n'; });
+        if (extraHead) h += '  ' + extraHead + '\n';
         h += '  <link href="https://unpkg.com/jspsych@' + _JSPsychVersion +
              '/css/jspsych.css" rel="stylesheet" type="text/css">\n';
         // Only when the caller has something to say. With the device height no
@@ -5300,11 +5325,16 @@ function _applyI18n() {
       // Wrap experiment logic into a standalone runnable HTML file.
       // Load order matters: plugins read the global `jsPsychModule` while being
       // parsed, so the core script must always come first.
-      function _buildJsPsychHTML(code, usedPlugins) {
+      function _buildJsPsychHTML(code, usedPlugins, opts) {
         // A literal "</script" inside the experiment code would close the inline
         // script tag early; the escaped form is equivalent when parsed as JS.
         var safe = code.replace(/<\/script/gi, '<\\/script');
-        var h = _htmlHead(usedPlugins);
+        // A JATOS component loads the platform's script from an absolute path
+        // the server serves — it is not bundled into the .jzip. Nothing needs it
+        // elsewhere: the generated on_finish tests for `window.jatos` first, so
+        // a page without it simply downloads the data as it always did.
+        var h = _htmlHead(usedPlugins, '',
+          (opts && opts.jatos) ? '<script src="/assets/javascripts/jatos.js"><\/script>' : '');
         h += '<body>\n';
         h += '  <script>\n';
         h += safe
@@ -5801,15 +5831,74 @@ function _applyI18n() {
           var saved = saveVersion();
           if (!saved && !editor.projectName) return;
         }
-        downloadPublishedExperiment();
-        var _n = _compileExperiment({}).assets.length;
-        alert(_n
-          ? 'Experiment downloaded as a ZIP.\n\nUnzip it and open index.html — the ' + _n +
-            ' asset' + (_n === 1 ? '' : 's') + ' it needs are in the folders beside it. ' +
-            'Keep the layout: the code refers to them by path.\n\n' +
-            'When the experiment finishes it saves the data as a CSV file.'
-          : 'Experiment file downloaded.\n\nOpen it in a browser to run the experiment.\n' +
-            'When the experiment finishes it saves the data as a CSV file.');
+        // Compiled once and handed to whichever route runs. It builds the whole
+        // experiment, so asking it again for the asset count was waste.
+        var r = _compileExperiment({});
+        var n = r.assets.length;
+        showExportConfig(function (format) {
+          downloadPublishedExperiment(format, r);
+          if (format === 'jzip') {
+            alert('JATOS package downloaded.\n\nImport the .jzip into your JATOS server ' +
+              '(Studies → Import Study). The experiment submits its data back to JATOS ' +
+              'when it finishes, so the participant does not have to send anything.');
+            return;
+          }
+          alert(n
+            ? 'Experiment downloaded as a ZIP.\n\nUnzip it and open index.html — the ' + n +
+              ' asset' + (n === 1 ? '' : 's') + ' it needs are in the folders beside it. ' +
+              'Keep the layout: the code refers to them by path.\n\n' +
+              'When the experiment finishes it saves the data as a CSV file.'
+            : 'Experiment file downloaded.\n\nOpen it in a browser to run the experiment.\n' +
+              'When the experiment finishes it saves the data as a CSV file.');
+        });
+      }
+
+      // One clickable row of the deployment choice.
+      function _exportOption(value, icon, title, desc) {
+        return '<button type="button" data-format="' + value + '" style="display:flex;gap:12px;' +
+          'width:100%;text-align:left;align-items:flex-start;padding:13px 14px;margin-bottom:10px;' +
+          'border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;' +
+          'font-family:inherit">' +
+          '<span style="font-size:1.3rem;line-height:1.2">' + icon + '</span>' +
+          '<span style="flex:1"><span style="display:block;font-weight:600;font-size:0.83rem;' +
+          'margin-bottom:3px">' + title + '</span>' +
+          '<span style="display:block;font-size:0.72rem;color:var(--text2);line-height:1.5">' +
+          desc + '</span></span></button>';
+      }
+
+      // Where will this run? Asked at publish time because it is the one choice
+      // that changes the ARTEFACT rather than the experiment — the jsPsych code
+      // is identical either way, and only the packaging and the way the data
+      // travels back differ.
+      function showExportConfig(callback) {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2800;background:rgba(0,0,0,0.45);' +
+          'display:flex;align-items:center;justify-content:center;font-family:inherit';
+        var box = document.createElement('div');
+        box.style.cssText = 'background:#fff;border-radius:14px;width:540px;max-width:92vw;' +
+          'padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,0.28)';
+        box.innerHTML =
+          '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">Where will this run?</div>' +
+          '<p style="font-size:0.78rem;color:var(--text2);margin:0 0 16px;line-height:1.55">' +
+          'The experiment itself is the same either way — what differs is how it is packaged ' +
+          'and how the data gets back to you.</p>' +
+          _exportOption('html', '💾', 'Download the files',
+            'A single HTML file, or a ZIP with its assets beside it. Runs anywhere. When it ' +
+            'finishes it shows the data and saves a CSV the participant sends back.') +
+          _exportOption('jzip', '📦', 'JATOS package (.jzip)',
+            'Import into your JATOS server. The experiment submits its data to JATOS when it ' +
+            'finishes, so nothing depends on the participant sending a file back.') +
+          '<div style="display:flex;justify-content:flex-end;margin-top:6px">' +
+          '<button id="ec-cancel" class="btn btn-outline" style="font-size:0.78rem">Cancel</button>' +
+          '</div>';
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        function close() { overlay.remove(); }
+        overlay.onclick = function (e) { if (e.target === overlay) close(); };
+        document.getElementById('ec-cancel').onclick = close;
+        box.querySelectorAll('[data-format]').forEach(function (el) {
+          el.onclick = function () { close(); callback(el.getAttribute('data-format')); };
+        });
       }
 
       function showPublishConfig(callback) {
@@ -6031,6 +6120,7 @@ function showVersionHistory() {
             editor.cc = d.cc || 0;
             editor.projectName = d.pn || '';
             editor.projectId = d.pid || '';
+            editor.jatos = d.jatos || null;
           }
           var ver = localStorage.getItem(_vek('task_versions'));
           if (ver) editor.versions = JSON.parse(ver);
@@ -6463,11 +6553,88 @@ function _downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+// RFC 4122 v4. `crypto.randomUUID` is the whole implementation on anything
+// current; the fallback is for a browser that predates it.
+function _uuid() {
+  if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+  var b = new Uint8Array(16);
+  if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(b);
+  else for (var i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  var h = [].map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+  return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' +
+    h.slice(16, 20) + '-' + h.slice(20);
+}
+
+// This project's JATOS identity, minted once and then kept. Re-exporting and
+// re-importing therefore overwrites the same study on the server, which is what
+// a researcher revising an experiment wants — the alternative is a new
+// near-identical study per revision.
+function _jatosIds() {
+  if (!editor.jatos || !editor.jatos.study || !editor.jatos.component) {
+    editor.jatos = {study: _uuid(), component: _uuid()};
+    autoSave();
+  }
+  return editor.jatos;
+}
+
+// The file list a .jzip is packed from, kept separate from the packing so the
+// probe can assert the layout without implementing an unzipper.
+//
+// Layout, from a real one: `info.jas` at the root, and one directory named
+// after the study uuid holding the component's HTML and its assets. The stimuli
+// address their assets by RELATIVE path (`img/blue.png`), so the HTML and the
+// img/ snd/ vid/ directories have to be siblings — an extra component-level
+// directory would break every one of them.
+function buildJatosFiles(r) {
+  var j = _jatosIds();
+  var title = editor.projectName || 'ExpVis Experiment';
+  var jas = {
+    version: '3',
+    data: {
+      uuid: j.study,
+      title: title,
+      dirName: j.study,
+      componentList: [{
+        uuid: j.component,
+        title: title,
+        htmlFilePath: j.component + '.html',
+        reloadable: false,
+        active: true,
+      }],
+      batchList: [],
+      groupStudy: false,
+      linearStudy: false,
+      allowPreview: false,
+    },
+  };
+  var files = [
+    {name: 'info.jas', data: _utf8Bytes(JSON.stringify(jas, null, 2))},
+    {name: j.study + '/' + j.component + '.html',
+     data: _utf8Bytes(_buildJsPsychHTML(r.code, r.usedPlugins, {jatos: true}))},
+  ];
+  r.assets.forEach(function (a) {
+    // _dataUriBytes, not _utf8Bytes: _zipBytes takes bytes, and handing it the
+    // data-URI text would write the wrong length and crc.
+    files.push({name: j.study + '/' + a.path, data: _dataUriBytes(a.data)});
+  });
+  return files;
+}
+
 // What publishing hands the researcher: the experiment file plus every asset it
 // refers to, laid out exactly as the code names them.
-function downloadPublishedExperiment() {
-  var r = _compileExperiment({});
+function downloadPublishedExperiment(format, compiled) {
+  var r = compiled || _compileExperiment({});
   var name = (editor.projectName || 'experiment').replace(/[^a-zA-Z0-9_-]/g, '_');
+  // A .jzip is the same experiment in the layout JATOS imports. Its own
+  // packaging, not the local bundle plus a manifest: the entries are named
+  // after the study uuid, and the HTML carries the platform's script tag.
+  if (format === 'jzip') {
+    _downloadBlob(new Blob([_zipBytes(buildJatosFiles(r))], {type: 'application/zip'}),
+      name + '.jzip');
+    return;
+  }
   var files = [{name: 'index.html', data: _utf8Bytes(_buildJsPsychHTML(r.code, r.usedPlugins))}];
   r.assets.forEach(function (a) {
     files.push({name: a.path, data: _dataUriBytes(a.data)});
