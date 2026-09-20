@@ -171,6 +171,13 @@
         background: #f0fdf4;
         color: var(--green);
       }
+      /* A component that owns the whole trial rather than sitting on a shared
+         screen — animation. Its own colour because it belongs to neither of the
+         other two groups, and the toolbox groups it on its own. */
+      .comp-card-icon.x {
+        background: #f5f3ff;
+        color: #7c3aed;
+      }
       .comp-card-name {
         font-weight: 600;
         font-size: 0.78rem;

@@ -146,20 +146,6 @@
           <div
             class="comp-card"
             draggable="true"
-            data-type="animation"
-            data-cat="x"
-            ondragstart="dragStart(event)"
-            ondragend="dragEnd(event)"
-          >
-            <div class="comp-card-icon s">🎞️</div>
-            <div>
-              <div class="comp-card-name">Animation</div>
-              <div class="comp-card-desc">Frame sequence · flipbook</div>
-            </div>
-          </div>
-          <div
-            class="comp-card"
-            draggable="true"
             data-type="audio"
             data-cat="s"
             ondragstart="dragStart(event)"
@@ -266,6 +252,34 @@
             <div>
               <div class="comp-card-name">Survey Text</div>
               <div class="comp-card-desc">Question · Free Text · Required</div>
+            </div>
+          </div>
+          <!-- Its own group: an animation is neither a screen element nor a
+               response. It takes the whole trial, and nothing shares it. -->
+          <div
+            style="
+              font-size: 0.65rem;
+              color: var(--text2);
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              padding: 4px 8px;
+              margin-top: 10px;
+            "
+          >
+            🎞️ Owns the trial
+          </div>
+          <div
+            class="comp-card"
+            draggable="true"
+            data-type="animation"
+            data-cat="x"
+            ondragstart="dragStart(event)"
+            ondragend="dragEnd(event)"
+          >
+            <div class="comp-card-icon x">🎞️</div>
+            <div>
+              <div class="comp-card-name">Animation</div>
+              <div class="comp-card-desc">Frame sequence · takes the whole trial</div>
             </div>
           </div>
           </div>
