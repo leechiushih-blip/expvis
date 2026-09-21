@@ -33,7 +33,14 @@ var _aiProviders = {
     },
     parseResponse: function(data) { return data.choices[0].message.content; },
     apiKeyHint: 'sk-...',
-    apiKeyUrl: 'https://platform.openai.com/api-keys'
+    apiKeyUrl: 'https://platform.openai.com/api-keys',
+    // Where the live list comes from. Every one of these answers a browser
+    // call (verified: the CORS preflight allows it), which is what lets the
+    // ↻ button work without ExpVis shipping a copy of anything.
+    modelsUrl: 'https://api.openai.com/v1/models',
+    modelsPageUrl: 'https://platform.openai.com/docs/models',
+    // OpenAI's list mixes in models that cannot answer a chat request at all.
+    modelsFilter: /(tts|transcribe|whisper|realtime|audio|image|embedding|moderation|dall-e|sora)/i
   },
   deepseek: {
     name: 'DeepSeek',
@@ -46,7 +53,9 @@ var _aiProviders = {
     },
     parseResponse: function(data) { return data.choices[0].message.content; },
     apiKeyHint: 'sk-...',
-    apiKeyUrl: 'https://platform.deepseek.com/api_keys'
+    apiKeyUrl: 'https://platform.deepseek.com/api_keys',
+    modelsUrl: 'https://api.deepseek.com/v1/models',
+    modelsPageUrl: 'https://api-docs.deepseek.com/quick_start/pricing'
   },
   anthropic: {
     name: 'Anthropic Claude',
@@ -80,7 +89,11 @@ var _aiProviders = {
     },
     parseResponse: function(data) { return data.content[0].text; },
     apiKeyHint: 'sk-ant-...',
-    apiKeyUrl: 'https://console.anthropic.com/settings/keys'
+    apiKeyUrl: 'https://console.anthropic.com/settings/keys',
+    // Same endpoint shape as the others; it just needs its own headers, which
+    // the fetch reuses from requestHeaders above.
+    modelsUrl: 'https://api.anthropic.com/v1/models',
+    modelsPageUrl: 'https://platform.claude.com/docs/en/about-claude/models'
   },
   qwen: {
     name: '通义千问 (Qwen)',
@@ -93,7 +106,9 @@ var _aiProviders = {
     },
     parseResponse: function(data) { return data.choices[0].message.content; },
     apiKeyHint: 'sk-...',
-    apiKeyUrl: 'https://bailian.console.aliyun.com/'
+    apiKeyUrl: 'https://bailian.console.aliyun.com/',
+    modelsUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/models',
+    modelsPageUrl: 'https://help.aliyun.com/zh/model-studio/'
   },
   custom: {
     // NOT a second OpenAI. This is the bring-your-own-endpoint option:
@@ -122,6 +137,87 @@ function _getAIProvider(id) {
   return _aiProviders[id] || _aiProviders['deepseek'];
 }
 
+// What to say when the call fails.
+//
+// The commonest failure by far is a model name that the provider has retired
+// or that this key cannot reach — and the raw error for it ("404 … model not
+// found") gives the researcher nothing to do next. Naming the model, saying
+// where the current list is, and pointing at the field above turns a dead end
+// into one more attempt.
+function _aiErrorMessage(status, body, model, provider) {
+  var text = String(body || '');
+  var looksLikeModel = /model/i.test(text) &&
+    /not.?found|does not exist|unknown|invalid|unsupported|no such/i.test(text);
+  if (status === 404 || looksLikeModel) {
+    var lines = ['The model "' + model + '" was refused by ' + provider.name + '.',
+      'It may have been retired, or this key may not have access to it.'];
+    if (provider.modelsPageUrl) lines.push('Current models: ' + provider.modelsPageUrl);
+    lines.push('Type a current name in the Model box, or use ↻ to fetch the list.');
+    return lines.join('\n');
+  }
+  if (status === 401 || status === 403) {
+    return 'This key was rejected by ' + provider.name + ' (' + status + ').\n' +
+      'Check it is current and has access to the model you chose.';
+  }
+  if (status === 429) {
+    return provider.name + ' is rate-limiting this key (429). Wait a moment and try again.';
+  }
+  return 'API Error ' + status + ': ' + text.slice(0, 200);
+}
+
+// Ask the provider what it currently offers.
+//
+// This is the half that keeps the list from ever mattering: the researcher
+// gets the models THEIR key can actually use, today, instead of whatever was
+// true when their copy of this file was written. It only runs when asked and
+// only with a key already in hand, and the free-text field means nothing here
+// has to succeed for the editor to work.
+//
+// Verified: all four providers answer a browser call to their models endpoint
+// (the CORS preflight allows it), which is why this can be a fetch rather than
+// something a server has to do for us.
+function _fetchModelList(providerId, key, done) {
+  var provider = _getAIProvider(providerId);
+  if (!provider.modelsUrl) {
+    done(new Error(provider.name + ' has no model list to fetch — type the name.'));
+    return;
+  }
+  var headers = {'Content-Type': 'application/json'};
+  var authH = provider.requestHeaders
+    ? provider.requestHeaders(key)
+    : {'Authorization': provider.authHeader(key)};
+  for (var k in authH) headers[k] = authH[k];
+
+  fetch(provider.modelsUrl, {headers: headers})
+    .then(function (r) {
+      if (!r.ok) {
+        return r.text().then(function (t) {
+          throw new Error('Could not read the model list from ' + provider.name +
+            ' (' + r.status + '). ' +
+            (provider.modelsPageUrl ? 'See ' + provider.modelsPageUrl : ''));
+        });
+      }
+      return r.json();
+    })
+    .then(function (data) {
+      var rows = data && data.data;
+      var ids = Array.isArray(rows)
+        ? rows.map(function (m) { return m && (m.id || m.name); }).filter(Boolean)
+        : [];
+      if (provider.modelsFilter) {
+        ids = ids.filter(function (id) { return !provider.modelsFilter.test(id); });
+      }
+      // Descending, which for these naming schemes puts the newest first. A
+      // heuristic, not a guarantee — the field is free text either way.
+      ids.sort();
+      ids.reverse();
+      done(null, ids);
+    })
+    .catch(function (e) {
+      done(new Error('Could not reach ' + provider.name + ' to list models: ' + e.message));
+    });
+}
+
 function _callAI(providerId, model, messages, maxTokens) {
   var provider = _getAIProvider(providerId);
   var key = localStorage.getItem('ve_ai_key_' + providerId) || '';
@@ -147,7 +243,7 @@ function _callAI(providerId, model, messages, maxTokens) {
     headers: headers,
     body: provider.buildBody(model, messages, maxTokens)
   }).then(function(r) {
-    if (!r.ok) return r.text().then(function(t) { throw new Error('API Error ' + r.status + ': ' + t.slice(0, 200)); });
+    if (!r.ok) return r.text().then(function(t) { throw new Error(_aiErrorMessage(r.status, t, model, provider)); });
     return r.json();
   }).then(function(data) {
     return provider.parseResponse(data);
@@ -6470,19 +6566,40 @@ var _compDefaults = {
 
         var currentProvider = _getAIProvider(providerId);
         var currentModel = model || currentProvider.defaultModel || '';
+        // A list fetched last week is a better suggestion than the one built
+        // into this file, so it is kept and merged in front.
+        var _storedModels = [];
+        try {
+          _storedModels = JSON.parse(localStorage.getItem('ve_ai_models_' + providerId) || '[]');
+          if (!Array.isArray(_storedModels)) _storedModels = [];
+        } catch (e) { _storedModels = []; }
+        var _suggestions = _storedModels.concat(currentProvider.models || [])
+          .filter(function (m, i, a) { return m && a.indexOf(m) === i; });
+        // ALWAYS a text field, with the built-in list as suggestions.
+        //
+        // A model name is a fact the PROVIDER owns, and it changes without
+        // asking anyone here. Every entry below is therefore a guess with a
+        // shelf life, and a closed <select> turns each expired guess into a
+        // dead end — which is how a two-year-old download stops working for a
+        // reason that has nothing to do with the experiment. As suggestions, an
+        // expired list degrades to being merely out of date, and the researcher
+        // types whatever their provider offers today.
+        //
+        // There is no separate branch for the custom endpoint any more: it was
+        // the one provider that already worked this way.
         var modelOpts = '';
-        if (currentProvider.isCustom) {
-          modelOpts = '<input id="ai-custom-model" value="' + currentModel.replace(/"/g, '&quot;') + '" placeholder="model name" style="width:100%;padding:8px 12px;border:1px solid #e0e0e8;border-radius:8px;font-size:0.78rem;font-family:monospace;outline:none">';
-        } else if (currentProvider.models && currentProvider.models.length > 0) {
-          for (var j = 0; j < currentProvider.models.length; j++) {
-            var mn = currentProvider.models[j];
-            modelOpts += '<option value="' + mn + '"' + (mn === currentModel ? ' selected' : '') + '>' + mn + '</option>';
-          }
-          modelOpts = '<select id="ai-model" style="width:100%;padding:8px 12px;border:1px solid #e0e0e8;border-radius:8px;font-size:0.78rem;font-family:inherit;outline:none;background:#fff">' + modelOpts + '</select>';
-        } else {
-          modelOpts = '<input id="ai-model" value="' + currentModel.replace(/"/g, '&quot;') + '" placeholder="model name" style="width:100%;padding:8px 12px;border:1px solid #e0e0e8;border-radius:8px;font-size:0.78rem;font-family:monospace;outline:none">';
+        {
+          var _dl = '';
+          _suggestions.forEach(function (mn) {
+            if (mn) _dl += '<option value="' + mn.replace(/"/g, '&quot;') + '"></option>';
+          });
+          modelOpts =
+            '<input id="ai-model" list="ai-model-list" value="' +
+              currentModel.replace(/"/g, '&quot;') + '" placeholder="model name" ' +
+              'style="width:100%;padding:8px 12px;border:1px solid #e0e0e8;border-radius:8px;' +
+              'font-size:0.78rem;font-family:monospace;outline:none">' +
+            '<datalist id="ai-model-list">' + _dl + '</datalist>';
         }
-
         var customEpHTML = '';
         if (currentProvider.isCustom) {
           customEpHTML = '<div style="margin-top:8px"><label style="font-size:0.65rem;font-weight:600;color:var(--text2);display:block;margin-bottom:2px">🔗 Endpoint URL</label><input id="ai-custom-endpoint" value="' + customEp.replace(/"/g, '&quot;') + '" placeholder="https://your-llm-server/v1/chat/completions" style="width:100%;padding:8px 12px;border:1px solid #e0e0e8;border-radius:8px;font-size:0.75rem;font-family:monospace;outline:none"></div>';
@@ -6500,7 +6617,7 @@ var _compDefaults = {
           // Provider selector
           '<div style="display:flex;gap:12px">' +
           '<div style="flex:1"><label style="font-size:0.72rem;font-weight:700;color:var(--text);margin-bottom:4px;display:block">' + i18n('ai.provider_label') + '</label><select id="ai-provider" style="width:100%;padding:8px 12px;border:1px solid #e0e0e8;border-radius:8px;font-size:0.78rem;font-family:inherit;outline:none;background:#fff">' + providerOpts + '</select></div>' +
-          '<div style="flex:1"><label style="font-size:0.72rem;font-weight:700;color:var(--text);margin-bottom:4px;display:block">🧠 Model</label><div id="ai-model-container">' + modelOpts + '</div></div>' +
+          '<div style="flex:1"><label style="font-size:0.72rem;font-weight:700;color:var(--text);margin-bottom:4px;display:block">🧠 Model <button type="button" id="ai-model-refresh" title="Ask the provider which models this key can use" style="border:1px solid #e0e0e8;background:#fafafe;border-radius:5px;cursor:pointer;font-size:0.7rem;font-family:inherit;padding:0 5px;vertical-align:middle">↻</button> <span id="ai-model-status" style="font-weight:400;color:var(--text2);font-size:0.65rem"></span></label><div id="ai-model-container">' + modelOpts + '</div></div>' +
           '</div>' +
           customEpHTML +
           // API Key
@@ -6527,13 +6644,32 @@ var _compDefaults = {
         document.body.appendChild(overlay);
 
         // Helper: get current provider model
+        document.getElementById('ai-model-refresh').onclick = function () {
+          var btn = this;
+          var st = document.getElementById('ai-model-status');
+          var key = (document.getElementById('ai-apikey') || {}).value || '';
+          if (!key.trim()) { st.textContent = 'key first'; return; }
+          btn.disabled = true;
+          st.textContent = 'fetching…';
+          _fetchModelList(providerId, key.trim(), function (err, ids) {
+            btn.disabled = false;
+            if (err) { st.textContent = err.message; return; }
+            document.getElementById('ai-model-list').innerHTML = ids.map(function (id) {
+              return '<option value="' + id.replace(/"/g, '&quot;') + '"></option>';
+            }).join('');
+            try { localStorage.setItem('ve_ai_models_' + providerId, JSON.stringify(ids)); }
+            catch (e) { /* private mode: the suggestions just do not persist */ }
+            st.textContent = ids.length + ' available';
+          });
+        };
+
         function _getModel() {
-          if (currentProvider.isCustom) {
-            var cel = document.getElementById('ai-custom-model');
-            return cel ? cel.value.trim() : '';
-          }
-          var sel = document.getElementById('ai-model');
-          return sel ? (sel.value || (currentProvider.models && currentProvider.models[0]) || '') : '';
+          // One field for every provider, and whatever is typed wins. The
+          // fallback is only for an empty box: a suggestion the researcher has
+          // not touched should still send something.
+          var el = document.getElementById('ai-model');
+          if (!el) return currentProvider.defaultModel || '';
+          return el.value.trim() || currentProvider.defaultModel || '';
         }
 
         // Helper: get custom endpoint

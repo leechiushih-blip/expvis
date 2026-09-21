@@ -1100,6 +1100,56 @@ function phaseCases() {
   ], {repetitions: 2});
   // …but sampling has nothing to draw from without a table, and jsPsych would
   // ignore it, so it must not be emitted. Gated the same way the badge is.
+  // A model name is the provider's fact, not ours, and the version of it
+  // written into this file has a shelf life. These assert the three things
+  // that keep an expired copy from becoming a dead end: the field takes
+  // anything, the list is only a suggestion, and a refusal says what to do.
+  (function () {
+    resetEditor();
+    // The dialog is built by JS, so it has to be opened to be inspected.
+    showAIGenerate();
+    var field = document.getElementById('ai-model');
+    var list = document.getElementById('ai-model-list');
+    var selects = document.querySelectorAll('select#ai-model');
+    var suggestions = list ? list.querySelectorAll('option').length : 0;
+    var overlay = document.querySelector('div[style*="z-index:3000"]');
+
+    var openai = _aiProviders.openai;
+    var refused = _aiErrorMessage(404, 'model not found', 'gpt-1-nope', openai);
+    var broken = _aiErrorMessage(500, 'internal error', 'gpt-1-nope', openai);
+    var unauth = _aiErrorMessage(401, 'bad key', 'gpt-1-nope', openai);
+
+    // A provider with nowhere to ask must say so rather than throw.
+    var customErr = null;
+    _fetchModelList('custom', 'k', function (e) { customErr = e; });
+
+    if (overlay) overlay.remove();
+
+    out['an expired model list is not a dead end'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      // a text field, and specifically not the closed list that made a stale
+      // entry unescapable
+      isATextField: !!field && field.tagName === 'INPUT' &&
+                    field.getAttribute('list') === 'ai-model-list',
+      noClosedSelect: selects.length === 0,
+      // the built-in list is still offered, as suggestions
+      suggestionsOffered: suggestions > 0,
+      defaultsToSomething: !!field && field.value.length > 0,
+      // a refusal names the model, points at the current list, and says how to
+      // get it — rather than a bare 404
+      refusalNamesTheModel: refused.indexOf('gpt-1-nope') >= 0,
+      refusalPointsAtTheList: refused.indexOf(openai.modelsPageUrl) >= 0,
+      refusalOffersTheFix: refused.indexOf('Model box') >= 0,
+      // a failure that is NOT about the model must not claim to be
+      unrelatedErrorStaysPlain: broken.indexOf('gpt-1-nope') < 0 &&
+                                broken.indexOf('API Error 500') >= 0,
+      authErrorSaysSo: unauth.indexOf('rejected') >= 0,
+      // and a provider with no list endpoint fails softly
+      customHasNoList: !!customErr && customErr.message.indexOf('type the name') >= 0
+    };
+  })();
+
   // DataPipe is a PACKAGING choice, not a different experiment: the timeline
   // gains a save trial and the file has to load the plugin. The behaviour suite
   // runs the timeline and can say what it sends; the <script> tag that makes
@@ -2248,6 +2298,14 @@ def cmd_check():
                 for k in ("imageUsesImagePlugin", "htmlUsesHtmlPlugin", "feedbackEmitted",
                           "keyAnswerEmitted", "pluginDoesTheScoring",
                           "withoutFeedbackUnchanged", "severalKeysRefuse"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "an expired model list is not a dead end":
+                for k in ("isATextField", "noClosedSelect", "suggestionsOffered",
+                          "defaultsToSomething", "refusalNamesTheModel",
+                          "refusalPointsAtTheList", "refusalOffersTheFix",
+                          "unrelatedErrorStaysPlain", "authErrorSaysSo",
+                          "customHasNoList"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "datapipe is a packaging choice":
