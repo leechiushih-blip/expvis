@@ -82,33 +82,6 @@ var _aiProviders = {
     apiKeyHint: 'sk-ant-...',
     apiKeyUrl: 'https://console.anthropic.com/settings/keys'
   },
-  gemini: {
-    name: 'Google Gemini',
-    models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
-    defaultModel: 'gemini-2.5-flash',
-    endpoint: '', // set dynamically
-    authHeader: function(key) { return ''; }, // key in URL param
-    buildBody: function(model, messages, maxTokens) {
-      var contents = [];
-      var sysInstr = '';
-      for (var i = 0; i < messages.length; i++) {
-        if (messages[i].role === 'system') {
-          sysInstr = messages[i].content;
-        } else {
-          contents.push({ role: messages[i].role === 'assistant' ? 'model' : 'user', parts: [{text: messages[i].content}] });
-        }
-      }
-      var body = { contents: contents, generationConfig: { maxOutputTokens: maxTokens } };
-      if (sysInstr) body.systemInstruction = { parts: [{text: sysInstr}] };
-      return JSON.stringify(body);
-    },
-    buildUrl: function(model, key) {
-      return 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + key;
-    },
-    parseResponse: function(data) { return data.candidates[0].content.parts[0].text; },
-    apiKeyHint: 'AIza...',
-    apiKeyUrl: 'https://aistudio.google.com/apikey'
-  },
   qwen: {
     name: '通义千问 (Qwen)',
     models: ['qwen-plus', 'qwen-max', 'qwen-turbo'],
@@ -123,7 +96,11 @@ var _aiProviders = {
     apiKeyUrl: 'https://bailian.console.aliyun.com/'
   },
   custom: {
-    name: 'OpenAI-Compatible',
+    // NOT a second OpenAI. This is the bring-your-own-endpoint option:
+    // the researcher runs (or rents) a server that speaks the same API,
+    // and types its URL. Named for whose it is, because "OpenAI-Compatible"
+    // in a list that already has an OpenAI entry reads as two OpenAIs.
+    name: 'Your own endpoint (OpenAI-compatible)',
     models: [''],
     defaultModel: '',
     endpoint: '',
@@ -154,20 +131,6 @@ function _callAI(providerId, model, messages, maxTokens) {
     if (!ep) return Promise.reject(new Error('Custom endpoint not configured'));
     provider = JSON.parse(JSON.stringify(provider));
     provider.endpoint = ep;
-  }
-
-  if (providerId === 'gemini') {
-    var url = provider.buildUrl(model, key);
-    return fetch(url, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: provider.buildBody(model, messages, maxTokens)
-    }).then(function(r) {
-      if (!r.ok) return r.text().then(function(t) { throw new Error('API Error ' + r.status + ': ' + t.slice(0, 200)); });
-      return r.json();
-    }).then(function(data) {
-      return provider.parseResponse(data);
-    });
   }
 
   // Most of these providers take the key in `Authorization: Bearer …`. A

@@ -1419,9 +1419,24 @@ function phaseCases() {
         return typeof p.authHeader === 'function' && !p.requestHeaders;
       }),
       // and the header is never empty for a provider that uses the shared path
-      noEmptyBearer: others.filter(function (k) { return k !== 'gemini'; }).every(function (k) {
+      // Every provider left takes the key the same way. This used to exempt
+      // gemini, which passed its key as a URL parameter and so had an empty
+      // Authorization header; gemini is gone and so is the exemption.
+      noEmptyBearer: others.every(function (k) {
         return _aiProviders[k].authHeader('k') === 'Bearer k';
-      })
+      }),
+      // Two entries with the same label in one dropdown is a real way to make a
+      // researcher pick the wrong one — `openai` and a custom endpoint labelled
+      // "OpenAI-Compatible" was exactly that.
+      namesAreDistinct: (function () {
+        var seen = {}, dup = [];
+        Object.keys(_aiProviders).forEach(function (k) {
+          var n = _aiProviders[k].name;
+          if (seen[n]) dup.push(n);
+          seen[n] = 1;
+        });
+        return dup.length === 0;
+      })()
     };
   })();
   return out;
@@ -2275,7 +2290,8 @@ def cmd_check():
                 for k in ("anthropicUsesApiKey", "anthropicSendsNoAuthorization",
                           "browserAccessOptIn", "versionPinned", "restUseBearer",
                           "noEmptyBearer", "requestGoesToTheRightPlace",
-                          "requestCarriesApiKey", "requestOptsInToBrowser"):
+                          "requestCarriesApiKey", "requestOptsInToBrowser",
+                          "namesAreDistinct"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "cloze page":
