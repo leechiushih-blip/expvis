@@ -1451,6 +1451,32 @@ function blockCases() {
       // reported so a failure says which field, not just that something moved
       drift: drift.join('; '),
       controlsNamed: missingControls.length === 0,
+      // The worked example must obey the rule stated further down the same
+      // prompt. It used to show `randomize_order` with no `conditions` — which
+      // is INERT, and which the prose forbids two paragraphs later. A model
+      // follows an example more reliably than it connects prose, so the
+      // example is where the trap would be taught.
+      exampleObeysItsOwnRule: (function () {
+        var ex = sys.slice(sys.indexOf('{"blocks":['), sys.indexOf('A block has a NAME'));
+        var usesGatedSetting = /randomize_order|sample/.test(ex);
+        return !usesGatedSetting || ex.indexOf('"conditions":true') >= 0;
+      })(),
+      // …and a condition table needs two trials of one shape, so an example
+      // that asks for one is showing a table that cannot fold.
+      //
+      // Counted INSIDE the block that says `conditions`, not across the whole
+      // example: the first version counted every component array in it, so the
+      // instructions block and the feedback block made the count two all by
+      // themselves and the assertion passed whichever way the trials went.
+      exampleShowsTwoTrials: (function () {
+        var ex = sys.slice(sys.indexOf('{"blocks":['), sys.indexOf('A block has a NAME'));
+        var at = ex.indexOf('"conditions":true');
+        if (at < 0) return true;
+        var rest = ex.slice(at);
+        var next = rest.indexOf('{"name":');
+        var tableBlock = next > 0 ? rest.slice(0, next) : rest;
+        return (tableBlock.match(/\{"components":/g) || []).length >= 2;
+      })(),
       sampleTypesNamed: missingSample.length === 0,
       operatorsNamed: missingOps.length === 0
     };
@@ -2401,8 +2427,7 @@ def cmd_check():
                         broken_cases.append(f"block case {name}: {k} is false")
             if name == "an expired model list is not a dead end":
                 for k in ("isATextField", "noClosedSelect", "suggestionsOffered",
-                          "defaultsToSomething", "refusalNamesTheModel",
-                          "refusalPointsAtTheList", "refusalOffersTheFix",
+                          "defaultsToSomething", "refusalNamesTheModel", "refusalPointsAtTheList", "refusalOffersTheFix",
                           "unrelatedErrorStaysPlain", "authErrorSaysSo",
                           "customHasNoList"):
                     if not c[k]:
@@ -2434,7 +2459,8 @@ def cmd_check():
                     broken_cases.append(f"block case {name}: typesCovered is false")
                 if not c["noDrift"]:
                     broken_cases.append(f"block case {name}: prompt and editor disagree — {c['drift']}")
-                for k in ("controlsNamed", "sampleTypesNamed", "operatorsNamed"):
+                for k in ("controlsNamed", "sampleTypesNamed", "operatorsNamed",
+                          "exampleObeysItsOwnRule", "exampleShowsTwoTrials"):
                     if not c[k]:
                         broken_cases.append(f"block case {name}: {k} is false")
             if name == "block settings survive the import":

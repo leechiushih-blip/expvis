@@ -301,15 +301,23 @@ function _aiSystemPrompt(dev) {
   '【Output Format】Strict JSON only - no markdown code blocks, no comments.\n' +
   '{"blocks":[\n' +
   '  {"name":"Instructions","timeline":[{"components":[text(instructions)+button(start)]}]},\n' +
-  '  {"name":"Trials","repetitions":48,"randomize_order":true,"timeline":[{"components":[fixation+stimulus+response]}]},\n' +
+  // `conditions` and TWO same-shape trials, because the rule below says a
+  // sample or a shuffle is INERT without the first and meaningless without the
+  // second. The example used to show `randomize_order` alone, so the prompt
+  // taught the trap in its example and forbade it two paragraphs later — and a
+  // concrete example is what a model follows.
+  '  {"name":"Trials","conditions":true,"repetitions":48,"randomize_order":true,\n' +
+  '   "timeline":[{"components":[fixation+word+response]},\n' +
+  '               {"components":[fixation+word+response]}]},\n' +
   '  {"name":"Feedback","timeline":[{"components":[text(thanks)]}]}\n' +
   ']}\n' +
   'A block has a NAME and a `timeline` of trials. There is no block type and no colour.\n' +
   'Instructions and Feedback as above are conventional, not required — use as many blocks as the design needs.\n' +
   'Do NOT write `id`s. The editor assigns them on import, so any you invent are discarded.\n\n' +
   '【Block Settings】OPTIONAL, on the block object beside `name` and `timeline`.\n' +
-  '  This is how a block repeats and how it orders itself. It is also the ONLY way to\n' +
-  '  reach the four things ExpVis used to express as components.\n' +
+  '  This is how a block repeats and how it orders itself, and it is the ONLY place\n' +
+  '  repetition, sampling, ordering and conditional execution live — there is no\n' +
+  '  component for any of them.\n' +
   '  ⚠ NEVER write the same trial out N times. Write it ONCE and set these.\n\n' +
   '  repetitions: 48              run the block timeline 48 times           (any block)\n' +
   '  loop: {field,op,value}       repeat the whole block while this holds   (any block)\n' +
