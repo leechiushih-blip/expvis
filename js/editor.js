@@ -17,7 +17,7 @@
 // Set by the maintainer, not by a version bump out of habit: it changes only
 // when they say so. The number a tutorial is written against has to be stable,
 // or the correspondence the review asked for is worthless.
-var EXPVIS_VERSION = '1.0';
+var EXPVIS_VERSION = '1.0.0';
 var EXPVIS_REPO = 'https://github.com/leechiushih-blip/expvis';
 
 // ============ AI Provider Configuration ============
@@ -273,19 +273,19 @@ function _getAIProviderKeys() {
 // scored by its correct key, with the block repeated and ordered through the
 // PHASE's settings.
 var _aiTemplates = {
-  stroop:'Design a classic Stroop colour-word interference experiment. Red is answered with A, blue with L, green with K.\n1. Instructions: explain the rules, with a button that starts the experiment.\n2. Trials: one trial per condition — a fixation, then a colour word, then a keyboard response. Write one trial for each word × ink-colour combination, each with its correct key set so the trial is scored (including the incongruent ones, where the word and the ink disagree). Repeat this block many times and shuffle the order, through the phase settings.\n3. Feedback: thank the participant.',
-  simon:'Design a Simon effect experiment. A red circle is answered with A, a green circle with L; the participant responds to the colour and ignores which side it appears on.\n1. Instructions: explain the rules, with a button that starts the experiment.\n2. Trials: one trial per condition — a fixation, then a shape on the left or the right, then a keyboard response. Write one trial for each colour × side combination, each with its correct key set so the trial is scored. Repeat this block many times and shuffle the order, through the phase settings.\n3. Feedback: thank the participant.',
-  flanker:'Design an Eriksen flanker task. The middle arrow decides the answer: F for left, J for right, and the flanking arrows are to be ignored.\n1. Instructions: explain the rules, with a button that starts the experiment.\n2. Trials: one trial per condition — a fixation, then a row of five arrows, then a keyboard response. Write one trial for each arrangement (congruent and incongruent, with the incongruent rows in a distinct colour), each with its correct key set so the trial is scored. Repeat this block many times and shuffle the order, through the phase settings.\n3. Feedback: thank the participant.',
-  custom:'Design a [experiment name]. [Purpose and background]. Include:\n1. [What the participant reads first, and how they start]\n2. [The trials: one trial per condition, the stimuli, the response and which key is correct. Say how many times the block repeats and in what order — repetition and ordering belong to the phase, not to a component.]\n3. [What happens at the end]'
+  stroop:'Design a classic Stroop colour-word interference experiment. Red is answered with A, blue with L, green with K.\n1. Instructions: explain the rules, with a button that starts the experiment.\n2. Trials: one trial per condition — a fixation, then a colour word, then a keyboard response. Write one trial for each word × ink-colour combination, each with its correct key set so the trial is scored (including the incongruent ones, where the word and the ink disagree). Repeat this block many times and shuffle the order, through the block settings.\n3. Feedback: thank the participant.',
+  simon:'Design a Simon effect experiment. A red circle is answered with A, a green circle with L; the participant responds to the colour and ignores which side it appears on.\n1. Instructions: explain the rules, with a button that starts the experiment.\n2. Trials: one trial per condition — a fixation, then a shape on the left or the right, then a keyboard response. Write one trial for each colour × side combination, each with its correct key set so the trial is scored. Repeat this block many times and shuffle the order, through the block settings.\n3. Feedback: thank the participant.',
+  flanker:'Design an Eriksen flanker task. The middle arrow decides the answer: F for left, J for right, and the flanking arrows are to be ignored.\n1. Instructions: explain the rules, with a button that starts the experiment.\n2. Trials: one trial per condition — a fixation, then a row of five arrows, then a keyboard response. Write one trial for each arrangement (congruent and incongruent, with the incongruent rows in a distinct colour), each with its correct key set so the trial is scored. Repeat this block many times and shuffle the order, through the block settings.\n3. Feedback: thank the participant.',
+  custom:'Design a [experiment name]. [Purpose and background]. Include:\n1. [What the participant reads first, and how they start]\n2. [The trials: one trial per condition, the stimuli, the response and which key is correct. Say how many times the block repeats and in what order — repetition and ordering belong to the block, not to a component.]\n3. [What happens at the end]'
 };
 
 function _aiMetaPrompt(prompt, dev) {
   return 'You are an experiment design assistant. The user wants to create an online behavioral experiment but their description may be unclear.\n' +
   'Rewrite their description into a clear, complete experiment specification including:\n' +
   '1. Experiment type (Stroop/Simon/Flanker/game/memory/dialogue etc.)\n' +
-  '2. The phases and what each is for — as many as the design needs; "instructions, trials, feedback" is conventional, not required\n' +
-  '3. Specific content for each phase\n' +
-  '4. How many trials, and how the block repeats and orders itself (this belongs to the phase, not to a component)\n' +
+  '2. The blocks and what each is for — as many as the design needs; "instructions, trials, feedback" is conventional, not required\n' +
+  '3. Specific content for each block\n' +
+  '4. How many trials, and how the block repeats and orders itself (this belongs to the block, not to a component)\n' +
   '5. Required component types (text, shape, image, audio, video, fixation, animation, keyboard, button, slider, textInput, likert, multiChoice, multiSelect, htmlForm, cloze, freeSort)\n' +
   '6. Whether any trial is scored, and against which key — and whether a feedback message is wanted\n' +
   '7. Color scheme and key mappings\n' +
@@ -299,22 +299,22 @@ function _aiSystemPrompt(dev) {
   return 'You are an online behavioral experiment builder. Generate a complete experiment structure JSON based on the user\'s description.\n\n' +
   '⚠ IMPORTANT: Output all text content, labels, and instructions in ENGLISH. Use English for all user-facing text.\n\n' +
   '【Output Format】Strict JSON only - no markdown code blocks, no comments.\n' +
-  '{"phases":[\n' +
+  '{"blocks":[\n' +
   '  {"name":"Instructions","timeline":[{"components":[text(instructions)+button(start)]}]},\n' +
   '  {"name":"Trials","repetitions":48,"randomize_order":true,"timeline":[{"components":[fixation+stimulus+response]}]},\n' +
   '  {"name":"Feedback","timeline":[{"components":[text(thanks)]}]}\n' +
   ']}\n' +
-  'A phase has a NAME and a `timeline` of trials. There is no phase type and no colour.\n' +
-  'Instructions and Feedback as above are conventional, not required — use as many phases as the design needs.\n' +
+  'A block has a NAME and a `timeline` of trials. There is no block type and no colour.\n' +
+  'Instructions and Feedback as above are conventional, not required — use as many blocks as the design needs.\n' +
   'Do NOT write `id`s. The editor assigns them on import, so any you invent are discarded.\n\n' +
-  '【Phase Settings】OPTIONAL, on the phase object beside `name` and `timeline`.\n' +
+  '【Block Settings】OPTIONAL, on the block object beside `name` and `timeline`.\n' +
   '  This is how a block repeats and how it orders itself. It is also the ONLY way to\n' +
   '  reach the four things ExpVis used to express as components.\n' +
   '  ⚠ NEVER write the same trial out N times. Write it ONCE and set these.\n\n' +
-  '  repetitions: 48              run the phase timeline 48 times           (any phase)\n' +
-  '  loop: {field,op,value}       repeat the whole phase while this holds   (any phase)\n' +
-  '  cond: {field,op,value}       run the phase only if this holds          (any phase)\n\n' +
-  '  conditions: true             make this phase a CONDITION TABLE         (needed by the next two)\n' +
+  '  repetitions: 48              run the block timeline 48 times           (any block)\n' +
+  '  loop: {field,op,value}       repeat the whole block while this holds   (any block)\n' +
+  '  cond: {field,op,value}       run the block only if this holds          (any block)\n\n' +
+  '  conditions: true             make this block a CONDITION TABLE         (needed by the next two)\n' +
   '  randomize_order: true        shuffle the trials\n' +
   '  sample: {type:"...", size:N} draw a subset\n\n' +
   '      A sample or a shuffle means nothing while each trial runs once, so without\n' +
@@ -379,7 +379,7 @@ function _aiSystemPrompt(dev) {
   '  ⚠ For a button trial, `choices` is an ARRAY of button labels, not a comma-separated string\n' +
   '  ⚠ A trial holds at most ONE response component — one plugin runs per trial.\n' +
   '  ⚠ animation / cloze / freeSort OWN the trial: nothing may sit beside them.\n' +
-  '  ⚠ There is no loop, branch, randomize or variable component. A phase repeats via its own settings\n' +
+  '  ⚠ There is no loop, branch, randomize or variable component. A block repeats via its own settings\n' +
   '    (repetitions / sample / randomize_order), not via a component.\n\n' +
   '【Layout】Components stack in document flow — there are NO x/y coordinates.\n' +
   '  `position` is alignment only: "center" (default), "left", or "right".\n' +
@@ -408,10 +408,10 @@ function _aiSystemPrompt(dev) {
   '      `timeout_message` and `show_feedback_on_timeout` (what a timed-out trial shows), and\n' +
   '      `force_correct_button_press` (make the participant press the right key to continue).\n' +
   '  There is no in-trial branching, so one trial cannot react to its own response: to do that,\n' +
-  '  score the trial and let a later phase act on the score — a `cond` on the next phase, or a\n' +
+  '  score the trial and let a later block act on the score — a `cond` on the next block, or a\n' +
   '  `loop` on this one.\n\n' +
   '【Experiment Patterns】\n' +
-  '  Stroop: ONE trial — text(word, coloured) + keyboard(choices, correctKey) — with the phase\n' +
+  '  Stroop: ONE trial — text(word, coloured) + keyboard(choices, correctKey) — with the block\n' +
   '    repeating it. For several conditions write one trial per condition instead and let\n' +
   '    `randomize_order` shuffle them; do not write 48 copies of anything.\n' +
   '  Flanker: text("<<<<<") + keyboard(choices:["f","j"], correctKey:"f"), and a trial per arrow direction.\n' +
@@ -422,7 +422,7 @@ function _aiSystemPrompt(dev) {
   '  ❌ text color = #fff/white → invisible on white background\n' +
   '  ❌ Two components expected to overlap → impossible, they stack in flow\n' +
   '  ❌ randomize present but text/shape missing key mapping → keyboard has no correct key\n' +
-  '  ❌ A loop / branch / randomize / variable component → they do not exist; a phase repeats through its settings\n' +
+  '  ❌ A loop / branch / randomize / variable component → they do not exist; a block repeats through its settings\n' +
 // `%n%` and `%s%` belong to the cloze and free-sort plugins' own counter text,
 // not to this prompt — it is not a percent-format.
   '  ❌ A `step_duration`, `newStep` or "映射按键" field → removed; a trial shows one screen\n' +
@@ -488,16 +488,16 @@ var _i18n = {
   'empty.desc':       {en:'Drag components from the left, or choose a template to get started', zh:'从左侧拖入组件，或选择一个模板快速开始'},
   'empty.click_node': {en:'← Click a node in the flow\nto view and edit properties', zh:'← 点击流程中的节点\n查看和编辑属性'},
   'empty.click_preview':{en:'Click a node to preview', zh:'Click a node to preview'},
-  // --- Phase names ---
-  // Phase names are stored plain; the icon is added by _phaseLabel() at render
+  // --- Block names ---
+  // Block names are stored plain; the icon is added by _blockLabel() at render
   // time so that generated experiment code stays free of decorative emoji.
-  'phase.instructions': {en:'Instructions', zh:'指导语'},
-  'phase.trials':       {en:'Trials', zh:'正式实验'},
-  'phase.feedback':     {en:'Feedback', zh:'反馈'},
-  'phase.trials_count': {en:' trials', zh:' 个试次'},
-  'phase.empty_trial':  {en:'Empty Trial', zh:'Empty Trial'},
-  'phase.drop_comp':    {en:'Drop component', zh:'拖入组件'},
-  'phase.add_trial':    {en:'+ Add Trial', zh:'+ 添加试次'},
+  'block.instructions': {en:'Instructions', zh:'指导语'},
+  'block.trials':       {en:'Trials', zh:'正式实验'},
+  'block.feedback':     {en:'Feedback', zh:'反馈'},
+  'block.trials_count': {en:' trials', zh:' 个试次'},
+  'block.empty_trial':  {en:'Empty Trial', zh:'Empty Trial'},
+  'block.drop_comp':    {en:'Drop component', zh:'拖入组件'},
+  'block.add_trial':    {en:'+ Add Trial', zh:'+ 添加试次'},
   // --- AI dialog ---
   'ai.title':         {en:'AI Generate Experiment', zh:'AI 生成实验'},
   'ai.subtitle':      {en:'Describe your experiment in natural language', zh:'用自然语言描述，AI 自动构建实验结构'},
@@ -505,7 +505,7 @@ var _i18n = {
   'ai.apikey_hint':   {en:'Stored locally in your browser', zh:'保存在本地浏览器'},
   'ai.provider_label':{en:'🤖 Provider', zh:'🤖 模型提供商'},
   'ai.prompt_label':  {en:'📝 Experiment Description', zh:'📝 实验描述'},
-  'ai.prompt_placeholder': {en:'e.g.:\\nDesign a Stroop color-word interference experiment with instructions, 48 trials (red/blue/green text, congruent and incongruent conditions), and a feedback phase.\\n\\nOr:\\nDesign a Simon effect experiment with instructions, 60 trials (red/green shapes randomly appearing left/right, keyboard response), and feedback.', zh:'例如：\n设计一个Stroop色词干扰实验，包含指导语、48个试次（红/蓝/绿文字，颜色和字义一致或不一致）、反馈阶段\n\n或：\n设计一个Simon效应实验，包含指导语、60个试次（红绿方块随机左右出现，按键反应）、反馈阶段'},
+  'ai.prompt_placeholder': {en:'e.g.:\\nDesign a Stroop color-word interference experiment with instructions, 48 trials (red/blue/green text, congruent and incongruent conditions), and a feedback block.\\n\\nOr:\\nDesign a Simon effect experiment with instructions, 60 trials (red/green shapes randomly appearing left/right, keyboard response), and feedback.', zh:'例如：\n设计一个Stroop色词干扰实验，包含指导语、48个试次（红/蓝/绿文字，颜色和字义一致或不一致）、反馈阶段\n\n或：\n设计一个Simon效应实验，包含指导语、60个试次（红绿方块随机左右出现，按键反应）、反馈阶段'},
   'ai.btn.optimize':  {en:'🔧 Optimize Prompt', zh:'🔧 优化提示词'},
   'ai.btn.generate':  {en:'✨ Generate Experiment', zh:'✨ 生成实验'},
   'ai.btn.cancel':    {en:'Cancel', zh:'取消'},
@@ -522,7 +522,7 @@ var _i18n = {
   'misc.delete':         {en:'✕ Delete', zh:'✕ 删除'},
   'misc.version_latest': {en:'Latest', zh:'Latest'},
   'misc.version_restore':{en:'Restore', zh:'Restore'},
-  'misc.phase_delete':   {en:'✕ Delete', zh:'✕ 删除'},
+  'misc.block_delete':   {en:'✕ Delete', zh:'✕ 删除'},
   'misc.drag_hint':      {en:'Drag to reposition · Double-click to reset', zh:'Drag to reposition · Double-click to reset'},
   'misc.close':          {en:'Close', zh:'Close'},
   'misc.component_list': {en:'📋 Component List', zh:'📋 Component List'},
@@ -623,7 +623,7 @@ function _applyI18n() {
       });
 
       var editor = {
-        phases: [],
+        blocks: [],
         selectedTrial: null,
         tc: 0,
         pc: 0,
@@ -649,7 +649,7 @@ function _applyI18n() {
         dataPipe: null,
       };
 
-      // Phase/device labels: storage keeps plain text so that generated jsPsych
+      // Block/device labels: storage keeps plain text so that generated jsPsych
       // code carries no decorative emoji. The UI re-adds an icon at render time.
       // _stripEmoji also cleans legacy data saved before this convention.
       function _stripEmoji(s) {
@@ -658,54 +658,54 @@ function _applyI18n() {
           '',
         );
       }
-      // Turn a phase name into the prefix of its generated variable names, so
+      // Turn a block name into the prefix of its generated variable names, so
       // "Trials" becomes `trials_trial_1` and `trials_timeline`. The name is the
       // user's, so the slug has to survive two things the old type-based one
       // could not: a name that is not ASCII (an identifier cannot be, even
       // though the header comment above it keeps the name as typed) and a name
-      // that repeats (two phases both called "Trials" would otherwise declare
+      // that repeats (two blocks both called "Trials" would otherwise declare
       // `var trials_trial_1` twice, and the second would silently win).
       function _slugify(name) {
         var s = _stripEmoji(String(name == null ? '' : name))
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '_')
           .replace(/^_+|_+$/g, '');
-        if (!s) return 'phase';
+        if (!s) return 'block';
         // A leading digit is legal in neither a slug nor a JS identifier.
-        return /^[0-9]/.test(s) ? 'phase_' + s : s;
+        return /^[0-9]/.test(s) ? 'block_' + s : s;
       }
       // "Trials", "Trials" → "trials", "trials_2". `seen` is the caller's set,
-      // so uniqueness holds across the whole experiment, not within one phase.
+      // so uniqueness holds across the whole experiment, not within one block.
       function _uniqueSlug(base, seen) {
         var s = base, n = 2;
         while (seen[s]) s = base + '_' + n++;
         seen[s] = true;
         return s;
       }
-      function _phaseLabel(ph) {
+      function _blockLabel(ph) {
         return _stripEmoji(ph.name);
       }
-      // What the phase is called where it matters — in the code. Asked of the
+      // What the block is called where it matters — in the code. Asked of the
       // compiler, which knows the de-duplicated name a repeated one gets.
-      function _phaseRenameTitle(ph, mode) {
+      function _blockRenameTitle(ph, mode) {
         var base = 'Double-click to rename.';
         if (!mode || !mode.slug) return base;
-        return base + ' In the generated code this phase is \u2018' + mode.slug +
+        return base + ' In the generated code this block is \u2018' + mode.slug +
           '\u2019: its trials are ' + mode.slug + '_trial_1, ' + mode.slug +
           '_trial_2 \u2026 and the node it pushes is ' + mode.slug + '_timeline.';
       }
 
-      // Renaming happens on the card, where the phase is. The code follows on
+      // Renaming happens on the card, where the block is. The code follows on
       // its own: every generated name is derived from this one string.
-      function _startPhaseRename(el) {
-        var pid = el.getAttribute('data-phase');
-        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+      function _startBlockRename(el) {
+        var pid = el.getAttribute('data-block');
+        var ph = editor.blocks.filter(function (p) { return p.id === pid; })[0];
         if (!ph) return;
         var was = _stripEmoji(ph.name);
         var input = document.createElement('input');
         input.type = 'text';
         input.value = was;
-        input.className = 'phase-name-input';
+        input.className = 'block-name-input';
         el.replaceWith(input);
         input.focus();
         input.select();
@@ -806,14 +806,14 @@ function _applyI18n() {
         if (hi && document.activeElement !== hi) hi.value = d.h;
       }
 
-      // A phase is a name and a list of trials. It used to carry a `type` as
+      // A block is a name and a list of trials. It used to carry a `type` as
       // well — instructions / trials / feedback — which chose the card's icon
       // and colour; with the toolbar down to one button that distinction had
       // nowhere to be made and nothing to mean, so it is gone. The name is what
-      // the generated code uses; nothing else about a phase is in the file.
-      function addPhase(name) {
+      // the generated code uses; nothing else about a block is in the file.
+      function addBlock(name) {
         saveState();
-        editor.phases.push({
+        editor.blocks.push({
           id: 'ph' + ++editor.pc,
           name: name || 'Trials',
           timeline: [],
@@ -824,7 +824,7 @@ function _applyI18n() {
 
       function addTrial(pid) {
         var t = {id: 't' + ++editor.tc, components: []};
-        var ph = editor.phases.find((p) => p.id === pid);
+        var ph = editor.blocks.find((p) => p.id === pid);
         if (ph) {
           saveState();
           ph.timeline.push(t);
@@ -845,21 +845,21 @@ function _applyI18n() {
       }
       function removeTrial(id) {
         saveState();
-        editor.phases.forEach((p) => {
+        editor.blocks.forEach((p) => {
           p.timeline = p.timeline.filter((t) => t.id !== id);
         });
         if (editor.selectedTrial === id) editor.selectedTrial = null;
         renderAll();
       }
-      function deletePhase(pid) {
-        if (!confirm('Delete this phase and all its trials?')) return;
+      function deleteBlock(pid) {
+        if (!confirm('Delete this block and all its trials?')) return;
         saveState();
-        editor.phases = editor.phases.filter((p) => p.id !== pid);
-        if (editor.phases.length === 0) document.getElementById('empty-state').style.display = 'block';
+        editor.blocks = editor.blocks.filter((p) => p.id !== pid);
+        if (editor.blocks.length === 0) document.getElementById('empty-state').style.display = 'block';
         renderAll();
       }
       function findTrial(id) {
-        for (var p of editor.phases) for (var t of p.timeline) if (t.id === id) return t;
+        for (var p of editor.blocks) for (var t of p.timeline) if (t.id === id) return t;
         return null;
       }
 
@@ -1130,7 +1130,7 @@ var _compDefaults = {
                       : hasOwner || (cat === 'r' &&
                           t.components.some(function (x) { return x.cat === 'r'; }))) {
           var ph = null;
-          editor.phases.forEach(function (p) {
+          editor.blocks.forEach(function (p) {
             if (p.timeline.indexOf(t) >= 0) ph = p;
           });
           if (ph) {
@@ -1400,7 +1400,7 @@ var _compDefaults = {
         editor._asTimer = setTimeout(function () {
           try {
             var data = {
-              phases: editor.phases,
+              blocks: editor.blocks,
               sel: editor.selectedTrial,
               sc: editor.selComp,
               tc: editor.tc,
@@ -1432,7 +1432,7 @@ var _compDefaults = {
         //
         // Taking the default away from mousedown on buttons stops the focus and
         // the click still fires. Only buttons: the drag handles are spans, so
-        // dragging a phase or a component is untouched. Assigned rather than
+        // dragging a block or a component is untouched. Assigned rather than
         // added, so repeated renders do not stack handlers.
         fc.onmousedown = function (e) {
           if (e.target && e.target.closest && e.target.closest('button')) {
@@ -1445,35 +1445,35 @@ var _compDefaults = {
         // to 0. Carry the position across the rebuild as well.
         var scroller = document.getElementById('canvas-scroll');
         var keepTop = scroller ? scroller.scrollTop : 0;
-        if (editor.phases.length === 0) {
+        if (editor.blocks.length === 0) {
           es.style.display = 'block';
-          fc.querySelectorAll('.phase-card,.phase-arrow,.flow-row,.add-node-btn').forEach((el) => {
+          fc.querySelectorAll('.block-card,.block-arrow,.flow-row,.add-node-btn').forEach((el) => {
             if (!el.classList.contains('empty-state')) el.remove();
           });
           return;
         }
         es.style.display = 'none';
         // Remove old rendered nodes (keep the empty-state placeholder)
-        fc.querySelectorAll('.phase-card,.phase-arrow').forEach((el) => el.remove());
+        fc.querySelectorAll('.block-card,.block-arrow').forEach((el) => el.remove());
         fc.querySelectorAll('.flow-row').forEach((el) => el.remove());
 
-        var _modes = phaseModes();
-        editor.phases.forEach(function (ph, i) {
-          // Presentation steps are numbered across the whole phase, not per trial:
-          // a phase is one block of the experiment, so its screens read as a single
+        var _modes = blockModes();
+        editor.blocks.forEach(function (ph, i) {
+          // Presentation steps are numbered across the whole block, not per trial:
+          // a block is one block of the experiment, so its screens read as a single
           // sequence instead of every trial restarting at 1.
           //
-          // Except when the phase's trials are one procedure repeated — then they
+          // Except when the block's trials are one procedure repeated — then they
           // are conditions, not a sequence, so each runs the same steps and the
-          // numbering restarts. Counted straight across, a 4-condition phase would
+          // numbering restarts. Counted straight across, a 4-condition block would
           // claim 12 consecutive screens.
           var _mode = _modes[ph.id];
           var _perTrial = !!(_mode && _mode.factored);
           var _stepNo = 0;
-          // Phase card wrapper
+          // Block card wrapper
           var card = document.createElement('div');
-          card.className = 'phase-card';
-          card.setAttribute('data-phase-idx', i);
+          card.className = 'block-card';
+          card.setAttribute('data-block-idx', i);
           card.ondragover = function (e) {
             e.preventDefault();
             card.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.2)';
@@ -1484,12 +1484,12 @@ var _compDefaults = {
           card.ondrop = function (e) {
             e.preventDefault();
             card.style.boxShadow = '';
-            var raw = e.dataTransfer.getData('phaseIdx');
+            var raw = e.dataTransfer.getData('blockIdx');
             if (raw) {
               var from = parseInt(raw);
               if (!isNaN(from)) {
-                var item = editor.phases.splice(from, 1)[0];
-                editor.phases.splice(i, 0, item);
+                var item = editor.blocks.splice(from, 1)[0];
+                editor.blocks.splice(i, 0, item);
                 renderAll();
                 return;
               }
@@ -1512,37 +1512,37 @@ var _compDefaults = {
 
           // Card header
           var hdr = document.createElement('div');
-          hdr.className = 'phase-card-header';
-          // The dot has to cover every setting the dialog holds. A phase whose
+          hdr.className = 'block-card-header';
+          // The dot has to cover every setting the dialog holds. A block whose
           // only setting is a loop or a condition would otherwise look untouched
           // — and a feature that is reachable but not visible may as well not be
           // there.
           var configured = !!(ph.sample || Number(ph.repetitions) > 1 || ph.loop || ph.cond);
           hdr.innerHTML =
-            '<span class="drag-handle" draggable="true" title="Drag to reorder phase">⋮⋮</span><span class="phase-index">' +
+            '<span class="drag-handle" draggable="true" title="Drag to reorder block">⋮⋮</span><span class="block-index">' +
             (i + 1) +
-            '</span><span class="phase-name" data-phase="' + ph.id + '" title="' +
-            _phaseRenameTitle(ph, _mode) + '">' +
-            _phaseLabel(ph) +
-            '</span><span class="phase-mode' + (_mode && _mode.factored ? ' factored' : '') +
-            '" title="' + _phaseModeTitle(_mode) + '">' +
-            _phaseModeLabel(_mode) +
-            '</span><button data-phase="' +
+            '</span><span class="block-name" data-block="' + ph.id + '" title="' +
+            _blockRenameTitle(ph, _mode) + '">' +
+            _blockLabel(ph) +
+            '</span><span class="block-mode' + (_mode && _mode.factored ? ' factored' : '') +
+            '" title="' + _blockModeTitle(_mode) + '">' +
+            _blockModeLabel(_mode) +
+            '</span><button data-block="' +
             ph.id +
-            '" class="phase-settings-btn' +
+            '" class="block-settings-btn' +
             (configured ? ' configured' : '') +
             '" style="margin-left:auto" title="Repetitions, sampling, randomisation and ' +
-            'conditions for this phase' +
+            'conditions for this block' +
             (configured ? ' — configured' : '') + '">Settings' +
-            (configured ? '<span class="phase-settings-dot"></span>' : '') +
-            '</button><button data-phase="' +
+            (configured ? '<span class="block-settings-dot"></span>' : '') +
+            '</button><button data-block="' +
             ph.id +
-            '" class="phase-delete-btn" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;padding:2px 8px;border-radius:4px" title="Delete this phase">✕ Delete</button>';
+            '" class="block-delete-btn" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;opacity:0.4;padding:2px 8px;border-radius:4px" title="Delete this block">✕ Delete</button>';
           card.appendChild(hdr);
 
           // Card body
           var cardBody = document.createElement('div');
-          cardBody.className = 'phase-card-body';
+          cardBody.className = 'block-card-body';
 
           if (ph.timeline.length === 0) {
             var emptyRow = document.createElement('div');
@@ -1583,7 +1583,7 @@ var _compDefaults = {
             cardBody.appendChild(emptyRow);
           }
           ph.timeline.forEach(function (t) {
-            // Each condition of a factored phase runs the same procedure, so its
+            // Each condition of a factored block runs the same procedure, so its
             // steps are numbered from 1 again rather than continuing the count.
             if (_perTrial) _stepNo = 0;
             var row = document.createElement('div');
@@ -1795,7 +1795,7 @@ var _compDefaults = {
                 _stepNo++;
                 num.textContent = _stepNo;
                 num.title = 'Presentation step ' + _stepNo +
-                  (_perTrial ? ' of this condition' : ' of this phase') +
+                  (_perTrial ? ' of this condition' : ' of this block') +
                   ' \u00b7 click for trial settings' +
                   (step.simul && step.comps.length > 1
                     ? ' — ' + step.comps.length + ' components shown together on one screen'
@@ -1929,7 +1929,7 @@ var _compDefaults = {
             // it Trial Settings was a one-way door: the only thing wired to
             // selectTrial() was the Empty Trial placeholder, which disappears the
             // moment a trial has anything in it.
-            // stopPropagation: the phase card has its own click handler that
+            // stopPropagation: the block card has its own click handler that
             // selects its first trial's first component, and it is an ancestor of
             // this row. Without this the card would overwrite what the click just
             // selected — the panel would show Trial Settings while the state said
@@ -1956,42 +1956,42 @@ var _compDefaults = {
           card.appendChild(cardBody);
           fc.appendChild(card);
 
-          // Arrow between phases
-          if (i < editor.phases.length - 1) {
+          // Arrow between blocks
+          if (i < editor.blocks.length - 1) {
             var arrow = document.createElement('div');
-            arrow.className = 'phase-arrow';
+            arrow.className = 'block-arrow';
             arrow.textContent = '↓';
             fc.appendChild(arrow);
           }
         });
 
         // Re-attach handlers after DOM rebuild
-        document.querySelectorAll('.phase-delete-btn').forEach(function (btn) {
+        document.querySelectorAll('.block-delete-btn').forEach(function (btn) {
           btn.onclick = function (e) {
             e.stopPropagation();
-            deletePhase(this.getAttribute('data-phase'));
+            deleteBlock(this.getAttribute('data-block'));
           };
         });
-        document.querySelectorAll('.phase-name').forEach(function (el) {
+        document.querySelectorAll('.block-name').forEach(function (el) {
           el.ondblclick = function (e) {
             e.stopPropagation();
-            _startPhaseRename(this);
+            _startBlockRename(this);
           };
         });
-        document.querySelectorAll('.phase-settings-btn').forEach(function (btn) {
+        document.querySelectorAll('.block-settings-btn').forEach(function (btn) {
           btn.onclick = function (e) {
             e.stopPropagation();
-            showPhaseSettings(this.getAttribute('data-phase'));
+            showBlockSettings(this.getAttribute('data-block'));
           };
         });
         document.querySelectorAll('.drag-handle').forEach(function (handle) {
           handle.ondragstart = function (e) {
-            var pg = this.closest('.phase-card');
-            e.dataTransfer.setData('phaseIdx', pg.getAttribute('data-phase-idx'));
+            var pg = this.closest('.block-card');
+            e.dataTransfer.setData('blockIdx', pg.getAttribute('data-block-idx'));
             pg.style.opacity = '0.4';
           };
           handle.ondragend = function (e) {
-            this.closest('.phase-card').style.opacity = '1';
+            this.closest('.block-card').style.opacity = '1';
           };
         });
         // Restoring after the rebuild, not instead of it. A delete can leave
@@ -2302,9 +2302,9 @@ var _compDefaults = {
         saveState();
         autoSave();
       }
-      // The phase dialog is an overlay, so renderAll() does not repaint it.
+      // The block dialog is an overlay, so renderAll() does not repaint it.
       // These handlers need the dialog's own repaint, which it registers here.
-      var _repaintPhaseSettings = null;
+      var _repaintBlockSettings = null;
       // Both custom-parameter controls take an EXPRESSION, because the value is
       // emitted as `key: <text>`. The mistake people make is a statement — an
       // `if (…) { … }`, a bare `return` — and "Unexpected token 'if'" does not
@@ -2343,7 +2343,7 @@ var _compDefaults = {
       }
 
       // --- loop_function / conditional_function ---
-      // The two node parameters that take a function, built from the phase's
+      // The two node parameters that take a function, built from the block's
       // settings rather than written by hand. They differ in a way the shared
       // controls have to hide: loop_function is handed the data of the CURRENT
       // round — jsPsych resets it on every iteration — and returns true to go
@@ -2351,7 +2351,7 @@ var _compDefaults = {
       // reads the whole experiment's data. So one "field is value" wording
       // becomes two accessors, and only the loop's answer is negated.
       //
-      // These live out here rather than beside _phaseNodeParams (which calls
+      // These live out here rather than beside _blockNodeParams (which calls
       // them) because the settings dialog validates with them before writing
       // anything, and that dialog is not inside the compiler.
       var _COND_OPS = {
@@ -2410,23 +2410,23 @@ var _compDefaults = {
       }
 
       function _addNodeCustom(pid) {
-        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+        var ph = editor.blocks.filter(function (p) { return p.id === pid; })[0];
         if (!ph) return;
         saveState();
         if (!Array.isArray(ph.custom)) ph.custom = [];
         ph.custom.push({name: '', src: ''});
         autoSave();
-        if (_repaintPhaseSettings) _repaintPhaseSettings();
+        if (_repaintBlockSettings) _repaintBlockSettings();
       }
       function _setNodeCustom(pid, i, field, value) {
-        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+        var ph = editor.blocks.filter(function (p) { return p.id === pid; })[0];
         if (!ph || !Array.isArray(ph.custom) || !ph.custom[i]) return;
         var row = ph.custom[i];
         if (field === 'name') {
           var v = String(value).trim();
           if (v && !/^[A-Za-z_$][\w$]*$/.test(v)) {
             alert('A parameter name has to be a JavaScript identifier:\n\n' + value);
-            if (_repaintPhaseSettings) _repaintPhaseSettings();
+            if (_repaintBlockSettings) _repaintBlockSettings();
             return;
           }
           row.name = v;
@@ -2439,7 +2439,7 @@ var _compDefaults = {
             var err = _jsExpressionError(src, row.name || 'this parameter');
             if (err) {
               alert(err);
-              if (_repaintPhaseSettings) _repaintPhaseSettings();
+              if (_repaintBlockSettings) _repaintBlockSettings();
               return;
             }
           }
@@ -2449,13 +2449,13 @@ var _compDefaults = {
         autoSave();
       }
       function _removeNodeCustom(pid, i) {
-        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+        var ph = editor.blocks.filter(function (p) { return p.id === pid; })[0];
         if (!ph || !Array.isArray(ph.custom)) return;
         saveState();
         ph.custom.splice(i, 1);
         if (!ph.custom.length) delete ph.custom;
         autoSave();
-        if (_repaintPhaseSettings) _repaintPhaseSettings();
+        if (_repaintBlockSettings) _repaintBlockSettings();
       }
 
       function _removeCustom(tid, i) {
@@ -2608,8 +2608,8 @@ var _compDefaults = {
             slider_width: 'Slider width in px. 0 = match the widest element on screen.',
             require_movement: 'true = the slider must be moved before the button can be clicked.',
           };
-          // For branch targetFail: build dropdown from same-phase trial IDs
-          var currentPhase = editor.phases.find(function (p) {
+          // For branch targetFail: build dropdown from same-block trial IDs
+          var currentBlock = editor.blocks.find(function (p) {
             return p.timeline.some(function (tr) {
               return tr.id === t.id;
             });
@@ -2696,13 +2696,13 @@ var _compDefaults = {
               if (c.condition === 'variable') {
                 h += '<select onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'targetFail\',this.value)">';
                 h += '<option value=""' + (v ? '' : ' selected') + '>Retry current trial</option>';
-                editor.phases.forEach(function (ph2, pi2) { ph2.timeline.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _phaseLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
+                editor.blocks.forEach(function (ph2, pi2) { ph2.timeline.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _blockLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
                 h += '</select>';
               }
               else {
                 h += '<select onchange="updateComponent(\'' + t.id + '\',\'' + c.id + '\',\'targetFail\',this.value)">';
                 h += '<option value=""' + (v ? '' : ' selected') + '>Retry current trial</option>';
-                editor.phases.forEach(function (ph2, pi2) { ph2.timeline.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _phaseLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
+                editor.blocks.forEach(function (ph2, pi2) { ph2.timeline.forEach(function (tr, ti2) { if (tr.id !== t.id) h += '<option value="' + tr.id + '"' + (v === tr.id ? ' selected' : '') + '>' + _blockLabel(ph2) + ' · Trial ' + (ti2 + 1) + '</option>'; }); });
                 h += '</select>';
               }
               h += '<div style="font-size:0.6rem;color:var(--text2);flex-basis:100%;margin-top:2px">' + failHint + '</div>';
@@ -3247,7 +3247,7 @@ var _compDefaults = {
           return;
         }
         var ph = null;
-        editor.phases.forEach(function (p) {
+        editor.blocks.forEach(function (p) {
           p.timeline.forEach(function (tr) {
             if (tr.id === t.id) ph = p;
           });
@@ -3289,7 +3289,7 @@ var _compDefaults = {
         if (ph)
           h +=
             '<div style="font-size:0.5rem;color:var(--text2);text-align:center;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;opacity:0.7">' +
-            _phaseLabel(ph) +
+            _blockLabel(ph) +
             '</div>';
         h +=
           '<div style="background:' +
@@ -3354,7 +3354,7 @@ var _compDefaults = {
         if (!t) return;
         var dev = editor.device || {w: 1280, h: 720};
         var ph = null;
-        editor.phases.forEach(function (p) {
+        editor.blocks.forEach(function (p) {
           if (p.timeline.some(function (x) { return x.id === t.id; })) ph = p;
         });
 
@@ -3372,7 +3372,7 @@ var _compDefaults = {
         h += '<div style="display:flex;align-items:center;gap:10px;padding:12px 20px;' +
              'border-bottom:1px solid var(--border);flex-shrink:0">';
         h += '<span style="font-weight:800;font-size:0.9rem">Layout Preview</span>';
-        if (ph) h += '<span style="font-size:0.7rem;color:var(--text2)">' + _phaseLabel(ph) + '</span>';
+        if (ph) h += '<span style="font-size:0.7rem;color:var(--text2)">' + _blockLabel(ph) + '</span>';
         h += '<span style="font-size:0.62rem;color:var(--text2)">' +
              _deviceLabel(dev) + ' \u00b7 flow layout \u00b7 same HTML the jsPsych stimulus uses</span>';
         // The zoom control. A device box is drawn at its real pixel size, so a
@@ -3475,8 +3475,8 @@ var _compDefaults = {
       // the publish button produce, opened in its own tab. Nothing is re-implemented
       // here, so the preview cannot drift from what a participant actually gets.
       function previewExperiment() {
-        if (editor.phases.length === 0) {
-          alert('Please add phases and trials first');
+        if (editor.blocks.length === 0) {
+          alert('Please add blocks and trials first');
           return;
         }
         var html;
@@ -3505,7 +3505,7 @@ var _compDefaults = {
         editor.history.push(
           JSON.parse(
             JSON.stringify({
-              phases: editor.phases,
+              blocks: editor.blocks,
               sel: editor.selectedTrial,
               sc: editor.selComp,
               tc: editor.tc,
@@ -3520,23 +3520,34 @@ var _compDefaults = {
       }
       // Bring experiments saved before the jsPsych alignment pass forward. Old
       // data lives in localStorage, so it cannot simply be assumed away.
+      // The list of blocks, from an object that may have been written before
+      // they were called that. Everything persisted says `phases` in an older
+      // project, an older saved version, or an older model answer, and reading
+      // the old name as well as the new one is a line that means nothing
+      // written before the rename is lost.
+      function _adoptBlocks(src) {
+        if (!src) return [];
+        var list = src.blocks || src.phases;
+        return Array.isArray(list) ? list : [];
+      }
+
       function migratePos() {
         var droppedDelays = 0;
         var droppedClicks = 0;
         var droppedLogic = 0;
-        // The per-phase array is `timeline` now — the same name jsPsych uses for
+        // The per-block array is `timeline` now — the same name jsPsych uses for
         // a node's children, so the later step to a nested tree is about nesting
         // rather than about renaming.
-        editor.phases.forEach(function (p) {
+        editor.blocks.forEach(function (p) {
           if (!Array.isArray(p.timeline)) p.timeline = Array.isArray(p.trials) ? p.trials : [];
           delete p.trials;
-          // `type` and `color` categorised a phase for the card's icon and
+          // `type` and `color` categorised a block for the card's icon and
           // badge. There is one category now, so they are dropped rather than
           // left behind for the next reader to wonder about.
           delete p.type;
           delete p.color;
         });
-        editor.phases.forEach(function (p) {
+        editor.blocks.forEach(function (p) {
           p.timeline.forEach(function (t) {
             // loop / randomize / branch / variable are gone: ExpVis no longer
             // carries node-level parameters at all, so a trial runs once and the
@@ -3738,7 +3749,7 @@ var _compDefaults = {
         if (!s) return;
         // Deep copy: assigning the snapshot by reference means the next edit
         // mutates the history entry too, so redo/undo drifts.
-        editor.phases = JSON.parse(JSON.stringify(s.phases));
+        editor.blocks = JSON.parse(JSON.stringify(_adoptBlocks(s)));
         migratePos();
         editor.selectedTrial = s.sel;
         editor.selComp = s.sc;
@@ -3752,7 +3763,7 @@ var _compDefaults = {
         }
       }
       function resetEditor() {
-        editor.phases = [];
+        editor.blocks = [];
         editor.selectedTrial = null;
         editor.selComp = null;
         editor.tc = 0;
@@ -3783,9 +3794,9 @@ var _compDefaults = {
           var c = trial.components[idx];
           Object.keys(props).forEach(function (k) { c[k] = props[k]; });
         }
-        function addPhaseWith(name, build) {
-          addPhase(name);
-          var ph = editor.phases[editor.phases.length - 1];
+        function addBlockWith(name, build) {
+          addBlock(name);
+          var ph = editor.blocks[editor.blocks.length - 1];
           if (build) build(ph);
           return ph;
         }
@@ -3824,14 +3835,14 @@ var _compDefaults = {
 
         if (name === 'stroop') {
           // The condition table. One trial per condition, the SAME shape each
-          // time, and the phase settings do the repeating and the shuffling —
+          // time, and the block settings do the repeating and the shuffling —
           // which is what turns the trials into a procedure plus a table in
           // the exported code.
-          addPhaseWith('Instructions', instructions(
+          addBlockWith('Instructions', instructions(
             'Stroop task\n\n' +
             'A colour word appears. Answer the INK COLOUR and ignore what the word says.\n\n' +
             'Red \u2192 A     Blue \u2192 L     Green \u2192 K'));
-          addPhaseWith('Trials', function (ph) {
+          addBlockWith('Trials', function (ph) {
             var conds = [
               {word: 'RED',   colour: '#3b82f6', key: 'l'},
               {word: 'BLUE',  colour: '#22c55e', key: 'k'},
@@ -3849,7 +3860,7 @@ var _compDefaults = {
             ph.repetitions = 48;
             ph.randomize_order = true;
           });
-          addPhaseWith('Done', ending('Thank you — that is the end of the task.'));
+          addBlockWith('Done', ending('Thank you — that is the end of the task.'));
           return finishTemplate();
         }
 
@@ -3857,12 +3868,12 @@ var _compDefaults = {
           // The same condition table, plus a message the plugin shows itself.
           // Filling correct_text switches the trial onto jsPsych's categorize
           // plugin, which is why the correct key has to be exactly one.
-          addPhaseWith('Instructions', instructions(
+          addBlockWith('Instructions', instructions(
             'Simon task\n\n' +
             'A circle appears on the left or the right. Answer the COLOUR and ' +
             'ignore the side it is on.\n\n' +
             'Red \u2192 A     Green \u2192 L'));
-          addPhaseWith('Trials', function (ph) {
+          addBlockWith('Trials', function (ph) {
             [
               {colour: '#ef4444', position: 'left',  key: 'a'},
               {colour: '#ef4444', position: 'right', key: 'a'},
@@ -3881,19 +3892,19 @@ var _compDefaults = {
             ph.repetitions = 40;
             ph.randomize_order = true;
           });
-          addPhaseWith('Done', ending('Thank you — that is the end of the task.'));
+          addBlockWith('Done', ending('Thank you — that is the end of the task.'));
           return finishTemplate();
         }
 
         if (name === 'flanker') {
-          // Sampling: the phase holds every condition, and the settings draw a
+          // Sampling: the block holds every condition, and the settings draw a
           // subset of them per repetition instead of running all of them.
-          addPhaseWith('Instructions', instructions(
+          addBlockWith('Instructions', instructions(
             'Flanker task\n\n' +
             'Five arrows appear. Answer the direction of the MIDDLE one and ' +
             'ignore the others.\n\n' +
             'Left \u2192 F     Right \u2192 J'));
-          addPhaseWith('Trials', function (ph) {
+          addBlockWith('Trials', function (ph) {
             [
               {row: '<<<<<', colour: '#333333', key: 'f'},
               {row: '>>>>>', colour: '#333333', key: 'j'},
@@ -3912,7 +3923,7 @@ var _compDefaults = {
             ph.sample = {type: 'without-replacement', size: 2};
             ph.repetitions = 40;
           });
-          addPhaseWith('Done', ending('Thank you — that is the end of the task.'));
+          addBlockWith('Done', ending('Thank you — that is the end of the task.'));
           return finishTemplate();
         }
 
@@ -3920,8 +3931,8 @@ var _compDefaults = {
           // Where a run goes, decided by what the participant just did.
           //
           // There is no branch component. This is jsPsych's
-          // `conditional_function` on a phase: the phase runs only if the
-          // condition holds. Two phases with opposite conditions are therefore
+          // `conditional_function` on a block: the block runs only if the
+          // condition holds. Two blocks with opposite conditions are therefore
           // a two-way branch.
           //
           // The two conditions are written `is true` and `is false`, NOT
@@ -3930,19 +3941,19 @@ var _compDefaults = {
           // own trial — and that one has no correct key, so its `correct` is
           // undefined. `undefined !== true` is true, so the negated spelling
           // lets both branches through.
-          addPhaseWith('Instructions', instructions(
+          addBlockWith('Instructions', instructions(
             'Consent\n\n' +
             'This demonstrates a run that goes one of two ways.\n\n' +
             'Press Y if you agree to take part, N if you do not. ' +
             'The rest of the study depends on which you press.'));
-          addPhaseWith('Question', function (ph) {
+          addBlockWith('Question', function (ph) {
             var t = trialIn(ph.id);
             addComponent(t.id, 'text', 's');
             addComponent(t.id, 'keyboard', 'r');
             sc(t, 0, {content: 'Do you agree to take part?', fontSize: 30});
             sc(t, 1, {choices: ['y', 'n'], correctKey: 'y', prompt: 'Y or N'});
           });
-          addPhaseWith('Agreed', function (ph) {
+          addBlockWith('Agreed', function (ph) {
             var t = trialIn(ph.id);
             addComponent(t.id, 'text', 's');
             addComponent(t.id, 'button', 'r');
@@ -3951,7 +3962,7 @@ var _compDefaults = {
             sc(t, 1, {choices: ['Continue']});
             ph.cond = {field: 'correct', op: 'is', value: 'true'};
           });
-          addPhaseWith('Declined', function (ph) {
+          addBlockWith('Declined', function (ph) {
             var t = trialIn(ph.id);
             addComponent(t.id, 'text', 's');
             addComponent(t.id, 'button', 'r');
@@ -3966,10 +3977,10 @@ var _compDefaults = {
         if (name === 'survey') {
           // The survey family, and the rule that shapes every trial: one screen,
           // one response component. Three question types is three trials.
-          addPhaseWith('Instructions', instructions(
+          addBlockWith('Instructions', instructions(
             'Questionnaire\n\n' +
             'Three short questions, one screen each.'));
-          addPhaseWith('Questions', function (ph) {
+          addBlockWith('Questions', function (ph) {
             var t1 = trialIn(ph.id);
             addComponent(t1.id, 'likert', 'r');
             sc(t1, 0, {
@@ -4026,14 +4037,14 @@ var _compDefaults = {
         // build with the bytes written in. The exported file and the published
         // bundle both use paths — the same compiler, the same experiment.
         var _inlineAssets = !!opts.inlineAssets;
-        if (editor.phases.length === 0) {
-          return { code: '// No experiment created yet\n', usedPlugins: {}, phases: [],
+        if (editor.blocks.length === 0) {
+          return { code: '// No experiment created yet\n', usedPlugins: {}, blocks: [],
                    assets: [] };
         }
-        // What was decided about each phase — whether its trials turned out to
+        // What was decided about each block — whether its trials turned out to
         // be one procedure with different values. Returned so the canvas can
         // report the compiler's actual decision instead of forming its own.
-        var _phaseModes = [];
+        var _blockModes = [];
         var dev = editor.device || {w: 1280, h: 720};
         // Collect jsPsych plugins actually used by this experiment, so the
         // generated HTML only loads what it needs.
@@ -4355,7 +4366,7 @@ var _compDefaults = {
             'so it is not in the timeline';
         }
 
-        // What makes two of a phase's trials the same procedure. Everything
+        // What makes two of a block's trials the same procedure. Everything
         // except the values of the properties: the shape of the object, the
         // properties it has, in order, and at what nesting they sit.
         function _trialSignature(part) {
@@ -4373,19 +4384,19 @@ var _compDefaults = {
           ]);
         }
 
-        // A phase becomes one procedure plus a table of values when — and only
+        // A block becomes one procedure plus a table of values when — and only
         // when — its trials are that. jsPsych's timeline variables repeat one
         // procedure; they cannot describe a set of trials that are structurally
-        // different from each other. So a phase whose trials differ in shape, or
+        // different from each other. So a block whose trials differ in shape, or
         // that holds a single trial, or that is empty, is emitted as plain
         // trials instead. Returns null in all of those cases.
-        function _factorPhase(parts) {
+        function _factorBlock(parts) {
           if (parts.length < 2) return null;
           if (parts.some(function (p) { return p.kind !== 'trial'; })) return null;
           var sig = _trialSignature(parts[0]);
           if (!parts.every(function (p) { return _trialSignature(p) === sig; })) return null;
 
-          // The properties that actually differ. A phase whose trials differ in
+          // The properties that actually differ. A block whose trials differ in
           // nothing has no table to build, and is emitted as plain trials.
           var varies = [];
           parts[0].slots.forEach(function (s, i) {
@@ -4473,20 +4484,20 @@ var _compDefaults = {
           };
         }
 
-        // The node-level parameters the phase's settings ask for, under jsPsych's
+        // The node-level parameters the block's settings ask for, under jsPsych's
         // own names and shapes.
         //
         // `sample` and `randomize_order` only mean anything alongside
         // `timeline_variables`: jsPsych's generateTimelineVariableOrder returns
         // [null] before looking at either when there is no table to draw from,
-        // so writing them onto a phase of unrelated trials would emit parameters
-        // that do nothing. They are therefore gated on the phase having factored,
-        // which is the same fact the phase badge shows.
+        // so writing them onto a block of unrelated trials would emit parameters
+        // that do nothing. They are therefore gated on the block having factored,
+        // which is the same fact the block badge shows.
         //
         // `sample.groups` is derived from the trials' own group numbers rather
         // than stored, so there is one answer to which condition is in which
         // group instead of a list that can drift from the trials it indexes.
-        function _phaseNodeParams(ph, factored) {
+        function _blockNodeParams(ph, factored) {
           var out = [];
           var s = ph.sample;
           if (factored && s && s.type) {
@@ -4527,7 +4538,7 @@ var _compDefaults = {
           var reps = Number(ph.repetitions);
           if (reps > 1) out.push('repetitions: ' + Math.round(reps));
           // A loop or a condition belongs to the NODE, and jsPsych reads both
-          // whether or not the phase was factored into a table — unlike sample
+          // whether or not the block was factored into a table — unlike sample
           // and randomize_order above, which mean nothing without one.
           if (ph.loop) out.push('loop_function: ' + _loopFunctionSrc(ph));
           if (ph.cond) out.push('conditional_function: ' + _conditionalFunctionSrc(ph));
@@ -4554,7 +4565,7 @@ var _compDefaults = {
         // (two levels, inside the node). The comma goes on a block's last line
         // unless it is the last block.
         function _timelineProp(blocks) {
-          // The one-line form, when every entry is a bare name: what a phase of
+          // The one-line form, when every entry is a bare name: what a block of
           // plain trials has always produced. Anything else goes multi-line.
           if (blocks.every(function (b) { return b.length === 1; })) {
             var one = '  timeline: [' + blocks.map(function (b) {
@@ -4580,7 +4591,7 @@ var _compDefaults = {
         // `conditional_function` are three different keys. jsPsych nests them
         // — loop_function repeats INSIDE each repetition — so none of them can
         // displace another. This is also what keeps a written `loop_function`
-        // to a single key when the phase settings generate one.
+        // to a single key when the block settings generate one.
         function _applyCustomProps(props, list) {
           if (!Array.isArray(list)) return props;
           var out = props.slice();
@@ -4598,12 +4609,12 @@ var _compDefaults = {
           return out;
         }
 
-        // The phase settings as emitted properties, indented.
+        // The block settings as emitted properties, indented.
         function _nodeParamProps(ph, factored) {
-          return _phaseNodeParams(ph, factored).map(function (p) { return ['  ' + p]; });
+          return _blockNodeParams(ph, factored).map(function (p) { return ['  ' + p]; });
         }
 
-        // One jsPsych node per phase. When the phase's trials are one procedure
+        // One jsPsych node per block. When the block's trials are one procedure
         // with different values, that is what is emitted: a `timeline_variables`
         // table the trials' values were lifted into. Otherwise the trials are
         // declared and collected into the node's `timeline`, which is the shape
@@ -4613,16 +4624,16 @@ var _compDefaults = {
         // parameters runs its children exactly as pushing them one at a time
         // would (same order, same `trial_index`, and the node itself records no
         // data). What the node buys is that the generated code mirrors the
-        // canvas, and that each phase has a named place to add `repetitions` /
+        // canvas, and that each block has a named place to add `repetitions` /
         // `sample` / `conditional_function` by hand.
-        var _phaseSlugs = {};
-        editor.phases.forEach(function (ph, phi) {
-          code += '// ── ' + _stripEmoji(ph.name) + ' (' + (phi + 1) + '/' + editor.phases.length + ') ──\n';
-          var phaseSlug = _uniqueSlug(_slugify(ph.name), _phaseSlugs);
-          // Each trial is compiled into a buffer first, because the phase cannot
+        var _blockSlugs = {};
+        editor.blocks.forEach(function (ph, phi) {
+          code += '// ── ' + _stripEmoji(ph.name) + ' (' + (phi + 1) + '/' + editor.blocks.length + ') ──\n';
+          var blockSlug = _uniqueSlug(_slugify(ph.name), _blockSlugs);
+          // Each trial is compiled into a buffer first, because the block cannot
           // be emitted until it is known whether its trials are one procedure
-          // with different values (see _factorPhase) or just trials.
-          var phaseParts = [];
+          // with different values (see _factorBlock) or just trials.
+          var blockParts = [];
           ph.timeline.forEach(function (t, ti) {
             // The previews render one trial. Compiling just that one — through
             // the same compiler, so the object is the one the export contains —
@@ -4928,9 +4939,9 @@ var _compDefaults = {
                 'categorize plugin scores against exactly one. No feedback is emitted.');
             }
 
-            // Semantic, stable names in the generated code: the phase name plus
-            // the trial's index within that phase.
-            var trialName = phaseSlug + '_trial_' + (ti + 1);
+            // Semantic, stable names in the generated code: the block name plus
+            // the trial's index within that block.
+            var trialName = blockSlug + '_trial_' + (ti + 1);
             // Categorize-image takes the picture as `stimulus` exactly as the image
             // plugins do, so it rides on the same decision; anything else — including
             // an audio or video trial — takes the rendered screen as HTML.
@@ -4982,11 +4993,11 @@ var _compDefaults = {
               _out += '};\n\n';
               // jsPsychAnimation owns the display element, so it is emitted as a
               // whole trial with no properties to lift into a variable table —
-              // a phase of animations never factors.
+              // a block of animations never factors.
               // `name` matters as much as `text`: the node collects its trials by
               // name, and without one the declaration below is emitted and never
               // referenced — the animation is declared and never runs.
-              phaseParts.push({kind: 'raw', text: _out, name: trialName});
+              blockParts.push({kind: 'raw', text: _out, name: trialName});
               return; // this trial is complete
             }
 
@@ -5024,7 +5035,7 @@ var _compDefaults = {
               if (respInfo.fsStartsInside) _fs += _fb + 'stim_starts_inside: true,\n';
               _fs = _fs.replace(/,\n$/, '\n');
               _fs += '};\n\n';
-              phaseParts.push({kind: 'raw', text: _fs, name: trialName});
+              blockParts.push({kind: 'raw', text: _fs, name: trialName});
               return; // this trial is complete
             }
 
@@ -5053,7 +5064,7 @@ var _compDefaults = {
               if (!respInfo.caseSensitivity) _co += _cb + 'case_sensitivity: false,\n';
               _co = _co.replace(/,\n$/, '\n');
               _co += '};\n\n';
-              phaseParts.push({kind: 'raw', text: _co, name: trialName});
+              blockParts.push({kind: 'raw', text: _co, name: trialName});
               return; // this trial is complete
             }
 
@@ -5092,7 +5103,7 @@ var _compDefaults = {
             function L(indent, str) {
               lines.push('  '.repeat(indent) + str);
             }
-            // Every property is recorded as it is written, so that a phase whose
+            // Every property is recorded as it is written, so that a block whose
             // trials are the same procedure with different values can be
             // re-rendered as one procedure plus a table of those values. Recorded
             // at the point of emission rather than parsed back out of the finished
@@ -5120,7 +5131,7 @@ var _compDefaults = {
             }
 
             // Hints for remaining unsupported logic ride along with the trial they
-            // are about, so they stay next to it however the phase is emitted.
+            // are about, so they stay next to it however the block is emitted.
             var _trialHints = logic.hints.slice();
 
             // A node holding exactly one trial and carrying no node-level
@@ -5135,7 +5146,7 @@ var _compDefaults = {
             // Trial" leaves behind and contributes nothing to run.
             var _hasScreen = stims.length > 0 || !_noResponseComponent;
             if (!_hasScreen && _plainNode) {
-              phaseParts.push({kind: 'skip', name: trialName, note: _emptyTrialNote(trialName)});
+              blockParts.push({kind: 'skip', name: trialName, note: _emptyTrialNote(trialName)});
               return;
             }
 
@@ -5441,11 +5452,11 @@ var _compDefaults = {
             if (!_plainNode) L(1, ']');
             L(0, '};');
 
-            phaseParts.push({
+            blockParts.push({
               kind: 'trial', name: trialName, lines: lines, slots: slots,
               hints: _trialHints, plain: _plainNode,
               // A trial of several jsPsych trials — a fixation then the screen —
-              // contributes those trials directly to the phase's timeline. It
+              // contributes those trials directly to the block's timeline. It
               // used to be wrapped in a node of its own and referred to by name,
               // which put a `timeline` inside a `timeline` for no gain: the
               // wrapper carries no parameter, and jsPsych runs the same trials
@@ -5454,22 +5465,22 @@ var _compDefaults = {
             });
           });
 
-          // Close the phase node. An empty phase contributes nothing to run, so
+          // Close the block node. An empty block contributes nothing to run, so
           // it is noted rather than emitted as an empty `timeline: []`.
-          if (phaseParts.length === 0) {
-            code += '// (this phase holds no trials, so it adds nothing to the timeline)\n\n';
-            _phaseModes.push({id: ph.id, trials: 0, factored: false, slug: phaseSlug});
+          if (blockParts.length === 0) {
+            code += '// (this block holds no trials, so it adds nothing to the timeline)\n\n';
+            _blockModes.push({id: ph.id, trials: 0, factored: false, slug: blockSlug});
             return;
           }
-          if (!phaseParts.some(function (p) { return p.kind !== 'skip'; })) {
-            phaseParts.forEach(function (p) { code += p.note + '\n'; });
-            code += '// (this phase adds nothing to the timeline)\n\n';
-            _phaseModes.push({id: ph.id, trials: ph.timeline.length, factored: false,
+          if (!blockParts.some(function (p) { return p.kind !== 'skip'; })) {
+            blockParts.forEach(function (p) { code += p.note + '\n'; });
+            code += '// (this block adds nothing to the timeline)\n\n';
+            _blockModes.push({id: ph.id, trials: ph.timeline.length, factored: false,
                               uniform: false, mode: ph.conditions ? 'conditions' : 'trials',
-                              empty: phaseParts.length, emitted: 0, slug: phaseSlug});
+                              empty: blockParts.length, emitted: 0, slug: blockSlug});
             return;
           }
-          var nodeName = phaseSlug + '_timeline';
+          var nodeName = blockSlug + '_timeline';
           // Whether the trials COULD be one procedure, which the settings dialog
           // needs to know before the researcher asks for it — and whether they
           // are being run as one, which is the researcher's call rather than the
@@ -5482,18 +5493,18 @@ var _compDefaults = {
           // and it rewrites `trial_1, trial_2` into a condition table that the
           // reader then has to read back out. So the default is what the canvas
           // shows — that many trials, in that order — and the table is asked for.
-          var uniform = _factorPhase(phaseParts);
+          var uniform = _factorBlock(blockParts);
           var factored = ph.conditions ? uniform : null;
-          var emptyCount = phaseParts.filter(function (p) {
+          var emptyCount = blockParts.filter(function (p) {
             return p.kind === 'skip';
           }).length;
-          _phaseModes.push({id: ph.id, trials: ph.timeline.length, factored: !!factored,
+          _blockModes.push({id: ph.id, trials: ph.timeline.length, factored: !!factored,
                             uniform: !!uniform, mode: ph.conditions ? 'conditions' : 'trials',
                             empty: emptyCount, emitted: ph.timeline.length - emptyCount,
-                            slug: phaseSlug});
+                            slug: blockSlug});
 
           if (factored) {
-            var varName = phaseSlug + '_variables';
+            var varName = blockSlug + '_variables';
             code += '// The same procedure once per set of values below.\n';
             code += 'var ' + varName + ' = [\n';
             factored.table.forEach(function (row, i) {
@@ -5511,7 +5522,7 @@ var _compDefaults = {
           // Plain trials: what the canvas shows, declared in order and then
           // collected into the node.
           var blocks = [];
-          phaseParts.forEach(function (p) {
+          blockParts.forEach(function (p) {
             // Said out loud rather than dropped in silence: the canvas shows this
             // trial, so its absence from the file needs an explanation.
             if (p.kind === 'skip') { code += p.note + '\n'; return; }
@@ -5586,27 +5597,27 @@ var _compDefaults = {
         return {
           code: code,
           usedPlugins: _usedPlugins,
-          phases: _phaseModes,
+          blocks: _blockModes,
           // For the export bundle: the file names and bytes behind every path the
           // code now refers to.
           assets: _assets,
         };
       }
 
-      // What the compiler decided about each phase, for the canvas to report.
+      // What the compiler decided about each block, for the canvas to report.
       // Asked of the compiler rather than worked out again here: a second
       // opinion about whether some trials are "the same procedure" is exactly
       // the duplicate-opinion bug this file has been bitten by repeatedly.
       // It is affordable because building the code is cheap — measured at well
       // under a millisecond for a hundred trials, less than serialising the
-      // phases to JSON.
-      function phaseModes() {
+      // blocks to JSON.
+      function blockModes() {
         try {
           var modes = {};
-          (_compileExperiment({}).phases || []).forEach(function (m) { modes[m.id] = m; });
+          (_compileExperiment({}).blocks || []).forEach(function (m) { modes[m.id] = m; });
           return modes;
         } catch (e) {
-          // A phase card must never fail to draw because a badge could not.
+          // A block card must never fail to draw because a badge could not.
           return {};
         }
       }
@@ -5645,24 +5656,24 @@ var _compDefaults = {
         }
       }
 
-      // How a phase's trials compile, in words. The pair matters more than
-      // either half: seeing "4 trials · 4 procedures" next to a phase that says
+      // How a block's trials compile, in words. The pair matters more than
+      // either half: seeing "4 trials · 4 procedures" next to a block that says
       // "one procedure × 4 conditions" is what tells the reader that making the
       // trials the same shape is what produces a timeline_variables table.
-      function _phaseModeLabel(mode) {
+      function _blockModeLabel(mode) {
         if (!mode || !mode.trials) return 'empty';
         if (mode.factored) return '1 procedure × ' + mode.trials + ' conditions';
         if (mode.mode === 'conditions') return mode.trials + ' trials · not one procedure';
         // Counted as what the file will contain, not what the canvas shows —
-        // a phase whose second trial is still blank runs one trial, and the
+        // a block whose second trial is still blank runs one trial, and the
         // badge is the only place that says so before you export.
         var n = mode.emitted == null ? mode.trials : mode.emitted;
         if (!n) return mode.empty + ' empty';
         return (n === 1 ? '1 trial' : n + ' trials') +
           (mode.empty ? ' · ' + mode.empty + ' empty' : '');
       }
-      function _phaseModeTitle(mode) {
-        if (!mode || !mode.trials) return 'This phase has no trials';
+      function _blockModeTitle(mode) {
+        if (!mode || !mode.trials) return 'This block has no trials';
         if (mode.empty) {
           return mode.empty + ' of these ' + mode.trials + ' trials ' +
             (mode.empty === 1 ? 'is' : 'are') + ' empty — nothing to show and nothing to ' +
@@ -5686,7 +5697,7 @@ var _compDefaults = {
           (mode.uniform ? '.' : ' — which needs them to share a shape.');
       }
 
-      // How many trials the phase will actually run, per jsPsych's own rules for
+      // How many trials the block will actually run, per jsPsych's own rules for
       // each sample type. Null when the answer depends on a function only the
       // researcher can read.
       function _drawnPerRepetition(draft, n) {
@@ -5758,7 +5769,7 @@ var _compDefaults = {
           var usesCorrect = (draft.loop.on && draft.loop.field === 'correct') ||
             (draft.cond.on && draft.cond.field === 'correct');
           if (usesCorrect) {
-            out.push('No trial in this phase has a Correct Key, so `correct` is ' +
+            out.push('No trial in this block has a Correct Key, so `correct` is ' +
               'never recorded. The condition can never come true' +
               (draft.loop.on ? ' — the block will run to its cap every time.' : '.'));
           }
@@ -5787,8 +5798,8 @@ var _compDefaults = {
             'exported file is left to behave exactly as jsPsych does, so make sure ' +
             'the condition can come true.');
         }
-        if (draft.cond.on && editor.phases.indexOf(ph) === 0) {
-          out.push('This is the first phase, so there is no earlier trial for the ' +
+        if (draft.cond.on && editor.blocks.indexOf(ph) === 0) {
+          out.push('This is the first block, so there is no earlier trial for the ' +
             'condition to read. It is false and the whole block is skipped.');
         }
         if (draft.loop.on && Number(draft.repetitions) > 1) {
@@ -5799,14 +5810,14 @@ var _compDefaults = {
         return out;
       }
 
-      // The jsPsych node-level parameters for a phase. They belong to the node,
+      // The jsPsych node-level parameters for a block. They belong to the node,
       // not to a trial or a component, which is why they are not in the trial
-      // inspector — and why a phase with no variable table is told to its face
+      // inspector — and why a block with no variable table is told to its face
       // that there is nothing here to sample.
-      function showPhaseSettings(pid) {
-        var ph = editor.phases.filter(function (p) { return p.id === pid; })[0];
+      function showBlockSettings(pid) {
+        var ph = editor.blocks.filter(function (p) { return p.id === pid; })[0];
         if (!ph) return;
-        var mode = phaseModes()[pid];
+        var mode = blockModes()[pid];
         var factored = !!(mode && mode.factored);
         var n = ph.timeline.length;
         var sample = ph.sample || {};
@@ -5821,7 +5832,7 @@ var _compDefaults = {
           groups: ph.timeline.map(function (t) { return t.group == null ? 0 : t.group; }),
           weights: ph.timeline.map(function (t) { return t.weight == null ? 1 : t.weight; }),
           // The two node conditions, as the constructor's own state. `on` lives
-          // only here — on the phase, an absent `loop` IS off.
+          // only here — on the block, an absent `loop` IS off.
           loop: {
             on: !!ph.loop,
             field: (ph.loop && ph.loop.field) || 'correct',
@@ -5853,7 +5864,7 @@ var _compDefaults = {
         function head() {
           return '<div style="display:flex;justify-content:space-between;align-items:center;' +
             'padding:14px 20px;border-bottom:1px solid var(--border)">' +
-            '<span style="font-weight:700;font-size:0.9rem">⚙ Phase settings · ' +
+            '<span style="font-weight:700;font-size:0.9rem">⚙ Block settings · ' +
             _stripEmoji(ph.name) + '</span>' +
             '<button id="ps-close" style="background:none;border:none;font-size:1.1rem;' +
             'cursor:pointer;color:var(--text2)">✕</button></div>';
@@ -5889,7 +5900,7 @@ var _compDefaults = {
               'them all.</div>';
           } else if (n === 1) {
             h += '<div style="font-size:0.68rem;color:var(--text2);margin-top:4px">' +
-              'A phase with one trial has nothing to vary.</div>';
+              'A block with one trial has nothing to vary.</div>';
           }
           h += '</div></div>';
           h += '<div style="border-top:1px solid var(--border);margin:10px 0 4px"></div>';
@@ -6096,7 +6107,7 @@ var _compDefaults = {
         }
 
         function repaint() {
-          _repaintPhaseSettings = repaint;
+          _repaintBlockSettings = repaint;
           box.innerHTML = head() +
             '<div style="flex:1;overflow-y:auto">' + body() + '</div>' +
             '<div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;' +
@@ -6143,7 +6154,7 @@ var _compDefaults = {
         }
 
         function close() {
-          _repaintPhaseSettings = null;   // the dialog is gone; do not call into it
+          _repaintBlockSettings = null;   // the dialog is gone; do not call into it
           overlay.remove();
         }
         function wire() {
@@ -6678,17 +6689,17 @@ var _compDefaults = {
             var m = text.match(/\{[\s\S]*\}/);
             if (!m) throw new Error('AI did not return valid JSON');
             var exp = JSON.parse(m[0]);
-            if (!exp.phases || !Array.isArray(exp.phases)) throw new Error('Response missing phases array');
+            if (!exp.blocks || !Array.isArray(exp.blocks)) throw new Error('Response missing blocks array');
 
             resetEditor();
-            editor.phases = exp.phases;
+            editor.blocks = _adoptBlocks(exp);
             // Migrate first: the loop below reads `ph.timeline`, and an import in
             // the older shape has `trials` until migratePos() renames it.
             migratePos();
             editor.pc = 0; editor.tc = 0; editor.cc = 0;
-            editor.phases.forEach(function (ph) {
+            editor.blocks.forEach(function (ph) {
               ph.id = 'ph' + ++editor.pc;
-              if (!ph.name) ph.name = i18n('phase.timeline');
+              if (!ph.name) ph.name = i18n('block.timeline');
               ph.timeline.forEach(function (tr) {
                 tr.id = 't' + ++editor.tc;
                 tr.components.forEach(function (c) {
@@ -6696,25 +6707,25 @@ var _compDefaults = {
                 });
               });
             });
-            // Fill only a real gap: an answer with no phases at all. This used to
-            // insist on a phase literally named "Instructions" first and
-            // "Feedback" last, and would insert one beside a phase the model had
-            // named differently — a phase may be called anything, so that was
+            // Fill only a real gap: an answer with no blocks at all. This used to
+            // insist on a block literally named "Instructions" first and
+            // "Feedback" last, and would insert one beside a block the model had
+            // named differently — a block may be called anything, so that was
             // editing a good answer to match a bad assumption.
-            if (editor.phases.length === 0) {
-              editor.phases.push({ name: 'Instructions', timeline: [{ components: [
+            if (editor.blocks.length === 0) {
+              editor.blocks.push({ name: 'Instructions', timeline: [{ components: [
                 { type: 'text', content: 'Welcome to this experiment!\n\nPlease read the instructions carefully before starting.', fontSize: 20, color: '#333333', position: 'center', fontWeight: 'bold', cat: 's' },
                 { type: 'button', choices: ['Start Experiment'], prompt: '', button_layout: 'grid', grid_rows: 1, grid_columns: 0, trial_duration: 0, stimulus_duration: 0, response_ends_trial: true, enable_button_after: 0, cat: 'r' }
               ] }] });
             }
-            if (editor.phases.length > 0 && editor.phases[0].timeline.length > 0) {
-              editor.selectedTrial = editor.phases[0].timeline[0].id;
-              if (editor.phases[0].timeline[0].components.length > 0) editor.selComp = editor.phases[0].timeline[0].components[0].id;
+            if (editor.blocks.length > 0 && editor.blocks[0].timeline.length > 0) {
+              editor.selectedTrial = editor.blocks[0].timeline[0].id;
+              if (editor.blocks[0].timeline[0].components.length > 0) editor.selComp = editor.blocks[0].timeline[0].components[0].id;
             }
             renderAll();
             overlay.remove();
-            statusEl.innerHTML = '<span style="color:var(--green)">✅ ' + editor.phases.length + ' phases, ' + editor.tc + ' trials generated!</span>';
-            setTimeout(function() { alert('✅ Success!\n\nPhases: ' + editor.phases.length + '\nTrials: ' + editor.tc + '\nComponents: ' + editor.cc); }, 300);
+            statusEl.innerHTML = '<span style="color:var(--green)">✅ ' + editor.blocks.length + ' blocks, ' + editor.tc + ' trials generated!</span>';
+            setTimeout(function() { alert('✅ Success!\n\nBlocks: ' + editor.blocks.length + '\nTrials: ' + editor.tc + '\nComponents: ' + editor.cc); }, 300);
           }).catch(function (err) {
             statusEl.innerHTML = '<span style="color:var(--red)">❌ ' + err.message + '</span>';
             genBtn.disabled = false; genBtn.textContent = '✨ Generate Experiment';
@@ -6767,7 +6778,7 @@ var _compDefaults = {
           String(now.getSeconds()).padStart(2, '0');
         var snap = JSON.parse(
           JSON.stringify({
-            phases: editor.phases,
+            blocks: editor.blocks,
             selectedTrial: editor.selectedTrial,
             selComp: editor.selComp,
             tc: editor.tc,
@@ -6785,8 +6796,8 @@ var _compDefaults = {
         try {
           var pid = editor.projectId || 'task_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
           if (!editor.projectId) editor.projectId = pid;
-          var phaseCount = editor.phases.length,
-            trialCount = editor.phases.reduce(function (s, p) {
+          var blockCount = editor.blocks.length,
+            trialCount = editor.blocks.reduce(function (s, p) {
               return s + p.timeline.length;
             }, 0);
           var exp = {
@@ -6797,7 +6808,7 @@ var _compDefaults = {
             builderType: 'task',
             config: {targetN: 200, reward: 3, isPublic: true, duration: '~' + trialCount * 2 + ' min'},
             showInHall: true,
-            stats: {participants: 0, completed: 0, phases: phaseCount, trials: trialCount},
+            stats: {participants: 0, completed: 0, blocks: blockCount, trials: trialCount},
             createdAt: new Date().toISOString(),
           };
           // Save to ExpStore (where renderDashboard reads from)
@@ -6831,12 +6842,12 @@ var _compDefaults = {
 
       function publishExperiment() {
         if (
-          editor.phases.length === 0 ||
-          editor.phases.every(function (p) {
+          editor.blocks.length === 0 ||
+          editor.blocks.every(function (p) {
             return p.timeline.length === 0;
           })
         ) {
-          alert('Experiment is empty. Please add phases and trials before publishing.');
+          alert('Experiment is empty. Please add blocks and trials before publishing.');
           return;
         }
         if (!editor.projectName) {
@@ -7016,7 +7027,7 @@ function showVersionHistory() {
             '<p style="color:var(--text2);font-size:0.8rem;text-align:center;padding:30px">No versions yet<br><span style="font-size:0.7rem">Click "💾 Save" to create your first version</span></p>';
         } else {
           var nowSnap = JSON.stringify({
-            phases: editor.phases,
+            blocks: editor.blocks,
             selectedTrial: editor.selectedTrial,
             selComp: editor.selComp,
             tc: editor.tc,
@@ -7027,7 +7038,7 @@ function showVersionHistory() {
             var isCurrent =
               i === 0 &&
               JSON.stringify({
-                phases: v.phases,
+                blocks: v.blocks,
                 selectedTrial: v.selectedTrial,
                 selComp: v.selComp,
                 tc: v.tc,
@@ -7072,7 +7083,7 @@ function showVersionHistory() {
             if (!confirm('Restore this version? Unsaved changes will be lost.')) return;
             var v = editor.versions[parseInt(btn.getAttribute('data-vi'))];
             saveState();
-            editor.phases = JSON.parse(JSON.stringify(v.phases));
+            editor.blocks = JSON.parse(JSON.stringify(_adoptBlocks(v)));
             migratePos();
             editor.selectedTrial = v.selectedTrial;
             editor.selComp = v.selComp;
@@ -7171,7 +7182,7 @@ function showVersionHistory() {
           var saved = localStorage.getItem(_vek('task_editor'));
           if (saved) {
             var d = JSON.parse(saved);
-            editor.phases = d.phases || [];
+            editor.blocks = _adoptBlocks(d);
             migratePos();
             editor.selectedTrial = d.sel || null;
             editor.selComp = d.sc || null;
@@ -7223,16 +7234,16 @@ function showVersionHistory() {
         stroop: {
           name: 'Stroop Effect',
           icon: '\u{1F9E0}',
-          phases: [
+          blocks: [
             'Instructions: the rule and the three keys',
-            'Trials: one trial per ink colour, all the same shape, then the phase settings repeat them 48 times and shuffle the order',
+            'Trials: one trial per ink colour, all the same shape, then the block settings repeat them 48 times and shuffle the order',
             'Done',
           ],
         },
         simon: {
           name: 'Simon Effect',
           icon: '\u{1F3AF}',
-          phases: [
+          blocks: [
             'Instructions: answer the colour, ignore the side',
             'Trials: four colour x side conditions, each scored, with a message the plugin shows itself',
             'Done',
@@ -7241,7 +7252,7 @@ function showVersionHistory() {
         flanker: {
           name: 'Flanker Task',
           icon: '\u{2B05}\u{FE0F}\u{27A1}\u{FE0F}',
-          phases: [
+          blocks: [
             'Instructions: answer the middle arrow',
             'Trials: four arrow arrangements, and the settings draw two of them per round rather than running all four',
             'Done',
@@ -7250,16 +7261,16 @@ function showVersionHistory() {
         branching: {
           name: 'Conditional Branching',
           icon: '\u{1F500}',
-          phases: [
+          blocks: [
             'Instructions: press Y or N',
             'Question: one scored trial',
-            'Agreed / Declined: two phases, each with a condition — only the one that matches the answer runs',
+            'Agreed / Declined: two blocks, each with a condition — only the one that matches the answer runs',
           ],
         },
         survey: {
           name: 'Survey',
           icon: '\u{1F4CB}',
-          phases: [
+          blocks: [
             'Instructions',
             'Questions: a scale, a choice and a free-text question — three trials, because a trial shows one screen and takes one response',
           ],
@@ -7283,7 +7294,7 @@ function showVersionHistory() {
             ' ' +
             info.name +
             '</div>' +
-            info.phases
+            info.blocks
               .map(function (p) {
                 return (
                   '<div style="font-size:0.7rem;color:var(--text2);padding:2px 0;white-space:nowrap">' + p + '</div>'
@@ -7439,13 +7450,13 @@ function showVersionHistory() {
               btn: 'Next →',
             },
             {
-              title: '⚙️ The repeats belong to the phase',
-              desc: 'A <strong>phase</strong> is a named block of trials, and its settings decide how ' +
+              title: '⚙️ The repeats belong to the block',
+              desc: 'A <strong>block</strong> is a named block of trials, and its settings decide how ' +
                 'they run: <strong>repetitions</strong>, <strong>randomize order</strong>, ' +
                 '<strong>sample</strong> (draw a subset), and the <strong>condition table</strong> — ' +
                 'which folds trials of the same shape into one procedure plus a table of values, ' +
                 'the way jsPsych documents a repeated paradigm.<br><br>' +
-                'Two more decide <em>whether</em> a phase runs at all: one that repeats it while a ' +
+                'Two more decide <em>whether</em> a block runs at all: one that repeats it while a ' +
                 'condition holds, and one that runs it only if a condition holds.',
               el: 'flow-container',
               btn: 'Next →',
@@ -7811,9 +7822,9 @@ function showDataDashboard() {
       h += '<span style="font-size:0.72rem">⏱ '+sAvg+'ms</span>';
       h += '</div>';
       h += '<div style="display:none;padding:0"><table style="width:100%;font-size:0.7rem;border-collapse:collapse">';
-      h += '<tr style="background:#f5f5fa"><th style="padding:6px 12px;text-align:left">Trial</th><th style="padding:6px 12px;text-align:left">Phase</th><th style="padding:6px 12px;text-align:left">Type</th><th style="padding:6px 12px;text-align:left">Response</th><th style="padding:6px 12px;text-align:center">Correct</th><th style="padding:6px 12px;text-align:right">RT (ms)</th></tr>';
+      h += '<tr style="background:#f5f5fa"><th style="padding:6px 12px;text-align:left">Trial</th><th style="padding:6px 12px;text-align:left">Block</th><th style="padding:6px 12px;text-align:left">Type</th><th style="padding:6px 12px;text-align:left">Response</th><th style="padding:6px 12px;text-align:center">Correct</th><th style="padding:6px 12px;text-align:right">RT (ms)</th></tr>';
       d.responses.forEach(function(r, ri) {
-        h += '<tr style="border-bottom:1px solid #f0f0f5"><td style="padding:4px 12px">'+(ri+1)+'</td><td style="padding:4px 12px">'+r.phase+'</td><td style="padding:4px 12px">'+r.type+'</td><td style="padding:4px 12px">'+r.response+'</td><td style="padding:4px 12px;text-align:center">'+(r.correct?'✅':'❌')+'</td><td style="padding:4px 12px;text-align:right">'+r.rt+'</td></tr>';
+        h += '<tr style="border-bottom:1px solid #f0f0f5"><td style="padding:4px 12px">'+(ri+1)+'</td><td style="padding:4px 12px">'+r.block+'</td><td style="padding:4px 12px">'+r.type+'</td><td style="padding:4px 12px">'+r.response+'</td><td style="padding:4px 12px;text-align:center">'+(r.correct?'✅':'❌')+'</td><td style="padding:4px 12px;text-align:right">'+r.rt+'</td></tr>';
       });
       h += '</table></div></div>';
     });
@@ -7835,10 +7846,10 @@ function showDataDashboard() {
   };
   document.getElementById('db-export-csv').onclick = function() {
     if (allData.length === 0) return;
-    var csv = '﻿session,trial,phase,type,response,correct,rt_ms,time\n';
+    var csv = '﻿session,trial,block,type,response,correct,rt_ms,time\n';
     allData.forEach(function(d) {
       d.responses.forEach(function(r) {
-        csv += d.session + ',' + r.trial + ',' + r.phase + ',' + r.type + ',"' + r.response + '",' + r.correct + ',' + r.rt + ',' + r.time + '\n';
+        csv += d.session + ',' + r.trial + ',' + r.block + ',' + r.type + ',"' + r.response + '",' + r.correct + ',' + r.rt + ',' + r.time + '\n';
       });
     });
     var blob = new Blob([csv], {type: 'text/csv'});

@@ -2,10 +2,10 @@
 //
 // ExpVis has no branch component — it was one of the four mechanisms deleted
 // when the editor became a plain jsPsych timeline editor. What it has instead
-// is the phase-level condition (§45), which is jsPsych's own
+// is the block-level condition (§45), which is jsPsych's own
 // `conditional_function`: a node runs only if the condition holds.
 //
-// Two sibling phases with opposite conditions are therefore a two-way branch —
+// Two sibling blocks with opposite conditions are therefore a two-way branch —
 // exactly one of them runs. That is an emergent property of the primitive, not
 // something the editor draws, so it is worth proving rather than assuming.
 
@@ -15,22 +15,22 @@ jest.useFakeTimers();
 
 // screen → pass | fail
 //
-// addPhase() returns nothing; the id is read off the phase it just pushed.
-function newPhase(name) {
-  addPhase(name);
-  return editor.phases[editor.phases.length - 1].id;
+// addBlock() returns nothing; the id is read off the block it just pushed.
+function newBlock(name) {
+  addBlock(name);
+  return editor.blocks[editor.blocks.length - 1].id;
 }
 
 function branchOn(condPass, condFail) {
   resetEditor();
-  H.addTrialWith(newPhase("screen"), [
+  H.addTrialWith(newBlock("screen"), [
     ["text", { content: "SCREEN" }],
     ["keyboard", { choices: ["a", "l"], correctKey: "a" }],
   ]);
-  H.addTrialWith(newPhase("pass"), [["text", { content: "PASSED" }], ["keyboard", { choices: ["a"] }]]);
-  H.addTrialWith(newPhase("fail"), [["text", { content: "FAILED" }], ["keyboard", { choices: ["a"] }]]);
-  editor.phases[1].cond = condPass;
-  editor.phases[2].cond = condFail;
+  H.addTrialWith(newBlock("pass"), [["text", { content: "PASSED" }], ["keyboard", { choices: ["a"] }]]);
+  H.addTrialWith(newBlock("fail"), [["text", { content: "FAILED" }], ["keyboard", { choices: ["a"] }]]);
+  editor.blocks[1].cond = condPass;
+  editor.blocks[2].cond = condFail;
   return H.runExperiment();
 }
 
@@ -56,7 +56,7 @@ async function answer(exp, screenKey) {
 const onCorrect = (op, value) => ({ field: "correct", op, value });
 const onResponse = (op, value) => ({ field: "response", op, value });
 
-describe("two sibling phases with opposite conditions", () => {
+describe("two sibling blocks with opposite conditions", () => {
   // The condition always reads the IMMEDIATELY PRECEDING trial. After a branch
   // has run, that is the branch's own trial — not the screening one it was
   // meant to decide on. So the two conditions have to be mutually exclusive on
@@ -115,7 +115,7 @@ describe("two sibling phases with opposite conditions", () => {
   test("the negated form lets BOTH branches through — the trap", async () => {
     // Recorded because it looks like the same thing written differently, and
     // is not. "correct is not true" is true of the branch trial that just ran,
-    // so both the pass and the fail phases execute one after the other.
+    // so both the pass and the fail blocks execute one after the other.
     const rows = await answer(
       branchOn(onCorrect("is", "true"), onCorrect("is not", "true")),
       "a"

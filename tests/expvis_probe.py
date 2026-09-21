@@ -54,7 +54,7 @@ PROBE = """
 <script>
 // Evaluate the generated experiment against a stub of the jsPsych surface it
 // expects. This is the only way to assert its SHAPE rather than its bytes: that
-// every phase became one node pushed in canvas order, that each node collects
+// every block became one node pushed in canvas order, that each node collects
 // the trials the canvas shows, and that no node carries a node-level parameter
 // ExpVis no longer supports. A syntax error in the generated code throws here.
 var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
@@ -68,13 +68,13 @@ var __PLUGINS = ['jsPsychHtmlKeyboardResponse', 'jsPsychHtmlButtonResponse',
   'jsPsychImageKeyboardResponse', 'jsPsychImageButtonResponse', 'jsPsychImageSliderResponse'];
 // Node-level parameters that jsPsych reads but ExpVis does not derive from the
 // canvas. Everything else a node can carry — timeline_variables, sample,
-// randomize_order, repetitions — is derived or set in the phase settings and is
-// asserted per case in phaseCases() instead.
+// randomize_order, repetitions — is derived or set in the block settings and is
+// asserted per case in blockCases() instead.
 //
 // A case may carry one of these ONLY by declaring it in `expectParams`, and the
 // check runs both ways: an undeclared parameter fails (something leaked), and a
 // declared one that never appears fails too (a feature stopped working). The
-// phase-settings dialog builds loop_function and conditional_function, so those
+// block-settings dialog builds loop_function and conditional_function, so those
 // two are declared by the cases that ask for them; on_timeline_start /
 // on_timeline_finish are still hand-written only, and so are declared by nobody.
 var __NODE_PARAMS = ['name', 'loop_function', 'conditional_function',
@@ -103,7 +103,7 @@ function inspectStructure(code) {
     });
   });
   return {
-    // one entry per phase node; the number is how many trials it collects
+    // one entry per block node; the number is how many trials it collects
     trialsPerNode: tl.map(function (n) { return n && n.timeline ? n.timeline.length : null; }),
     observedParams: observed.sort()
   };
@@ -138,11 +138,11 @@ function nodeShape(code) {
   };
 }
 
-// Phase factoring (one procedure + a timeline_variables table) needs a phase
+// Block factoring (one procedure + a timeline_variables table) needs a block
 // whose trials are structurally identical, which none of the five built-in
 // templates has — they are all heterogeneous or single-trial, so nothing in
 // them exercises this path. These cases build one on the spot.
-function phaseCases() {
+function blockCases() {
   var out = {};
   function build(pid, spec) {
     return spec.map(function (v) {
@@ -156,14 +156,14 @@ function phaseCases() {
       return t;
     });
   }
-  function run(label, spec, phaseProps) {
+  function run(label, spec, blockProps) {
     resetEditor();
-    addPhase('trials');
-    build(editor.phases[0].id, spec);
-    Object.keys(phaseProps || {}).forEach(function (k) { editor.phases[0][k] = phaseProps[k]; });
+    addBlock('trials');
+    build(editor.blocks[0].id, spec);
+    Object.keys(blockProps || {}).forEach(function (k) { editor.blocks[0][k] = blockProps[k]; });
     var code = _compileExperiment({}).code;
     var st = inspectStructure(code);
-    var m = phaseModes()[editor.phases[0].id] || {};
+    var m = blockModes()[editor.blocks[0].id] || {};
     out[label] = {
       factored: code.indexOf('timeline_variables') >= 0,
       // whether the trials COULD be one procedure, which is what the settings
@@ -175,12 +175,12 @@ function phaseCases() {
       expectParams: [],
       noTokens: code.indexOf('@@') < 0,
       // `type` selects the plugin and is read when the trial is instantiated,
-      // before any timeline variable has a value. Whatever the phase, the plugin
+      // before any timeline variable has a value. Whatever the block, the plugin
       // must never have been hoisted into the table.
       variablePlugin: /timelineVariable\\('type'\\)/.test(code),
       // The four fields jsPsych writes on every row. ExpVis must not write them
       // itself — `data: {trial_index: …}` collides with a reserved field, which
-      // is why the provenance field was renamed trial_in_phase.
+      // is why the provenance field was renamed trial_in_block.
       writesReserved: /^\\s*(trial_type|trial_index|time_elapsed|plugin_version):/m.test(code)
     };
   }
@@ -201,7 +201,7 @@ function phaseCases() {
   ];
   run('fixation, run as one procedure', WITH_FIXATION, {conditions: true});
   // Asking for one procedure does not make one exist: trials of different
-  // shapes still have no single procedure to hoist, so the phase falls back.
+  // shapes still have no single procedure to hoist, so the block falls back.
   run('ragged, run as one procedure', [
     [['text', {content: 'RED'}], ['keyboard', {choices: ['a']}]],
     [['text', {content: 'BLUE'}]]
@@ -226,8 +226,8 @@ function phaseCases() {
   // keys in one object literal is valid JavaScript that keeps the last one.
   (function () {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     addComponent(t.id, 'text', 's');
     addComponent(t.id, 'keyboard', 'r');
@@ -250,8 +250,8 @@ function phaseCases() {
   // A custom parameter the compiler would NOT have written is appended.
   (function () {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     addComponent(t.id, 'text', 's');
     t.custom = [{name: 'on_load', src: 'function () { console.log("loaded"); }'}];
@@ -284,11 +284,11 @@ function phaseCases() {
   // JavaScript that keeps the last one.
   (function () {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     addComponent(editor.selectedTrial, 'text', 's');
-    editor.phases[0].repetitions = 4;
-    editor.phases[0].custom = [
+    editor.blocks[0].repetitions = 4;
+    editor.blocks[0].custom = [
       {name: 'loop_function', src: 'function (data) { return false; }'},
       {name: 'repetitions', src: '2'}
     ];
@@ -307,29 +307,29 @@ function phaseCases() {
         .map(function (x) { return x.trim().replace(/,$/, ''); }).sort()
     };
   })();
-  // The phase settings build the two node parameters that take a function.
+  // The block settings build the two node parameters that take a function.
   // These cases pin that they reach the node, the exact shape they take, and —
   // separately, because text can be right while the meaning is inverted — how
   // they behave when actually driven.
   (function () {
     function buildWith(loop, cond) {
       resetEditor();
-      addPhase('trials');
-      addTrial(editor.phases[0].id);
+      addBlock('trials');
+      addTrial(editor.blocks[0].id);
       var t = findTrial(editor.selectedTrial);
       addComponent(t.id, 'text', 's');
       addComponent(t.id, 'keyboard', 'r');
       t.components[1].choices = ['a', 'l'];
       t.components[1].correctKey = 'a';
-      if (loop) editor.phases[0].loop = loop;
-      if (cond) editor.phases[0].cond = cond;
+      if (loop) editor.blocks[0].loop = loop;
+      if (cond) editor.blocks[0].cond = cond;
       var code = _compileExperiment({}).code;
       return {code: code, st: inspectStructure(code)};
     }
     var LOOP = {field: 'correct', op: 'is', value: 'true', cap: 10};
     var COND = {field: 'correct', op: 'is', value: 'true'};
     var both = buildWith(LOOP, COND);
-    out['phase conditions'] = {
+    out['block conditions'] = {
       factored: false, uniform: false,
       trialsPerNode: both.st.trialsPerNode,
       observedParams: both.st.observedParams,
@@ -416,15 +416,15 @@ function phaseCases() {
     // at the node level for the very parameter the dialog now generates.
     (function () {
       resetEditor();
-      addPhase('trials');
-      addTrial(editor.phases[0].id);
+      addBlock('trials');
+      addTrial(editor.blocks[0].id);
       var t = findTrial(editor.selectedTrial);
       addComponent(t.id, 'text', 's');
       addComponent(t.id, 'keyboard', 'r');
       t.components[1].choices = ['a', 'l'];
       t.components[1].correctKey = 'a';
-      editor.phases[0].loop = LOOP;
-      editor.phases[0].custom = [{name: 'loop_function',
+      editor.blocks[0].loop = LOOP;
+      editor.blocks[0].custom = [{name: 'loop_function',
                                   src: 'function (data) { return false; }'}];
       var code = _compileExperiment({}).code;
       out['hand-written loop overrides'] = {
@@ -444,8 +444,8 @@ function phaseCases() {
   (function () {
     resetEditor();
     editor.projectName = 'Probe Project';
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     addComponent(t.id, 'text', 's');
     addComponent(t.id, 'image', 's');
@@ -496,8 +496,8 @@ function phaseCases() {
   // experiment does not run.
   (function () {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     addComponent(t.id, 'shape', 's');
     t.components[0].shape = 'circle';
@@ -535,8 +535,8 @@ function phaseCases() {
   // key can answer.
   (function () {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     addComponent(t.id, 'text', 's');
     addComponent(t.id, 'keyboard', 'r');
@@ -569,11 +569,11 @@ function phaseCases() {
   (function () {
     function shapeAfter(spec) {
       resetEditor();
-      addPhase('trials');
-      addTrial(editor.phases[0].id);
+      addBlock('trials');
+      addTrial(editor.blocks[0].id);
       var t = findTrial(editor.selectedTrial);
       spec.forEach(function (s) { addComponent(t.id, s[0], s[1]); });
-      return editor.phases[0].timeline.map(function (tr) {
+      return editor.blocks[0].timeline.map(function (tr) {
         return tr.components.map(function (c) { return c.type; }).join('+');
       }).join(' | ');
     }
@@ -598,8 +598,8 @@ function phaseCases() {
   (function () {
     function build(type, questions, html) {
       resetEditor();
-      addPhase('trials');
-      addTrial(editor.phases[0].id);
+      addBlock('trials');
+      addTrial(editor.blocks[0].id);
       var t = findTrial(editor.selectedTrial);
       addComponent(t.id, type, 'r');
       if (questions) t.components[0].questions = questions;
@@ -670,8 +670,8 @@ function phaseCases() {
   (function () {
     function build(spec, tweak) {
       resetEditor();
-      addPhase('trials');
-      addTrial(editor.phases[0].id);
+      addBlock('trials');
+      addTrial(editor.blocks[0].id);
       var t = findTrial(editor.selectedTrial);
       spec.forEach(function (s) {
         addComponent(t.id, s[0], s[1]);
@@ -726,8 +726,8 @@ function phaseCases() {
   (function () {
     function build(spec, setup) {
       resetEditor();
-      addPhase('trials');
-      addTrial(editor.phases[0].id);
+      addBlock('trials');
+      addTrial(editor.blocks[0].id);
       var t = findTrial(editor.selectedTrial);
       spec.forEach(function (s) {
         addComponent(t.id, s[0], s[1]);
@@ -775,8 +775,8 @@ function phaseCases() {
   // the retired 'Key Hint' label alongside it is gone.
   (function () {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     addComponent(t.id, 'keyboard', 'r');
     var kb = t.components[0];
@@ -801,8 +801,8 @@ function phaseCases() {
   // written rather than translated into anything of ExpVis's.
   (function () {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     addComponent(t.id, 'cloze', 'x');
     // Doubled percents: this text goes through the same format, so what JS
@@ -816,8 +816,8 @@ function phaseCases() {
     var trial = (code.match(/var trials_trial_1 = \\{[\\s\\S]*?\\n\\};/) || [''])[0];
     // a cloze with no blank at all: legal, but never what was meant
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t2 = findTrial(editor.selectedTrial);
     addComponent(t2.id, 'cloze', 'x');
     t2.components[0].text = 'No blanks here.';
@@ -851,8 +851,8 @@ function phaseCases() {
   (function () {
     function build(stimuli) {
       resetEditor();
-      addPhase('trials');
-      addTrial(editor.phases[0].id);
+      addBlock('trials');
+      addTrial(editor.blocks[0].id);
       var t = findTrial(editor.selectedTrial);
       addComponent(t.id, 'freeSort', 'x');
       var c = t.components[0];
@@ -900,8 +900,8 @@ function phaseCases() {
   (function () {
     function build(spec, setup) {
       resetEditor();
-      addPhase('trials');
-      addTrial(editor.phases[0].id);
+      addBlock('trials');
+      addTrial(editor.blocks[0].id);
       var t = findTrial(editor.selectedTrial);
       spec.forEach(function (s) {
         addComponent(t.id, s[0], s[1]);
@@ -960,8 +960,8 @@ function phaseCases() {
   (function () {
     function compileWithData(src) {
       resetEditor();
-      addPhase('Trials');
-      addTrial(editor.phases[0].id);
+      addBlock('Trials');
+      addTrial(editor.blocks[0].id);
       var t = findTrial(editor.selectedTrial);
       addComponent(t.id, 'text', 's');
       addComponent(t.id, 'keyboard', 'r');
@@ -1033,21 +1033,21 @@ function phaseCases() {
     [['fixation', {trial_duration: 600, durationMin: 600, durationMax: 1000, durationStep: 200}]]
   ], {conditions: true});
 
-  // Node-level parameters, set the way the phase settings dialog sets them.
+  // Node-level parameters, set the way the block settings dialog sets them.
   // `nodeParams` is the exact text emitted between `timeline` and the closing
   // brace, so the mapping from a control to a jsPsych parameter is pinned here
   // rather than being re-checked by hand in a browser.
-  function runSampled(label, spec, phaseProps, perTrial, noMode) {
+  function runSampled(label, spec, blockProps, perTrial, noMode) {
     resetEditor();
-    addPhase('trials');
-    var made = build(editor.phases[0].id, spec);
+    addBlock('trials');
+    var made = build(editor.blocks[0].id, spec);
     // Per-condition fields (group, weight) belong on the trials the editor
     // made, not on the spec they were built from.
     (perTrial || []).forEach(function (props, i) {
       Object.keys(props).forEach(function (k) { made[i][k] = props[k]; });
     });
-    if (!noMode) editor.phases[0].conditions = true;
-    Object.keys(phaseProps).forEach(function (k) { editor.phases[0][k] = phaseProps[k]; });
+    if (!noMode) editor.blocks[0].conditions = true;
+    Object.keys(blockProps).forEach(function (k) { editor.blocks[0][k] = blockProps[k]; });
     var code = _compileExperiment({}).code;
     out[label] = {
       factored: code.indexOf('timeline_variables') >= 0,
@@ -1096,7 +1096,7 @@ function phaseCases() {
   runSampled('sampling without the mode', three,
     {sample: {type: 'with-replacement', size: 1}}, null, true);
   // repetitions stands on its own — it repeats the block whatever it holds.
-  runSampled('repetitions on a ragged phase', [
+  runSampled('repetitions on a ragged block', [
     [['text', {content: 'A'}], ['keyboard', {choices: ['a']}]],
     [['text', {content: 'B'}]]
   ], {repetitions: 2});
@@ -1107,8 +1107,8 @@ function phaseCases() {
   // layout visible without lying about its scale.
   (function () {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     addComponent(t.id, 'text', 's');
     editor.device = {name: 'Desktop', icon: '', w: 1280, h: 720};
@@ -1248,8 +1248,8 @@ function phaseCases() {
   // this checks. Nothing here reaches pipe.jspsych.org.
   (function () {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     addComponent(t.id, 'text', 's');
     var base = _compileExperiment({});
@@ -1428,7 +1428,7 @@ function phaseCases() {
       if (!taught[t]) drift.push(t + ': no schema line at all');
     });
 
-    // The five phase controls the compiler reads. The prompt has to name the
+    // The five block controls the compiler reads. The prompt has to name the
     // same five, or "repeat this 48 times" has no spelling the model can use.
     var controls = ['repetitions', 'randomize_order', 'sample', 'loop', 'cond', 'conditions'];
     var missingControls = controls.filter(function (c) {
@@ -1456,19 +1456,19 @@ function phaseCases() {
     };
   })();
 
-  // The prompt now teaches phase settings, so the other half of that promise
-  // has to hold: a phase carrying them must survive the import an AI answer
+  // The prompt now teaches block settings, so the other half of that promise
+  // has to hold: a block carrying them must survive the import an AI answer
   // goes through, and reach the compiler. migratePos runs first on import and
-  // rewrites phases, so this is where they would be lost.
+  // rewrites blocks, so this is where they would be lost.
   (function () {
-    function imported(phase) {
+    function imported(block) {
       resetEditor();
-      editor.phases = [phase];
+      editor.blocks = [block];
       migratePos();
       return _compileExperiment({}).code;
     }
     // TWO trials of one shape, not one: a table of a single row is not a table,
-    // so _factorPhase refuses it and `conditions: true` has nothing to fold.
+    // so _factorBlock refuses it and `conditions: true` has nothing to fold.
     // This is the shape the prompt tells the model to write — one trial per
     // condition.
     function trial(word) {
@@ -1487,12 +1487,12 @@ function phaseCases() {
     var cond = imported(ph({cond: {field: 'correct', op: 'is not', value: 'true'}}));
     var plain = imported(ph({}));
     // The gate itself. `sample` and `randomize_order` are only emitted for a
-    // condition table, so a phase that asks for them without `conditions: true`
+    // condition table, so a block that asks for them without `conditions: true`
     // gets neither — silently. The prompt has to say so, which is why the two
     // are documented as needing it.
     var ungated = imported(ph({randomize_order: true,
                                sample: {type: 'without-replacement', size: 24}}));
-    out['phase settings survive the import'] = {
+    out['block settings survive the import'] = {
       factored: false, uniform: false, trialsPerNode: [],
       observedParams: [], expectParams: [], noTokens: true,
       repetitionsKept: /repetitions: 48/.test(reps),
@@ -1500,7 +1500,7 @@ function phaseCases() {
       sampleKept: /sample: \\{type: 'without-replacement', size: 24\\}/.test(samp),
       loopKept: /loop_function: function \\(data\\)/.test(loop),
       condKept: /conditional_function: function \\(\\)/.test(cond),
-      // and a phase that asked for none of them still emits none
+      // and a block that asked for none of them still emits none
       plainStaysPlain: plain.indexOf('repetitions') < 0 &&
                        plain.indexOf('randomize_order') < 0 &&
                        plain.indexOf('loop_function') < 0 &&
@@ -1595,8 +1595,8 @@ function mediaCases() {
     eval(setup);
     var code = _compileExperiment({}).code;
     var preload = code.indexOf('type: jsPsychPreload');
-    var phase = code.indexOf('// ── ');
-    var inPreload = preload >= 0 ? code.slice(preload, phase) : '';
+    var block = code.indexOf('// ── ');
+    var inPreload = preload >= 0 ? code.slice(preload, block) : '';
     var referenced = [];
     (code.match(/'(?:img|snd|vid)\\/[^']*'/g) || []).forEach(function (q) {
       var p = q.slice(1, -1);
@@ -1614,7 +1614,7 @@ function mediaCases() {
     out[label] = {
       paths: referenced,
       pathsMatch: JSON.stringify(referenced) === JSON.stringify(wantPaths || []),
-      preloadFirst: preload >= 0 && phase >= 0 && preload < phase,
+      preloadFirst: preload >= 0 && block >= 0 && preload < block,
       // every path the trials use is in the preload list
       allPreloaded: referenced.every(function (p) { return preloaded.indexOf(p) >= 0; }),
       // and nothing is preloaded that no trial uses
@@ -1631,21 +1631,21 @@ function mediaCases() {
       })(),
     };
   }
-  run('image trial', "addPhase('trials'); addTrial(editor.phases[0].id);"
+  run('image trial', "addBlock('trials'); addTrial(editor.blocks[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
     + "t.components[0].fileData='data:image/png;base64,AAAA';"
     + "t.components[0].fileName='blue.png';",
     ['img/blue.png']);
-  run('image in a later phase', "addPhase('instructions'); addTrial(editor.phases[0].id);"
+  run('image in a later block', "addBlock('instructions'); addTrial(editor.blocks[0].id);"
     + "addComponent(findTrial(editor.selectedTrial).id,'text','s');"
-    + "addPhase('trials'); addTrial(editor.phases[1].id);"
+    + "addBlock('trials'); addTrial(editor.blocks[1].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
     + "t.components[0].fileData='data:image/png;base64,AAAA';"
     + "t.components[0].fileName='blue.png';",
     ['img/blue.png']);
-  run('image + button', "addPhase('trials'); addTrial(editor.phases[0].id);"
+  run('image + button', "addBlock('trials'); addTrial(editor.blocks[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'button','r');"
     + "t.components[0].fileData='data:image/png;base64,AAAA';"
@@ -1655,7 +1655,7 @@ function mediaCases() {
   // An image mixed with anything else leaves the dedicated image plugin for the
   // HTML path, where the asset is written into a tag via a compiler token rather
   // than passed as `stimulus`. That token was the one nothing exercised.
-  run('image + text (HTML path)', "addPhase('trials'); addTrial(editor.phases[0].id);"
+  run('image + text (HTML path)', "addBlock('trials'); addTrial(editor.blocks[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'text','s');"
     + "addComponent(t.id,'keyboard','r');"
@@ -1665,7 +1665,7 @@ function mediaCases() {
     + "t.components[2].choices=['y','n'];",
     ['img/face.png']);
   // Each kind gets its own folder, so a name collision across kinds is fine.
-  run('audio and video', "addPhase('trials'); addTrial(editor.phases[0].id);"
+  run('audio and video', "addBlock('trials'); addTrial(editor.blocks[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'audio','s'); addComponent(t.id,'video','s');"
     + "addComponent(t.id,'keyboard','r');"
@@ -1674,16 +1674,16 @@ function mediaCases() {
     + "t.components[1].fileData='data:video/mp4;base64,BBBB';"
     + "t.components[1].fileName='clip.mp4';",
     ['snd/beep.mp3', 'vid/clip.mp4']);
-  run('animation frames', "addPhase('trials'); addTrial(editor.phases[0].id);"
+  run('animation frames', "addBlock('trials'); addTrial(editor.blocks[0].id);"
     + "var t=findTrial(editor.selectedTrial); addComponent(t.id,'animation','r');"
     + "t.components[0].frames=[{fileData:'data:image/png;base64,AAAA',fileName:'f1.png'},"
     + "{fileData:'data:image/png;base64,BBBB',fileName:'f2.png'}];",
     ['img/f1.png', 'img/f2.png']);
   // Two different files that share a name must both survive the archive, so the
   // second gets a suffix rather than overwriting the first.
-  run('same file name, different bytes', "addPhase('trials');"
+  run('same file name, different bytes', "addBlock('trials');"
     + "['AAAA','BBBB'].forEach(function (d, i) {"
-    + "addTrial(editor.phases[0].id);"
+    + "addTrial(editor.blocks[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
     + "t.components[0].fileData='data:image/png;base64,'+d;"
@@ -1691,9 +1691,9 @@ function mediaCases() {
     + "t.components[1].choices=['f','j']; });",
     ['img/face.png', 'img/face_2.png']);
   // The same file twice is one archive entry, one path, one preload entry.
-  run('same file used twice', "addPhase('trials');"
+  run('same file used twice', "addBlock('trials');"
     + "['x','y'].forEach(function () {"
-    + "addTrial(editor.phases[0].id);"
+    + "addTrial(editor.blocks[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
     + "t.components[0].fileData='data:image/png;base64,AAAA';"
@@ -1701,14 +1701,14 @@ function mediaCases() {
     + "t.components[1].choices=['f','j']; });",
     ['img/blue.png']);
   // A name with characters that cannot go in a path or a JS string.
-  run('awkward file name', "addPhase('trials'); addTrial(editor.phases[0].id);"
+  run('awkward file name', "addBlock('trials'); addTrial(editor.blocks[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
     + "t.components[0].fileData='data:image/png;base64,AAAA';"
     + "t.components[0].fileName=\\\"my face (1)'s.png\\\";",
     ['img/my_face_1_s.png']);
   // A bracket before the extension must not leave a trailing underscore.
-  run('bracket before extension', "addPhase('trials'); addTrial(editor.phases[0].id);"
+  run('bracket before extension', "addBlock('trials'); addTrial(editor.blocks[0].id);"
     + "var t=findTrial(editor.selectedTrial);"
     + "addComponent(t.id,'image','s'); addComponent(t.id,'keyboard','r');"
     + "t.components[0].fileData='data:image/png;base64,AAAA';"
@@ -1730,8 +1730,8 @@ function contentlessCases() {
   var out = {};
   function run(label, spec) {
     resetEditor();
-    addPhase('trials');
-    addTrial(editor.phases[0].id);
+    addBlock('trials');
+    addTrial(editor.blocks[0].id);
     var t = findTrial(editor.selectedTrial);
     spec.forEach(function (c) {
       var cat = ['keyboard', 'button', 'slider', 'textInput', 'animation'].indexOf(c[0]) >= 0
@@ -1792,51 +1792,51 @@ function timelineDocCases() {
   var out = {};
   function build(setup) { resetEditor(); eval(setup); return _compileExperiment({}).code; }
 
-  // A phase of two homogeneous trials run as one procedure, with every node
+  // A block of two homogeneous trials run as one procedure, with every node
   // parameter ExpVis can set. Exercises the timeline_variables half of the page.
   function sampled(sample, extra) {
     return build(
-      "addPhase('Trials');" +
+      "addBlock('Trials');" +
       "['RED','BLUE'].forEach(function (w, i) {" +
-      "  addTrial(editor.phases[0].id);" +
+      "  addTrial(editor.blocks[0].id);" +
       "  var t=findTrial(editor.selectedTrial);" +
       "  addComponent(t.id,'text','s'); addComponent(t.id,'keyboard','r');" +
       "  t.components[0].content=w; t.components[1].choices=['a','l'];" +
       "  t.components[1].correctKey='a'; t.weight=i+1;" +
       "});" +
-      "editor.phases[0].conditions = true;" +
-      (sample ? "editor.phases[0].sample = " + sample + ";" : "") +
+      "editor.blocks[0].conditions = true;" +
+      (sample ? "editor.blocks[0].sample = " + sample + ";" : "") +
       (extra || ""));
   }
   var rich = sampled("{type:'with-replacement', size:1}",
-    "editor.phases[0].randomize_order=true; editor.phases[0].repetitions=4;");
+    "editor.blocks[0].randomize_order=true; editor.blocks[0].repetitions=4;");
   var withoutReplacement = sampled("{type:'without-replacement', size:2}");
   var fixedReps = sampled("{type:'fixed-repetitions', size:3}");
   var custom = sampled("{type:'custom', fn:'function (order) { return order; }'}");
   var alternate = sampled("{type:'alternate-groups', randomizeGroupOrder:true}");
   // A fixation with jitter — the one dynamic parameter ExpVis emits.
   var jitter = build(
-    "addPhase('Trials'); addTrial(editor.phases[0].id);" +
+    "addBlock('Trials'); addTrial(editor.blocks[0].id);" +
     "var t=findTrial(editor.selectedTrial); addComponent(t.id,'fixation','s');" +
     "t.components[0].trial_duration=500; t.components[0].durationMin=500;" +
     "t.components[0].durationMax=900; t.components[0].durationStep=200;" +
     "addComponent(t.id,'text','s');");
-  var plain = build("addPhase('Trials'); addTrial(editor.phases[0].id);" +
+  var plain = build("addBlock('Trials'); addTrial(editor.blocks[0].id);" +
     "var t=findTrial(editor.selectedTrial); addComponent(t.id,'text','s');" +
     "addComponent(t.id,'keyboard','r');");
 
-  // A phase carrying both node conditions, so the loop_function /
+  // A block carrying both node conditions, so the loop_function /
   // conditional_function checks below have something to find. Without it they
   // would pass on a sample that deliberately contains neither — which is what
   // they used to do.
   var conditions = build(
-    "addPhase('Trials'); addTrial(editor.phases[0].id);" +
+    "addBlock('Trials'); addTrial(editor.blocks[0].id);" +
     "var t=findTrial(editor.selectedTrial); addComponent(t.id,'text','s');" +
     "addComponent(t.id,'keyboard','r');" +
     "t.components[1].choices=['a','l']; t.components[1].correctKey='a';" +
-    "editor.phases[0].repetitions=4;" +
-    "editor.phases[0].loop={field:'correct',op:'is',value:'true',cap:10};" +
-    "editor.phases[0].cond={field:'correct',op:'is',value:'true'};");
+    "editor.blocks[0].repetitions=4;" +
+    "editor.blocks[0].loop={field:'correct',op:'is',value:'true',cap:10};" +
+    "editor.blocks[0].cond={field:'correct',op:'is',value:'true'};");
   var all = [rich, withoutReplacement, fixedReps, custom, alternate, jitter, plain,
              conditions].join('\\n');
   var shape = nodeShape(rich);
@@ -1869,7 +1869,7 @@ function timelineDocCases() {
   // says so, because the label alone would look like a capability gap.
   check('pushtrials', 'multiple trials as successive timeline.push()', false,
     /timeline\\.push\\(\\w*_trial_\\d+\\)/.test(all),
-    'each phase becomes one node and that node is pushed once; pushing the trials ' +
+    'each block becomes one node and that node is pushed once; pushing the trials ' +
     'individually describes the same experiment, so this is a difference in how ' +
     'the file reads rather than in what it runs');
   section = '嵌套时间线';
@@ -1967,21 +1967,21 @@ function timelineDocCases() {
     'same — that is the top-level timeline array, which the editor also has');
   section = '时间线开始/结束回调';
   // 'byhand', not absent. The editor never writes these, but a node parameter
-  // in the phase settings reaches them exactly as it reaches loop_function —
+  // in the block settings reaches them exactly as it reaches loop_function —
   // having no constructor of its own is what puts a mechanism in this column,
   // not what keeps it out of the table. They were marked absent while the
-  // reason beside them said "write one in the phase settings", which is the
+  // reason beside them said "write one in the block settings", which is the
   // definition of the column next door.
   check('tlstart', 'on_timeline_start', 'byhand', /on_timeline_start/.test(all),
-    'the editor never writes one; a node parameter in the phase settings does');
+    'the editor never writes one; a node parameter in the block settings does');
   check('tlfinish', 'on_timeline_finish', 'byhand', /on_timeline_finish/.test(all),
-    'same — a node parameter in the phase settings');
+    'same — a node parameter in the block settings');
   section = '文档示例里的其它 API';
   check('init', 'initJsPsych()', true, /initJsPsych\\(/.test(all));
   check('comparekeys', 'jsPsych.pluginAPI.compareKeys()', true,
     /jsPsych\\.pluginAPI\\.compareKeys\\(/.test(all));
   // Was 'byhand' ("that is how a branch reads the previous trial; ExpVis has no
-  // branching"). Still true of branching — but the phase settings now emit
+  // branching"). Still true of branching — but the block settings now emit
   // exactly this to build a conditional_function, which jsPsych hands no
   // argument at all, so the editor writes it itself.
   check('lookback', 'jsPsych.data.get().last(1).values()[0]', true,
@@ -2035,7 +2035,7 @@ window.addEventListener('load', function () {
       }
     });
     try {
-      out.cases = phaseCases();
+      out.cases = blockCases();
     } catch (e) {
       out.ok = false;
       out.cases = { error: String(e.message) + ' @ ' + String(e.stack).split('\\n')[1] };
@@ -2223,10 +2223,10 @@ def cmd_check():
 
     cases = res.get("cases", {})
     if "error" in cases:
-        broken_cases = [f"phase cases threw: {cases['error']}"]
+        broken_cases = [f"block cases threw: {cases['error']}"]
     else:
-        # What each synthetic phase must compile to. `factored` is the point:
-        # a phase whose trials are one procedure becomes a table, and every
+        # What each synthetic block must compile to. `factored` is the point:
+        # a block whose trials are one procedure becomes a table, and every
         # other shape must stay plain trials rather than being forced into one.
         WANT = {"homogeneous, default": False,
                 "homogeneous, run as one procedure": True,
@@ -2240,11 +2240,11 @@ def cmd_check():
                 # the properties match, the plugin does not — still two procedures
                 "different plugins, run as one procedure": False}
         broken_cases = [
-            f"phase case {name}: factored={cases[name]['factored']}, expected {want}"
+            f"block case {name}: factored={cases[name]['factored']}, expected {want}"
             for name, want in WANT.items()
             if name in cases and cases[name]["factored"] != want
         ]
-        # The phase settings, mapped to the exact jsPsych parameters they emit.
+        # The block settings, mapped to the exact jsPsych parameters they emit.
         # Written out in full rather than pattern-matched: a control that quietly
         # stops emitting, or starts emitting the wrong shape, is the failure this
         # is here to catch.
@@ -2268,7 +2268,7 @@ def cmd_check():
             "randomize_order": ["randomize_order: true"],
             "repetitions + sample":
                 ["sample: {type: 'with-replacement', size: 1}", "repetitions: 48"],
-            "repetitions on a ragged phase": ["repetitions: 2"],
+            "repetitions on a ragged block": ["repetitions: 2"],
             # no table, so no sampling and no randomize_order
             "sampling without the mode": [],
             # sample is dropped here, repetitions is not.
@@ -2277,7 +2277,7 @@ def cmd_check():
         for name, want in WANT_PARAMS.items():
             got = cases.get(name, {}).get("nodeParams")
             if got != want:
-                broken_cases.append(f"phase case {name}: emitted {got}, expected {want}")
+                broken_cases.append(f"block case {name}: emitted {got}, expected {want}")
         for name, c in cases.items():
             # Both directions. An undeclared node parameter means one leaked in
             # from somewhere nobody asked; a declared one that never appeared
@@ -2286,18 +2286,18 @@ def cmd_check():
             declared = set(c.get("expectParams") or [])
             for k in sorted(observed - declared):
                 broken_cases.append(
-                    f"phase case {name}: node parameter {k!r} was emitted but not declared")
+                    f"block case {name}: node parameter {k!r} was emitted but not declared")
             for k in sorted(declared - observed):
                 broken_cases.append(
-                    f"phase case {name}: {k!r} was declared but never emitted")
+                    f"block case {name}: {k!r} was declared but never emitted")
             if not c["noTokens"]:
-                broken_cases.append(f"phase case {name}: an @@TOKEN@@ survived")
+                broken_cases.append(f"block case {name}: an @@TOKEN@@ survived")
             if name == "custom node parameter":
                 want_props = sorted(["loop_function: function (data) { return false; }",
                                      "repetitions: 2"])
                 if c["emitted"] != want_props:
                     broken_cases.append(
-                        f"phase case {name}: emitted {c['emitted']}, expected {want_props} "
+                        f"block case {name}: emitted {c['emitted']}, expected {want_props} "
                         f"— one key each, the custom one winning")
             if name == "data override keeps the scoring key":
                 checks = [
@@ -2317,16 +2317,16 @@ def cmd_check():
                 for ok, field, why in checks:
                     if not ok:
                         broken_cases.append(
-                            f"phase case {name}: {why} — {c[field]}")
-            if name == "phase conditions":
+                            f"block case {name}: {why} — {c[field]}")
+            if name == "block conditions":
                 for k in ("loopNegated", "condNotNegated", "loopReadsLastRow",
                           "condTakesNoArg", "condReadsGlobal", "noCapWrapper"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "uncapped loop":
                 if not c["plainLiteral"] or not c["noCounter"]:
                     broken_cases.append(
-                        f"phase case {name}: plainLiteral={c['plainLiteral']}, "
+                        f"block case {name}: plainLiteral={c['plainLiteral']}, "
                         f"noCounter={c['noCounter']}")
             if name == "loop behaviour":
                 # text can be right while the meaning is inverted, so drive it
@@ -2334,39 +2334,39 @@ def cmd_check():
                           "emptyRoundSafe"):
                     if not c[k]:
                         broken_cases.append(
-                            f"phase case {name}: {k} is false (capCalls={c['capCalls']})")
+                            f"block case {name}: {k} is false (capCalls={c['capCalls']})")
             if name == "hand-written loop overrides":
                 if c["keyCount"] != 1:
                     broken_cases.append(
-                        f"phase case {name}: {c['keyCount']} loop_function keys, expected 1")
+                        f"block case {name}: {c['keyCount']} loop_function keys, expected 1")
                 if not c["generatedOneGone"]:
                     broken_cases.append(
-                        f"phase case {name}: the generated one is still in the output")
+                        f"block case {name}: the generated one is still in the output")
                 if not c["isTheWrittenOne"]:
                     broken_cases.append(
-                        f"phase case {name}: the written source did not survive")
+                        f"block case {name}: the written source did not survive")
             if name == "jzip layout":
                 if c["manifestName"] != "info.jas":
                     broken_cases.append(
-                        f"phase case {name}: manifest is {c['manifestName']!r}, expected 'info.jas'")
+                        f"block case {name}: manifest is {c['manifestName']!r}, expected 'info.jas'")
                 for k in ("dirMatchesStudy", "htmlNamedAfterComponent",
                           "componentPathMatches", "assetsBesideHtml",
                           "everyEntryIsBytes", "htmlLoadsJatos",
                           "localDoesNotLoadJatos", "idsStable"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "fixation after a stimulus":
                 for k in ("holdsTwoTrials", "bothStimuliOnIt", "fixationIsTheTimedTrial"):
                     if not c[k]:
                         broken_cases.append(
-                            f"phase case {name}: {k} is false "
+                            f"block case {name}: {k} is false "
                             f"(trialsPerNode={c['trialsPerNode']})")
             if name == "two response components":
                 for k in ("pluginIsTheFirst", "choicesAreTheFirsts",
                           "secondDidNotLeak", "scoresAgainstIt"):
                     if not c[k]:
                         broken_cases.append(
-                            f"phase case {name}: {k} is false — plugin and parameters "
+                            f"block case {name}: {k} is false — plugin and parameters "
                             f"must come from the same component")
             if name == "one owner per trial":
                 want = {"animAfterStim": "text | animation",
@@ -2376,7 +2376,7 @@ def cmd_check():
                 for k, expect in want.items():
                     if c[k] != expect:
                         broken_cases.append(
-                            f"phase case {name}: {k} = {c[k]!r}, expected {expect!r}")
+                            f"block case {name}: {k} = {c[k]!r}, expected {expect!r}")
             if name == "survey questions":
                 for k in ("plugins", "likertTwoQuestions", "choiceTwoQuestions",
                           "textTwoQuestions", "labelsAsOneRow", "optionsReached",
@@ -2384,13 +2384,13 @@ def cmd_check():
                           "placeholderOnlyWhereSet", "namesNumbered", "formHasHtml",
                           "noUndefined", "noTrialDuration"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "feedback uses categorize":
                 for k in ("imageUsesImagePlugin", "htmlUsesHtmlPlugin", "feedbackEmitted",
                           "keyAnswerEmitted", "pluginDoesTheScoring",
                           "withoutFeedbackUnchanged", "severalKeysRefuse"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "layout preview zoom":
                 for k in ("hasASlider", "rangeIsSane", "defaultFitsWidth",
                           "defaultFitsHeight", "defaultIsBelowFullWhenNeeded",
@@ -2398,7 +2398,7 @@ def cmd_check():
                           "frameFollowsZoom", "sliderZoomsBothWays",
                           "fitReturnsToTheDefault"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "an expired model list is not a dead end":
                 for k in ("isATextField", "noClosedSelect", "suggestionsOffered",
                           "defaultsToSomething", "refusalNamesTheModel",
@@ -2406,43 +2406,43 @@ def cmd_check():
                           "unrelatedErrorStaysPlain", "authErrorSaysSo",
                           "customHasNoList"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "datapipe is a packaging choice":
                 for k in ("defaultHasNoPipeScript", "defaultHasNoSaveTrial",
                           "loadsThePlugin", "carriesTheTrial", "idIsEscaped"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "dropped parameters are named":
                 for k in ("aloneIsSilent", "untouchedIsSilent", "namesTheAudioParam",
                           "namesTheVideoParam", "namesTheRemedy", "staysAComment"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "correct key is editable":
                 for k in ("hasInput", "labelled", "retiredHintGone"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "ai prompts name no retired mechanism":
                 for k in ("templatesAreClean", "metaTypesAreReal",
                           "schemaHasNoRetiredType", "stillForbidden",
                           "templatesMatchButtons"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "the prompt teaches the schema the editor has":
                 if not c["schemaFound"]:
-                    broken_cases.append(f"phase case {name}: no schema section found")
+                    broken_cases.append(f"block case {name}: no schema section found")
                 if not c["typesCovered"]:
-                    broken_cases.append(f"phase case {name}: typesCovered is false")
+                    broken_cases.append(f"block case {name}: typesCovered is false")
                 if not c["noDrift"]:
-                    broken_cases.append(f"phase case {name}: prompt and editor disagree — {c['drift']}")
+                    broken_cases.append(f"block case {name}: prompt and editor disagree — {c['drift']}")
                 for k in ("controlsNamed", "sampleTypesNamed", "operatorsNamed"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
-            if name == "phase settings survive the import":
+                        broken_cases.append(f"block case {name}: {k} is false")
+            if name == "block settings survive the import":
                 for k in ("repetitionsKept", "randomizeOrderKept", "sampleKept",
                           "loopKept", "condKept", "plainStaysPlain",
                           "gatedOnConditions", "loopAndCondUngated"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "ai provider headers":
                 for k in ("anthropicUsesApiKey", "anthropicSendsNoAuthorization",
                           "browserAccessOptIn", "versionPinned", "restUseBearer",
@@ -2450,40 +2450,40 @@ def cmd_check():
                           "requestCarriesApiKey", "requestOptsInToBrowser",
                           "namesAreDistinct"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "cloze page":
                 for k in ("plugin", "notationKept", "paramsEmitted",
                           "defaultsOmitted", "noBlankWarns"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "free sort":
                 for k in ("plugin", "allImagesEmitted", "assetsCarried", "onlyChanged",
                           "noResponseOrStimulus", "emptyWarns"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "audio and video":
                 for k in ("audioPlugin", "audioParams", "videoPlugin",
                           "videoStimulusIsArray", "videoParams", "imageStillItsOwn",
                           "fallbackHasNoControls"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if name == "expression validation":
                 for k, want in (("rejectsStatement", True), ("namesTheValue", True),
                                 ("suggestsAFunction", True), ("acceptsFunction", True),
                                 ("acceptsArrow", True)):
                     if c[k] != want:
-                        broken_cases.append(f"phase case {name}: {k}={c[k]}, expected {want}")
+                        broken_cases.append(f"block case {name}: {k}={c[k]}, expected {want}")
             if name == "data is saved":
                 for k in ("callsLocalSave", "formatFirst", "hasFilename"):
                     if not c[k]:
-                        broken_cases.append(f"phase case {name}: {k} is false")
+                        broken_cases.append(f"block case {name}: {k} is false")
             if c.get("writesReserved"):
                 broken_cases.append(
-                    f"phase case {name}: writes a field jsPsych reserves "
+                    f"block case {name}: writes a field jsPsych reserves "
                     f"(trial_type / trial_index / time_elapsed / plugin_version)")
             if c.get("variablePlugin"):
                 broken_cases.append(
-                    f"phase case {name}: the plugin became a timeline variable — "
+                    f"block case {name}: the plugin became a timeline variable — "
                     "`type` is read before any variable has a value")
             # An animation trial must reach the node it is declared in. The
             # failure this case exists for is the declaration going unreferenced:
@@ -2494,23 +2494,23 @@ def cmd_check():
             # matters is the count.
             if name.startswith("custom parameter"):
                 if not c.get("emitsTheSource"):
-                    broken_cases.append(f"phase case {name}: the source was not emitted")
+                    broken_cases.append(f"block case {name}: the source was not emitted")
                 if name.endswith("(replace)"):
                     if not c.get("replacesGenerated"):
                         broken_cases.append(
-                            f"phase case {name}: the generated stimulus is still there")
+                            f"block case {name}: the generated stimulus is still there")
                     if c["stimulusKeys"] != 1:
                         broken_cases.append(
-                            f"phase case {name}: {c['stimulusKeys']} stimulus keys, expected 1")
+                            f"block case {name}: {c['stimulusKeys']} stimulus keys, expected 1")
                 elif c["stimulusKeys"] != 1:
                     broken_cases.append(
-                        f"phase case {name}: {c['stimulusKeys']} stimulus keys, expected 1")
+                        f"block case {name}: {c['stimulusKeys']} stimulus keys, expected 1")
             # (the null entries are the preload trial, which is a bare trial
             # rather than a node — the animation's frames are media)
             anim_nodes = [n for n in c["trialsPerNode"] if n is not None]
             if name == "animation trial" and anim_nodes != [1]:
                 broken_cases.append(
-                    f"phase case animation trial: node collects {anim_nodes}, "
+                    f"block case animation trial: node collects {anim_nodes}, "
                     f"expected [1] — the trial would be declared and never run")
             # A factored node holds the procedure's ENTRIES, not one entry per
             # condition. A plain procedure is one; a procedure that opens with a
@@ -2522,7 +2522,7 @@ def cmd_check():
                 got_nodes = [n for n in c["trialsPerNode"] if n is not None]
                 if got_nodes != want_nodes:
                     broken_cases.append(
-                        f"phase case {name}: node holds {got_nodes}, expected {want_nodes}")
+                        f"block case {name}: node holds {got_nodes}, expected {want_nodes}")
 
     bad = 0
     broken = (list(broken_cases) + list(broken_media) + list(broken_contentless)
@@ -2540,7 +2540,7 @@ def cmd_check():
             broken.append(f"{name}: node-level parameter(s) {stray} "
                           "that this template should not carry")
         if any(n is None or n == 0 for n in struct["trialsPerNode"]):
-            broken.append(f"{name}: a phase node collects no trials ({struct['trialsPerNode']})")
+            broken.append(f"{name}: a block node collects no trials ({struct['trialsPerNode']})")
         if not t.get("publishedMatches"):
             broken.append(f"{name}: publish != export")
         if not t.get("noTokens"):
@@ -2581,7 +2581,7 @@ def cmd_check():
             bad += 1
         print(f"  {'OK  ' if same else 'DIFF'} {name:16s} "
               f"{len(want)} -> {len(normalise(t['code']))} chars   "
-              f"phases={struct['trialsPerNode']}")
+              f"blocks={struct['trialsPerNode']}")
     # Version invariants: the same in every template, so checked once. They
     # answer the half of the review's versioning point that is about the editor
     # rather than about a particular file — the number has to be a number, and

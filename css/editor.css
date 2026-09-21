@@ -201,8 +201,8 @@
         max-width: 900px;
         margin: 0 auto;
       }
-      /* Phase card */
-      .phase-card {
+      /* Block card */
+      .block-card {
         background: var(--surface);
         border-radius: 14px;
         box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
@@ -212,7 +212,7 @@
         z-index: 2;
         width: 100%;
       }
-      .phase-card-header {
+      .block-card-header {
         padding: 14px 20px;
         border-bottom: 1px solid var(--border);
         display: flex;
@@ -220,13 +220,13 @@
         gap: 10px;
         background: #fafafe;
       }
-      .phase-card-body {
+      .block-card-body {
         padding: 16px 20px 20px;
         display: flex;
         flex-direction: column;
         gap: 6px;
       }
-      .phase-index {
+      .block-index {
         width: 26px;
         height: 26px;
         border-radius: 50%;
@@ -239,9 +239,9 @@
         font-weight: 700;
         flex-shrink: 0;
       }
-      /* The phase's name, which is also where every generated name in the code
+      /* The block's name, which is also where every generated name in the code
          comes from. Editable in place, so it has to look editable. */
-      .phase-name {
+      .block-name {
         font-weight: 700;
         font-size: 0.82rem;
         cursor: text;
@@ -249,11 +249,11 @@
         border-radius: 3px;
         padding: 1px 2px;
       }
-      .phase-name:hover {
+      .block-name:hover {
         border-bottom-color: var(--border);
         background: rgba(0, 0, 0, 0.03);
       }
-      .phase-name-input {
+      .block-name-input {
         font-family: inherit;
         font-weight: 700;
         font-size: 0.82rem;
@@ -265,10 +265,10 @@
         outline: none;
         min-width: 90px;
       }
-      /* The phase's settings. It was 0.72rem at half opacity, which is smaller
+      /* The block's settings. It was 0.72rem at half opacity, which is smaller
          than the text around it and easy to miss entirely — the gear has to be
          legible before it can be found. */
-      .phase-settings-btn {
+      .block-settings-btn {
         background: none;
         border: none;
         color: var(--text2);
@@ -281,13 +281,13 @@
         border-radius: 6px;
         transition: background 0.12s, color 0.12s;
       }
-      .phase-settings-btn:hover {
+      .block-settings-btn:hover {
         background: rgba(99, 102, 241, 0.1);
         color: var(--accent);
       }
-      /* "This phase has settings worth opening." A drawn dot rather than a •
+      /* "This block has settings worth opening." A drawn dot rather than a •
          glyph, which renders at whatever size the font happens to give it. */
-      .phase-settings-dot {
+      .block-settings-dot {
         display: inline-block;
         width: 6px;
         height: 6px;
@@ -296,22 +296,22 @@
         background: var(--accent);
         vertical-align: 0.1em;
       }
-      /* How the phase's trials compiled. A factored phase — one procedure run
+      /* How the block's trials compiled. A factored block — one procedure run
          once per condition — is the case worth spotting, so it is the one that
          gets colour; plain trials stay quiet text. */
-      .phase-mode {
+      .block-mode {
         font-size: 0.68rem;
         color: var(--text2);
         cursor: help;
       }
-      .phase-mode.factored {
+      .block-mode.factored {
         color: var(--accent);
         background: rgba(99, 102, 241, 0.1);
         border: 1px solid rgba(99, 102, 241, 0.25);
         border-radius: 999px;
         padding: 1px 8px;
       }
-      .phase-arrow {
+      .block-arrow {
         display: flex;
         align-items: center;
         justify-content: center;

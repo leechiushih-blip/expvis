@@ -101,8 +101,8 @@ const PLUGINS = {
 
 function newExperiment() {
   resetEditor();
-  addPhase("trials");
-  return editor.phases[0].id;
+  addBlock("trials");
+  return editor.blocks[0].id;
 }
 
 function addTrialWith(pid, spec) {
