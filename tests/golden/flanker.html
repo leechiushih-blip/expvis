@@ -37,8 +37,8 @@
     // ── Instructions (1/3) ──
     var instructions_trial_1 = {
       type: jsPsychHtmlButtonResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:20px;color:#1e293b;font-weight:bold">Welcome to the Flanker task!</div><div style="font-size:16px;color:#333333;font-weight:bold">A row of arrows will appear in the center. Judge the direction of the MIDDLE arrow.<br>If the middle arrow points LEFT (←), press F.<br>If the middle arrow points RIGHT (→), press J.<br>Ignore the flanking arrows. Respond quickly and accurately.</div></div>',
-      choices: ["Start Experiment"],
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:20px;color:#333333;font-weight:bold">Flanker task<br><br>Five arrows appear. Answer the direction of the MIDDLE one and ignore the others.<br><br>Left → F     Right → J</div></div>',
+      choices: ["Start"],
       button_layout: 'grid',
       grid_rows: 1
     };
@@ -49,52 +49,45 @@
     timeline.push(instructions_timeline);
 
     // ── Trials (2/3) ──
-    var trials_trial_2 = {
-      type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:20px;color:#ef4444;font-weight:bold">Press the key according to the rules!</div></div>',
-      trial_duration: 1500
-    };
-
-    var trials_trial_3 = {
-      type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:22px;color:#dc2626;font-weight:bold">Incorrect answer. Please focus.</div></div>',
-      choices: [" "],
-      prompt: 'Press space to continue'
-    };
+    // The same procedure once per set of values below.
+    var trials_variables = [
+      {stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:44px;color:#333333;font-weight:bold">&lt;&lt;&lt;&lt;&lt;</div></div>', data: {correct_response: 'f'}},
+      {stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:44px;color:#333333;font-weight:bold">&gt;&gt;&gt;&gt;&gt;</div></div>', data: {correct_response: 'j'}},
+      {stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:44px;color:#ef4444;font-weight:bold">&gt;&gt;&lt;&gt;&gt;</div></div>', data: {correct_response: 'f'}},
+      {stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:44px;color:#ef4444;font-weight:bold">&lt;&gt;&lt;&lt;&lt;</div></div>', data: {correct_response: 'j'}}
+    ];
 
     var trials_timeline = {
       timeline: [
-        // Trial 1
         {
           type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:60px;color:#ccc">+</div></div>',
-          choices: 'NO_KEYS',
-          trial_duration: 700,
-        },
-        {
-          type: jsPsychHtmlKeyboardResponse,
-          stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:32px;color:#333333;font-weight:bold">New Text</div><div style="font-size:28px;color:#1a1a2e;font-weight:bold">&lt;&lt;&lt;&lt;&lt;</div><div style="font-size:28px;color:#ef4444;font-weight:bold">&gt;&lt;&gt;&lt;&gt;</div><div style="font-size:28px;color:#1a1a2e;font-weight:bold">&gt;&gt;&gt;&gt;&gt;</div><div style="font-size:28px;color:#ef4444;font-weight:bold">&lt;&gt;&lt;&lt;&gt;</div></div>',
-          choices: ["a","l"],
-          prompt: 'Press a key'
-        },
-        trials_trial_2,
-        trials_trial_3
-      ]
+          stimulus: jsPsych.timelineVariable('stimulus'),
+          choices: ["f","j"],
+          data: jsPsych.timelineVariable('data'),
+          on_finish: function(data) {
+            data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);
+          }
+        }
+      ],
+      timeline_variables: trials_variables,
+      sample: {type: 'without-replacement', size: 2},
+      repetitions: 40
     };
     timeline.push(trials_timeline);
 
-    // ── Feedback (3/3) ──
-    var feedback_trial_1 = {
-      type: jsPsychHtmlKeyboardResponse,
-      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:22px;color:#1e293b;font-weight:bold">Experiment complete. Thank you for your participation!</div></div>',
-      choices: [" "],
-      prompt: 'Press a key'
+    // ── Done (3/3) ──
+    var done_trial_1 = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: '<div style="display:flex;flex-direction:column;align-items:center;gap:1.5em;padding:2em;box-sizing:border-box"><div style="font-size:20px;color:#333333;font-weight:bold">Thank you — that is the end of the task.</div></div>',
+      choices: ["Finish"],
+      button_layout: 'grid',
+      grid_rows: 1
     };
 
-    var feedback_timeline = {
-      timeline: [feedback_trial_1]
+    var done_timeline = {
+      timeline: [done_trial_1]
     };
-    timeline.push(feedback_timeline);
+    timeline.push(done_timeline);
 
     jsPsych.run(timeline);
 

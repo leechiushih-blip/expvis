@@ -3767,405 +3767,242 @@ var _compDefaults = {
 
       // ============ Templates ============
       function loadTemplate(name) {
+        // Five STRUCTURE demonstrations, one per mechanism the editor now has.
+        //
+        // They are not five finished experiments. Each shows one thing the
+        // current system can do that the others do not, so that a researcher
+        // can open the one closest to their design, see how it is built, and
+        // edit it. They used to demonstrate four components that no longer
+        // exist, and survived only because sc() ignored the calls that landed
+        // on nothing.
         resetEditor();
-        // Helper: set component props by index in a trial. Tolerant of a missing
-        // index: these templates were written against component types that have
-        // since been removed, so the indices have shifted and the surplus calls
-        // land on nothing. They are being rewritten; until then this keeps them
-        // loadable instead of throwing.
+
+        // Set component props by index. Exact now: every template below knows
+        // which component it is addressing.
         function sc(trial, idx, props) {
           var c = trial.components[idx];
-          if (!c) return;
-          Object.keys(props).forEach(function (k) {
-            c[k] = props[k];
-          });
+          Object.keys(props).forEach(function (k) { c[k] = props[k]; });
+        }
+        function addPhaseWith(name, build) {
+          addPhase(name);
+          var ph = editor.phases[editor.phases.length - 1];
+          if (build) build(ph);
+          return ph;
+        }
+        function trialIn(pid, spec) {
+          addTrial(pid);
+          var t = findTrial(editor.selectedTrial);
+          return t;
+        }
+        function instructions(lines, buttonLabel) {
+          return function (ph) {
+            var t = trialIn(ph.id);
+            addComponent(t.id, 'text', 's');
+            addComponent(t.id, 'button', 'r');
+            sc(t, 0, {content: lines, fontSize: 20, position: 'center'});
+            sc(t, 1, {choices: [buttonLabel || 'Start']});
+          };
+        }
+        // The tail every template shares: select something sensible so the
+        // inspector is not empty, then repaint.
+        function finishTemplate() {
+          if (editor.selectedTrial) {
+            var ft = findTrial(editor.selectedTrial);
+            if (ft && ft.components.length > 0) editor.selComp = ft.components[0].id;
+          }
+          renderAll();
+        }
+        function ending(lines) {
+          return function (ph) {
+            var t = trialIn(ph.id);
+            addComponent(t.id, 'text', 's');
+            addComponent(t.id, 'button', 'r');
+            sc(t, 0, {content: lines, fontSize: 20, position: 'center'});
+            sc(t, 1, {choices: ['Finish']});
+          };
         }
 
         if (name === 'stroop') {
-          // Phase 1: Instructions
-          addPhase('Instructions');
-          var p1 = editor.phases[0].id;
-          addTrial(p1);
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'button', 'r');
-          var t1 = findTrial(editor.selectedTrial);
-          sc(t1, 0, {content: 'Welcome to the Stroop experiment!\n\nYou will see color words (RED, BLUE, GREEN) displayed in different font colors.\nYour task is to respond to the FONT COLOR, ignoring the word meaning.\n\nRed font → Press A\nBlue font → Press L\nGreen font → Press K\n\nRespond as quickly and accurately as possible!', fontSize: 20, position: 'center'});
-          sc(t1, 1, {choices: ['Start Experiment']});
-          // Phase 2: Stroop trials — 9 variants (3 colors × 3 characters)
-          addPhase('Trials');
-          var p2 = editor.phases[1].id;
-          // Main trial: fixation → delay → randomize(9 texts) → keyboard → branch → loop
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'randomize', 'l');
-          for (var si = 0; si < 9; si++) addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'keyboard', 'r');
-          addComponent(editor.selectedTrial, 'branch', 'l');
-          addComponent(editor.selectedTrial, 'loop', 'l');
-          var t2 = findTrial(editor.selectedTrial);
-          sc(t2, 0, {trial_duration: 700});
-          sc(t2, 1, {mode: 'pick-one'});
-          // 9 text variants: 3 colors × 3 characters
-          var stroopVariants = [
-            {content: 'RED', color: '#ff0000', key: 'a'},
-            {content: 'RED', color: '#0000ff', key: 'l'},
-            {content: 'RED', color: '#00aa00', key: 'k'},
-            {content: 'BLUE', color: '#ff0000', key: 'a'},
-            {content: 'BLUE', color: '#0000ff', key: 'l'},
-            {content: 'BLUE', color: '#00aa00', key: 'k'},
-            {content: 'GREEN', color: '#ff0000', key: 'a'},
-            {content: 'GREEN', color: '#0000ff', key: 'l'},
-            {content: 'GREEN', color: '#00aa00', key: 'k'},
-          ];
-          stroopVariants.forEach(function (v, vi) {
-            sc(t2, 2 + vi, {content: v.content, color: v.color, fontSize: 36, position: 'center', fontWeight: 'bold', 映射按键: v.key});
+          // The condition table. One trial per condition, the SAME shape each
+          // time, and the phase settings do the repeating and the shuffling —
+          // which is what turns the trials into a procedure plus a table in
+          // the exported code.
+          addPhaseWith('Instructions', instructions(
+            'Stroop task\n\n' +
+            'A colour word appears. Answer the INK COLOUR and ignore what the word says.\n\n' +
+            'Red \u2192 A     Blue \u2192 L     Green \u2192 K'));
+          addPhaseWith('Trials', function (ph) {
+            var conds = [
+              {word: 'RED',   colour: '#3b82f6', key: 'l'},
+              {word: 'BLUE',  colour: '#22c55e', key: 'k'},
+              {word: 'GREEN', colour: '#ef4444', key: 'a'},
+            ];
+            conds.forEach(function (c) {
+              var t = trialIn(ph.id);
+              addComponent(t.id, 'text', 's');
+              addComponent(t.id, 'keyboard', 'r');
+              sc(t, 0, {content: c.word, color: c.colour, fontSize: 44});
+              sc(t, 1, {choices: ['a', 'l', 'k'], correctKey: c.key, prompt: ''});
+            });
+            // The two settings that need `conditions` to mean anything.
+            ph.conditions = true;
+            ph.repetitions = 48;
+            ph.randomize_order = true;
           });
-          sc(t2, 11, Object.assign({choices: ['a', 'l', 'k'], prompt: 'Red→A  Blue→L  Green→K'}));
-          sc(t2, 12, {condition: 'correct'});
-          sc(t2, 13, {count: 48});
-          // Error feedback trial
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'text', 's');
-          var t3 = findTrial(editor.selectedTrial);
-          sc(t3, 0, {content: 'Press the key for the FONT COLOR!\nRed=A  Blue=L  Green=K', fontSize: 22, color: '#ef4444', position: 'center'});
-          t3.trial_duration = 1200;
-          sc(t2, 12, {condition: 'correct', targetFail: t3.id});
-          // Phase 3: Feedback
-          addPhase('Feedback');
-          var p3 = editor.phases[2].id;
-          addTrial(p3);
-          addComponent(editor.selectedTrial, 'text', 's');
-          var t3 = findTrial(editor.selectedTrial);
-          sc(
-            t3,
-            0,
-            Object.assign({content: 'Experiment complete!\n\nThank you for your participation.\nYour response data has been recorded.', fontSize: 22, position: 'center'}, ),
-          );
-        } else if (name === 'simon') {
-          // Phase 1: Instructions
-          addPhase('Instructions');
-          var p1 = editor.phases[0].id;
-          addTrial(p1);
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'button', 'r');
-          var t1 = findTrial(editor.selectedTrial);
-          sc(
-            t1,
-            0,
-            Object.assign({
-                content:
-                  'Welcome to the Simon effect experiment!\n\nColored circles will appear on the left or right side of the screen.\nIgnore the position and respond based on COLOR:\n\nRed → Press A\nGreen → Press L\n\nRespond as quickly and accurately as possible!',
-                fontSize: 20,
-                position: 'center',
-              }, ),
-          );
-          sc(t1, 1, {choices: ['Start Experiment']});
-          // Phase 2: Simon trials — pick-one from 4 variants (red/green × left/right)
-          addPhase('Trials');
-          var p2 = editor.phases[1].id;
-          // Main trial: fixation → delay → randomize(4 shapes) → keyboard → branch → loop
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'randomize', 'l');
-          addComponent(editor.selectedTrial, 'shape', 's');
-          addComponent(editor.selectedTrial, 'shape', 's');
-          addComponent(editor.selectedTrial, 'shape', 's');
-          addComponent(editor.selectedTrial, 'shape', 's');
-          addComponent(editor.selectedTrial, 'keyboard', 'r');
-          addComponent(editor.selectedTrial, 'branch', 'l');
-          addComponent(editor.selectedTrial, 'loop', 'l');
-          var t2 = findTrial(editor.selectedTrial);
-          sc(t2, 0, {trial_duration: 700}); // fixation
-          sc(t2, 1, {mode: 'pick-one'}); // randomize: pick one each loop
-          sc(t2, 2, {shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}); // 左→A
-          sc(t2, 3, {shape: 'circle', size: 80, color: '#ef4444', position: 'center', 映射按键: 'a'}); // 右→A
-          sc(t2, 4, {shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}); // 左→L
-          sc(t2, 5, {shape: 'circle', size: 80, color: '#22c55e', position: 'center', 映射按键: 'l'}); // 右→L
-          sc(t2, 6, Object.assign({choices: ['a', 'l'], prompt: 'Red→A  Green→L'})); // keyboard
-          sc(t2, 7, {condition: 'correct'}); // branch placeholder (targetFail set below)
-          sc(t2, 8, {count: 60}); // 60 trials
-          // Error feedback trial (branch target)
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'text', 's');
-          var t3 = findTrial(editor.selectedTrial);
-          sc(
-            t3,
-            0,
-            Object.assign({content: 'Press the key for the COLOR!\nRed=A  Green=L', fontSize: 22, color: '#ef4444', position: 'center'}, ),
-          );
-          t3.trial_duration = 1200;
-          // Set branch target to error trial
-          sc(t2, 7, {condition: 'correct', targetFail: t3.id});
-          // Phase 3: Feedback
-          addPhase('Feedback');
-          var p3 = editor.phases[2].id;
-          addTrial(p3);
-          addComponent(editor.selectedTrial, 'text', 's');
-          var tf = findTrial(editor.selectedTrial);
-          sc(
-            tf,
-            0,
-            Object.assign({
-                content: 'Experiment complete!\n\nThank you for your participation.\nYour reaction time and accuracy have been recorded.',
-                fontSize: 24,
-                position: 'center',
-              }, ),
-          );
-        } else if (name === 'flanker') {
-          // Phase 1: Instructions
-          addPhase('Instructions');
-          var p1 = editor.phases[0].id;
-          addTrial(p1);
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'button', 'r');
-          var t1 = findTrial(editor.selectedTrial);
-          sc(t1, 0, {
-            content: 'Welcome to the Flanker task!', fontSize: 20, color: '#1e293b', position: 'center'
-          });
-          sc(t1, 1, {
-            content: 'A row of arrows will appear in the center. Judge the direction of the MIDDLE arrow.\nIf the middle arrow points LEFT (←), press F.\nIf the middle arrow points RIGHT (→), press J.\nIgnore the flanking arrows. Respond quickly and accurately.',
-            fontSize: 16, color: '#333333', position: 'center'
-          });
-          sc(t1, 2, {choices: ['Start Experiment']});
-          // Phase 2: Flanker trials
-          addPhase('Trials');
-          var p2 = editor.phases[1].id;
-          // Main trial: fixation → delay → randomize(5 texts) → keyboard → branch → loop
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'randomize', 'l');
-          for (var fi = 0; fi < 5; fi++) addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'keyboard', 'r');
-          addComponent(editor.selectedTrial, 'branch', 'l');
-          addComponent(editor.selectedTrial, 'loop', 'l');
-          var t2 = findTrial(editor.selectedTrial);
-          sc(t2, 0, {trial_duration: 700});
-          sc(t2, 1, {mode: 'pick-one'});
-          // 5 Flanker arrow variants
-          var flankerVariants = [
-            {content: '<<<<<', color: '#1a1a2e', 映射按键: 'f'},
-            {content: '><><>', color: '#ef4444', 映射按键: 'j'},
-            {content: '>>>>>', color: '#1a1a2e', 映射按键: 'j'},
-            {content: '<><<>', color: '#ef4444', 映射按键: 'f'},
-            {content: '>>><>', color: '#22c55e', 映射按键: 'j'},
-          ];
-          for (var fi2 = 0; fi2 < flankerVariants.length; fi2++) {
-            var fv = flankerVariants[fi2];
-            sc(t2, 2 + fi2, {content: fv.content, fontSize: 28, color: fv.color, position: 'center', 映射按键: fv.映射按键});
-          }
-          sc(t2, 7, Object.assign({choices: ['f', 'j'], prompt: '← Press F  → Press J', trial_duration: 1500}));
-          sc(t2, 8, {condition: 'correct', targetFail: ''});
-          sc(t2, 9, {count: 80});
-          // Error feedback trial (branch target)
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'text', 's');
-          var tErr = findTrial(editor.selectedTrial);
-          sc(tErr, 0, {
-            content: 'Press the key according to the rules!', fontSize: 20, color: '#ef4444', position: 'center'
-          });
-          tErr.trial_duration = 1500;
-          sc(t2, 8, {condition: 'correct', targetFail: tErr.id});
-          // Error message trial (shown after main experiment)
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'keyboard', 'r');
-          var t3 = findTrial(editor.selectedTrial);
-          sc(t3, 0, {
-            content: 'Incorrect answer. Please focus.', fontSize: 22, color: '#dc2626', position: 'center'
-          });
-          sc(t3, 1, Object.assign({choices: ['space'], prompt: 'Press space to continue'}));
-          // Phase 3: Feedback
-          addPhase('Feedback');
-          var p3 = editor.phases[2].id;
-          addTrial(p3);
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'keyboard', 'r');
-          var tf = findTrial(editor.selectedTrial);
-          sc(tf, 0, {
-            content: 'Experiment complete. Thank you for your participation!', fontSize: 22, color: '#1e293b', position: 'center'
-          });
-          sc(tf, 1, Object.assign({choices: ['space']}));
-        } else if (name === 'branch-demo') {
-          // Phase 1: explain the branch concept
-          addPhase('Instructions');
-          var p1 = editor.phases[0].id;
-          addTrial(p1);
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'button', 'r');
-          var t1 = findTrial(editor.selectedTrial);
-          sc(
-            t1,
-            0,
-            Object.assign({
-                content:
-                  'Branch Demo\n\nThis experiment demonstrates the branch component:\n• Red text → Press A\n• Blue text → Press L\n• Wrong answer → jumps to error feedback\n• Correct answer → proceeds normally\n\n2 sets of 3 trials each.',
-                fontSize: 18,
-                position: 'center',
-              }, ),
-          );
-          sc(t1, 1, {choices: ['Start Demo']});
-          // Phase 2: branch demo trials
-          addPhase('Trials');
-          var p2 = editor.phases[1].id;
-          // -- Trial 2: red text, A key (correctKey: a), branch→t3 on error
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'keyboard', 'r');
-          addComponent(editor.selectedTrial, 'branch', 'l');
-          addComponent(editor.selectedTrial, 'loop', 'l');
-          var t2 = findTrial(editor.selectedTrial);
-          sc(t2, 0, {trial_duration: 700});
-          sc(t2, 1, {content: 'RED', color: '#ef4444', fontSize: 36, position: 'center'});
-          sc(t2, 2, Object.assign({choices: ['a', 'l'], correctKey: 'a'}));
-          sc(t2, 3, {condition: 'correct'}); // targetFail set below after trial IDs known
-          sc(t2, 4, {count: 3});
-          // -- Trial 3: error feedback (target of branch from trial 2)
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'text', 's');
-          var t3 = findTrial(editor.selectedTrial);
-          sc(
-            t3,
-            0,
-            Object.assign({content: 'Wrong key!\n\nPress A for RED text', fontSize: 22, color: '#ef4444', position: 'center'}, ),
-          );
-          t3.trial_duration = 1500;
-          // -- Trial 4: blue text, L key (correctKey: l), branch→t5 on error
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'keyboard', 'r');
-          addComponent(editor.selectedTrial, 'branch', 'l');
-          addComponent(editor.selectedTrial, 'loop', 'l');
-          var t4 = findTrial(editor.selectedTrial);
-          sc(t4, 0, {trial_duration: 700});
-          sc(t4, 1, {content: 'BLUE', color: '#3b82f6', fontSize: 36, position: 'center'});
-          sc(t4, 2, Object.assign({choices: ['a', 'l'], correctKey: 'l'}));
-          sc(t4, 3, {condition: 'correct'});
-          sc(t4, 4, {count: 3});
-          // -- Trial 5: error feedback (target of branch from trial 4)
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'text', 's');
-          var t5 = findTrial(editor.selectedTrial);
-          sc(
-            t5,
-            0,
-            Object.assign({content: 'Wrong key!\n\nPress L for BLUE text', fontSize: 22, color: '#ef4444', position: 'center'}, ),
-          );
-          t5.trial_duration = 1500;
-          // Now set targetFail references (trial IDs are known)
-          sc(t2, 3, {condition: 'correct', targetFail: t3.id});
-          sc(t4, 3, {condition: 'correct', targetFail: t5.id});
-          // Phase 3: feedback
-          addPhase('Feedback');
-          var p3 = editor.phases[2].id;
-          addTrial(p3);
-          addComponent(editor.selectedTrial, 'text', 's');
-          var tf = findTrial(editor.selectedTrial);
-          sc(
-            tf,
-            0,
-            Object.assign({
-                content:
-                  'Demo complete!\n\nKey branch features:\n• targetFail property specifies error jump target\n• Correct answer: continues main flow\n• Wrong answer: flashes red → jumps to error page\n• Error page ends → returns to main flow\n• Target trials auto-skipped when reached via normal flow',
-                fontSize: 20,
-                position: 'center',
-              }, ),
-          );
-        } else if (name === 'randomize-demo') {
-          // Phase 1: Instructions
-          addPhase('Instructions');
-          var p1 = editor.phases[0].id;
-          addTrial(p1);
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'button', 'r');
-          var t1 = findTrial(editor.selectedTrial);
-          sc(
-            t1,
-            0,
-            Object.assign({
-                content:
-                  'Randomize + Variable Demo\n\nThis experiment demonstrates two logic components:\n\nVariable: stores experiment data (e.g. score)\n  • Creates variable score=0 at trial start\n  • +1 on each correct answer\n\nRandomize: shuffles component display order\n  • 4 fruit names in random order\n  • Different order each loop\n\nMemorize the fruit names, then type them in.\n5 rounds total.',
-                fontSize: 17,
-                position: 'center',
-              }, ),
-          );
-          sc(t1, 1, {choices: ['Start Demo']});
-          // Phase 2: Trials
-          addPhase('Trials');
-          var p2 = editor.phases[1].id;
-          // Trial 2: init variable
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'variable', 'l');
-          var t2 = findTrial(editor.selectedTrial);
-          sc(t2, 0, {name: 'score', initial: 0});
-          // Trial 3: memory test with randomize — 4 fruits + response
-          addTrial(p2);
-          addComponent(editor.selectedTrial, 'fixation', 's');
-          addComponent(editor.selectedTrial, 'randomize', 'l');
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'text', 's');
-          addComponent(editor.selectedTrial, 'textInput', 'r');
-          addComponent(editor.selectedTrial, 'variable', 'l');
-          addComponent(editor.selectedTrial, 'loop', 'l');
-          var t3 = findTrial(editor.selectedTrial);
-          sc(t3, 0, {trial_duration: 700});
-          sc(t3, 1, {mode: 'shuffle'});
-          sc(
-            t3,
-            2,
-            {content: 'Apple', fontSize: 30, color: '#ef4444', position: 'center'},
-          );
-          sc(
-            t3,
-            3,
-            {content: 'Banana', fontSize: 30, color: '#f59e0b', position: 'center'},
-          );
-          sc(
-            t3,
-            4,
-            {content: 'Orange', fontSize: 30, color: '#f97316', position: 'center'},
-          );
-          sc(
-            t3,
-            5,
-            {content: 'Grape', fontSize: 30, color: '#a855f7', position: 'center'},
-          );
-          // No trial_duration here: survey-text has none, so the recall question
-          // waits for the participant to submit.
-          sc(
-            t3,
-            6,
-            {prompt: 'Which fruits do you remember?', placeholder: 'Apple, Banana, …', name: 'Fruits'},
-          );
-          sc(t3, 7, {name: 'score', initial: 0});
-          sc(t3, 8, {count: 5});
-          // Phase 3: Feedback
-          addPhase('Feedback');
-          var p3 = editor.phases[2].id;
-          addTrial(p3);
-          addComponent(editor.selectedTrial, 'text', 's');
-          var tf = findTrial(editor.selectedTrial);
-          sc(
-            tf,
-            0,
-            Object.assign({
-                content:
-                  'Demo complete!\n\nVariable component:\n• Stores and updates experiment data\n• e.g. scores, cumulative RT\n• Converted to data fields in jsPsych\n\nRandomize component:\n• Shuffles component order within a trial\n• Controls order effects\n• Converted to timeline_variables in jsPsych',
-                fontSize: 20,
-                position: 'center',
-              }, ),
-          );
+          addPhaseWith('Done', ending('Thank you — that is the end of the task.'));
+          return finishTemplate();
         }
-        if (editor.selectedTrial) {
-          var ft = findTrial(editor.selectedTrial);
-          if (ft && ft.components.length > 0) editor.selComp = ft.components[0].id;
+
+        if (name === 'simon') {
+          // The same condition table, plus a message the plugin shows itself.
+          // Filling correct_text switches the trial onto jsPsych's categorize
+          // plugin, which is why the correct key has to be exactly one.
+          addPhaseWith('Instructions', instructions(
+            'Simon task\n\n' +
+            'A circle appears on the left or the right. Answer the COLOUR and ' +
+            'ignore the side it is on.\n\n' +
+            'Red \u2192 A     Green \u2192 L'));
+          addPhaseWith('Trials', function (ph) {
+            [
+              {colour: '#ef4444', position: 'left',  key: 'a'},
+              {colour: '#ef4444', position: 'right', key: 'a'},
+              {colour: '#22c55e', position: 'left',  key: 'l'},
+              {colour: '#22c55e', position: 'right', key: 'l'},
+            ].forEach(function (c) {
+              var t = trialIn(ph.id);
+              addComponent(t.id, 'shape', 's');
+              addComponent(t.id, 'keyboard', 'r');
+              sc(t, 0, {shape: 'circle', color: c.colour, size: 90,
+                        position: c.position});
+              sc(t, 1, {choices: ['a', 'l'], correctKey: c.key, prompt: '',
+                        correct_text: 'Correct!', incorrect_text: 'That was the wrong colour.'});
+            });
+            ph.conditions = true;
+            ph.repetitions = 40;
+            ph.randomize_order = true;
+          });
+          addPhaseWith('Done', ending('Thank you — that is the end of the task.'));
+          return finishTemplate();
         }
-        renderAll();
+
+        if (name === 'flanker') {
+          // Sampling: the phase holds every condition, and the settings draw a
+          // subset of them per repetition instead of running all of them.
+          addPhaseWith('Instructions', instructions(
+            'Flanker task\n\n' +
+            'Five arrows appear. Answer the direction of the MIDDLE one and ' +
+            'ignore the others.\n\n' +
+            'Left \u2192 F     Right \u2192 J'));
+          addPhaseWith('Trials', function (ph) {
+            [
+              {row: '<<<<<', colour: '#333333', key: 'f'},
+              {row: '>>>>>', colour: '#333333', key: 'j'},
+              {row: '>><>>', colour: '#ef4444', key: 'f'},
+              {row: '<><<<', colour: '#ef4444', key: 'j'},
+            ].forEach(function (c) {
+              var t = trialIn(ph.id);
+              addComponent(t.id, 'text', 's');
+              addComponent(t.id, 'keyboard', 'r');
+              sc(t, 0, {content: c.row, color: c.colour, fontSize: 44});
+              sc(t, 1, {choices: ['f', 'j'], correctKey: c.key, prompt: ''});
+            });
+            ph.conditions = true;
+            // Two of the four, drawn without replacement, then repeated: the
+            // same conditions come up again and again in a new order.
+            ph.sample = {type: 'without-replacement', size: 2};
+            ph.repetitions = 40;
+          });
+          addPhaseWith('Done', ending('Thank you — that is the end of the task.'));
+          return finishTemplate();
+        }
+
+        if (name === 'branching') {
+          // Where a run goes, decided by what the participant just did.
+          //
+          // There is no branch component. This is jsPsych's
+          // `conditional_function` on a phase: the phase runs only if the
+          // condition holds. Two phases with opposite conditions are therefore
+          // a two-way branch.
+          //
+          // The two conditions are written `is true` and `is false`, NOT
+          // `is true` and `is not true`. The condition reads the trial that ran
+          // immediately before it, which after the first branch is the branch's
+          // own trial — and that one has no correct key, so its `correct` is
+          // undefined. `undefined !== true` is true, so the negated spelling
+          // lets both branches through.
+          addPhaseWith('Instructions', instructions(
+            'Consent\n\n' +
+            'This demonstrates a run that goes one of two ways.\n\n' +
+            'Press Y if you agree to take part, N if you do not. ' +
+            'The rest of the study depends on which you press.'));
+          addPhaseWith('Question', function (ph) {
+            var t = trialIn(ph.id);
+            addComponent(t.id, 'text', 's');
+            addComponent(t.id, 'keyboard', 'r');
+            sc(t, 0, {content: 'Do you agree to take part?', fontSize: 30});
+            sc(t, 1, {choices: ['y', 'n'], correctKey: 'y', prompt: 'Y or N'});
+          });
+          addPhaseWith('Agreed', function (ph) {
+            var t = trialIn(ph.id);
+            addComponent(t.id, 'text', 's');
+            addComponent(t.id, 'button', 'r');
+            sc(t, 0, {content: 'Thank you for agreeing.\n\nThe study would carry on here.',
+                      fontSize: 24});
+            sc(t, 1, {choices: ['Continue']});
+            ph.cond = {field: 'correct', op: 'is', value: 'true'};
+          });
+          addPhaseWith('Declined', function (ph) {
+            var t = trialIn(ph.id);
+            addComponent(t.id, 'text', 's');
+            addComponent(t.id, 'button', 'r');
+            sc(t, 0, {content: 'Thank you for your time.\n\nYou may close this window.',
+                      fontSize: 24});
+            sc(t, 1, {choices: ['Continue']});
+            ph.cond = {field: 'correct', op: 'is', value: 'false'};
+          });
+          return finishTemplate();
+        }
+
+        if (name === 'survey') {
+          // The survey family, and the rule that shapes every trial: one screen,
+          // one response component. Three question types is three trials.
+          addPhaseWith('Instructions', instructions(
+            'Questionnaire\n\n' +
+            'Three short questions, one screen each.'));
+          addPhaseWith('Questions', function (ph) {
+            var t1 = trialIn(ph.id);
+            addComponent(t1.id, 'likert', 'r');
+            sc(t1, 0, {
+              questions: [{
+                prompt: 'The instructions were clear.',
+                labels: ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'],
+                required: true,
+              }],
+              preamble: 'About the task',
+            });
+            var t2 = trialIn(ph.id);
+            addComponent(t2.id, 'multiChoice', 'r');
+            sc(t2, 0, {
+              questions: [{
+                prompt: 'Which device did you use?',
+                options: ['Phone', 'Tablet', 'Laptop', 'Desktop'],
+                required: true,
+              }],
+            });
+            var t3 = trialIn(ph.id);
+            addComponent(t3.id, 'textInput', 'r');
+            sc(t3, 0, {
+              questions: [{prompt: 'Anything you would like to add?', required: false}],
+              button_label: 'Finish',
+            });
+          });
+          return finishTemplate();
+        }
+
+        // Nothing matched: leave the editor as it was.
+        return finishTemplate();
       }
+
 
       function setDevice(idx) {
         if (idx === '' || idx === 'custom') {
@@ -7385,43 +7222,46 @@ function showVersionHistory() {
       var _templateInfo = {
         stroop: {
           name: 'Stroop Effect',
-          icon: '🧠',
-          phases: ['📖 Instructions: task intro + start button', '🧪 Trials: fixation→color-word stimuli→key response(×48)', '📊 Feedback: thank you text'],
+          icon: '\u{1F9E0}',
+          phases: [
+            'Instructions: the rule and the three keys',
+            'Trials: one trial per ink colour, all the same shape, then the phase settings repeat them 48 times and shuffle the order',
+            'Done',
+          ],
         },
         simon: {
           name: 'Simon Effect',
-          icon: '🎯',
+          icon: '\u{1F3AF}',
           phases: [
-            '📖 Instructions: Red=A Green=L rules + start',
-            '🧪 Trials: fixation→delay→🎲random 4 shapes(pick-one+keyHint)→keyboard→🔀branch→error page(×60)',
-            '📊 Feedback: thank you',
+            'Instructions: answer the colour, ignore the side',
+            'Trials: four colour x side conditions, each scored, with a message the plugin shows itself',
+            'Done',
           ],
         },
         flanker: {
           name: 'Flanker Task',
-          icon: '⬅️➡️',
+          icon: '\u{2B05}\u{FE0F}\u{27A1}\u{FE0F}',
           phases: [
-            '📖 Instructions: arrow direction F/J rules + start',
-            '🧪 Trials: fixation→delay→🎲random 5 arrows(pick-one+keyMap)→keyboard→🔀error feedback(×80)',
-            '📊 Feedback: thank you',
+            'Instructions: answer the middle arrow',
+            'Trials: four arrow arrangements, and the settings draw two of them per round rather than running all four',
+            'Done',
           ],
         },
-        'branch-demo': {
-          name: 'Branch Demo',
-          icon: '🔀',
+        branching: {
+          name: 'Conditional Branching',
+          icon: '\u{1F500}',
           phases: [
-            '📖 Instructions: branch concept + start',
-            '🧪 Trials: Red text(A)→error→T3 | Error page | Blue text(L)→error→T5 | Error page',
-            '📊 Feedback: branch feature summary',
+            'Instructions: press Y or N',
+            'Question: one scored trial',
+            'Agreed / Declined: two phases, each with a condition — only the one that matches the answer runs',
           ],
         },
-        'randomize-demo': {
-          name: 'Randomize + Variable Demo',
-          icon: '🎲',
+        survey: {
+          name: 'Survey',
+          icon: '\u{1F4CB}',
           phases: [
-            '📖 Instructions: variable/randomize concepts + start',
-            '🧪 Trials: init variable score | fixation→random 4 fruits→memorize→input(×5)',
-            '📊 Feedback: variable+randomize summary',
+            'Instructions',
+            'Questions: a scale, a choice and a free-text question — three trials, because a trial shows one screen and takes one response',
           ],
         },
       };

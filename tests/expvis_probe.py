@@ -44,7 +44,9 @@ def _find_chrome():
 CHROME = _find_chrome()
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GOLDEN = os.path.join(ROOT, "tests", "golden")
-TEMPLATES = ["stroop", "simon", "flanker", "branch-demo", "randomize-demo"]
+# The five structure demonstrations. Renamed from branch-demo /
+# randomize-demo, which were named after components that no longer exist.
+TEMPLATES = ["stroop", "simon", "flanker", "branching", "survey"]
 
 # Injected into the editor page. Runs each template, generates code, and leaves
 # the result in a <pre id="PROBE_OUT"> for --dump-dom to pick up.
@@ -2528,15 +2530,39 @@ def cmd_check():
     for name, t in res["templates"].items():
         struct = t["structure"]
         # Invariants that must hold whatever the bytes are.
-        if struct["observedParams"]:
-            broken.append(f"{name}: node-level parameter(s) {struct['observedParams']} "
-                          "that no built-in template should carry")
+        # A node-level parameter is a claim about the template's purpose, so
+        # which ones are allowed depends on the template. `branching` exists to
+        # demonstrate conditional_function; everywhere else one appearing means
+        # something started emitting that nobody asked for.
+        allowed = {"branching": ["conditional_function"]}.get(name, [])
+        stray = [p for p in struct["observedParams"] if p not in allowed]
+        if stray:
+            broken.append(f"{name}: node-level parameter(s) {stray} "
+                          "that this template should not carry")
         if any(n is None or n == 0 for n in struct["trialsPerNode"]):
             broken.append(f"{name}: a phase node collects no trials ({struct['trialsPerNode']})")
         if not t.get("publishedMatches"):
             broken.append(f"{name}: publish != export")
         if not t.get("noTokens"):
             broken.append(f"{name}: an internal @@TOKEN@@ survived into the output")
+        # What each template EXISTS to demonstrate.
+        #
+        # A golden diff says only that something changed; it cannot say that
+        # the reason the template is in the list has gone, and it would accept
+        # that silently the moment someone re-saved the baseline. So the point
+        # of each one is asserted on its own.
+        folded = "timeline_variables" in t["code"]
+        carries_condition = "conditional_function" in t["code"]
+        if name in ("stroop", "simon", "flanker"):
+            if not folded:
+                broken.append(f"{name}: the trials no longer fold into a condition table, "
+                              "which is what this template demonstrates")
+        elif folded:
+            broken.append(f"{name}: folds into a condition table, which it does not demonstrate")
+        if name == "branching" and not carries_condition:
+            broken.append("branching: no conditional_function — the template's whole point")
+        if name != "branching" and carries_condition:
+            broken.append(f"{name}: carries a conditional_function, which it does not demonstrate")
         # A generated experiment has to name the build that wrote it, and the
         # editor's own header has to name the same one. A file that cannot be
         # traced back to a version is a file nobody can match to a tutorial.
