@@ -584,6 +584,10 @@ function _applyI18n() {
         // undo and version snapshots (they hold experiment content; this is
         // project identity, like projectId).
         jatos: null,
+        // Where the data goes, when the researcher has chosen DataPipe. The
+        // ID comes from their DataPipe dashboard, so it is project identity
+        // like `jatos` above rather than anything about the experiment.
+        dataPipe: null,
       };
 
       // Phase/device labels: storage keeps plain text so that generated jsPsych
@@ -1346,6 +1350,7 @@ var _compDefaults = {
               pn: editor.projectName,
               pid: editor.projectId,
               jatos: editor.jatos,
+              dataPipe: editor.dataPipe,
             };
             localStorage.setItem(_vek('task_editor'), JSON.stringify(data));
             localStorage.setItem(_vek('task_versions'), JSON.stringify(editor.versions));
@@ -4180,16 +4185,26 @@ var _compDefaults = {
         // Ending the study right after submitting is deliberate: JATOS discards
         // already-submitted result data when a component is aborted, so there is
         // nothing to gain by leaving the component running once the data is in.
-        var onFinishBody = opts.onFinish || (
+        var _jatosBranch =
           'if (window.jatos) {\n' +
           '  jatos.submitResultData(jsPsych.data.get().csv())\n' +
           '    .then(function () { jatos.endStudy(); });\n' +
-          '} else {\n' +
-          '  jsPsych.data.displayData();\n' +
-          // localSave lives on DataCollection, not on JsPsychData — it is
-          // `jsPsych.data.get().localSave(...)`.
-          "  jsPsych.data.get().localSave('csv', '" + _saveName + "_' + Date.now() + '.csv');\n" +
-          '}');
+          '}';
+        var _dataPipe = !!(opts.dataPipe && opts.dataPipe.experimentId);
+        var onFinishBody = opts.onFinish || (
+          _dataPipe
+            // The save trial in the timeline has already sent the data, so there
+            // is nothing left for this to do. Showing the table would also put
+            // the participant's own records on screen on a study they are not
+            // sitting next to, and prompting a download would ask them to save a
+            // file the researcher already has.
+            ? _jatosBranch
+            : _jatosBranch + ' else {\n' +
+              '  jsPsych.data.displayData();\n' +
+              // localSave lives on DataCollection, not on JsPsychData — it is
+              // `jsPsych.data.get().localSave(...)`.
+              "  jsPsych.data.get().localSave('csv', '" + _saveName + "_' + Date.now() + '.csv');\n" +
+              '}');
         code += 'var jsPsych = initJsPsych({\n';
         if (opts.displayElement) {
           code += "  display_element: '" + opts.displayElement + "',\n";
@@ -5556,6 +5571,26 @@ var _compDefaults = {
             [_timelineProp(blocks)].concat(_nodeParamProps(ph, false)), ph.custom));
         });
 
+        // The save trial, when the researcher has chosen DataPipe as the
+        // destination. It goes at the END of the timeline rather than in
+        // on_finish because that is how DataPipe's own plugin works: it is a
+        // trial, so the save happens inside jsPsych's flow, the participant is
+        // told to wait, and the study does not finish until the upload does.
+        if (opts.dataPipe && opts.dataPipe.experimentId) {
+          _usedPlugins['jsPsychPipe'] = true;
+          code += '\n' +
+            '// Where the data goes. DataPipe rejects a filename that already\n' +
+            '// exists, so the name carries a random id rather than the\n' +
+            '// participant\'s or the session\'s.\n' +
+            'var expvis_participant_id = jsPsych.randomization.randomID(10);\n' +
+            'timeline.push({\n' +
+            '  type: jsPsychPipe,\n' +
+            "  action: 'save',\n" +
+            "  experiment_id: '" + _jsStr(opts.dataPipe.experimentId) + "',\n" +
+            "  filename: expvis_participant_id + '.csv',\n" +
+            '  data_string: function () { return jsPsych.data.get().csv(); }\n' +
+            '});\n\n';
+        }
         code += 'jsPsych.run(timeline);\n';
         // The preload trial, now that every component has been scanned. Assets
         // are named by path, so there is nothing to declare first — which is what
@@ -6301,6 +6336,11 @@ var _compDefaults = {
         jsPsychSurveyMultiSelect: {pkg: '@jspsych/plugin-survey-multi-select', ver: '2.1.1'},
         jsPsychSurveyHtmlForm: {pkg: '@jspsych/plugin-survey-html-form', ver: '2.1.0'},
         jsPsychCategorizeImage: {pkg: '@jspsych/plugin-categorize-image', ver: '2.1.0'},
+        // DataPipe's own jsPsych plugin. It is a trial, not a fetch in an
+        // on_finish: that is how DataPipe documents it, and it means the save
+        // happens inside jsPsych's flow — the participant is told not to close
+        // the page, and the study is not over until the upload is.
+        jsPsychPipe: {pkg: '@jspsych-contrib/plugin-pipe', ver: '0.6.0'},
         jsPsychCategorizeHtml: {pkg: '@jspsych/plugin-categorize-html', ver: '2.1.0'},
         jsPsychPreload: {pkg: '@jspsych/plugin-preload', ver: '2.1.0'},
         jsPsychAnimation: {pkg: '@jspsych/plugin-animation', ver: '2.1.0'},
@@ -6802,6 +6842,21 @@ var _compDefaults = {
         var r = _compileExperiment({});
         var n = r.assets.length;
         showExportConfig(function (format) {
+          // DataPipe changes the experiment rather than the packaging — the save
+          // trial is part of the timeline — so it is compiled again with the
+          // destination set, and then packed exactly like a plain download.
+          if (format === 'datapipe') {
+            var rd = _compileExperiment({
+              dataPipe: {experimentId: (editor.dataPipe || {}).experimentId}});
+            downloadPublishedExperiment('html', rd);
+            alert('Experiment downloaded.\n\n' +
+              'Open it, or host it, and it will send its data to your DataPipe ' +
+              'project when it finishes — the participant does not send anything ' +
+              'back, and they are no longer shown the data table or asked to save ' +
+              'a file.\n\n' +
+              'Try one run yourself first and check the file appears in DataPipe.');
+            return;
+          }
           downloadPublishedExperiment(format, r);
           if (format === 'jzip') {
             alert('JATOS package downloaded.\n\nImport the .jzip into your JATOS server ' +
@@ -6836,6 +6891,26 @@ var _compDefaults = {
       // that changes the ARTEFACT rather than the experiment — the jsPsych code
       // is identical either way, and only the packaging and the way the data
       // travels back differ.
+      // The DataPipe experiment ID, asked for once and remembered on the
+      // project like the JATOS identifiers — it is the researcher's account that
+      // owns it, not anything the experiment decides.
+      function _askDataPipeId() {
+        var d = editor.dataPipe || {};
+        var id = prompt(
+          'DataPipe experiment ID\n\n' +
+          'Create an experiment at pipe.jspsych.org, then paste its ID here. The ID is how ' +
+          'DataPipe knows which project this study\'s data belongs to.\n\n' +
+          'Give that experiment a Google Drive or Zenodo destination while you are there: ' +
+          'DataPipe stops writing to OSF on 16 November 2026.',
+          d.experimentId || '');
+        if (id === null) return null;
+        id = id.trim();
+        if (!id) { alert('A DataPipe experiment ID is required.'); return null; }
+        editor.dataPipe = {experimentId: id};
+        autoSave();
+        return id;
+      }
+
       function showExportConfig(callback) {
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;z-index:2800;background:rgba(0,0,0,0.45);' +
@@ -6854,6 +6929,11 @@ var _compDefaults = {
           _exportOption('jzip', '📦', 'JATOS package (.jzip)',
             'Import into your JATOS server. The experiment submits its data to JATOS when it ' +
             'finishes, so nothing depends on the participant sending a file back.') +
+          _exportOption('datapipe', '🌐', 'Send to DataPipe',
+            'Free, run by the jsPsych team. The experiment sends its data to your DataPipe ' +
+            'project when it finishes, so nothing depends on the participant sending a file ' +
+            'back either — and no server of your own is needed. You are asked for your ' +
+            'DataPipe experiment ID next.') +
           '<div style="display:flex;justify-content:flex-end;margin-top:6px">' +
           '<button id="ec-cancel" class="btn btn-outline" style="font-size:0.78rem">Cancel</button>' +
           '</div>';
@@ -6863,7 +6943,15 @@ var _compDefaults = {
         overlay.onclick = function (e) { if (e.target === overlay) close(); };
         document.getElementById('ec-cancel').onclick = close;
         box.querySelectorAll('[data-format]').forEach(function (el) {
-          el.onclick = function () { close(); callback(el.getAttribute('data-format')); };
+          el.onclick = function () {
+            var fmt = el.getAttribute('data-format');
+            // Asked for before the dialog closes, so a cancelled prompt leaves
+            // the researcher where they were rather than exporting something
+            // half-configured.
+            if (fmt === 'datapipe' && !_askDataPipeId()) return;
+            close();
+            callback(fmt);
+          };
         });
       }
 
@@ -7087,6 +7175,7 @@ function showVersionHistory() {
             editor.projectName = d.pn || '';
             editor.projectId = d.pid || '';
             editor.jatos = d.jatos || null;
+            editor.dataPipe = d.dataPipe || null;
           }
           var ver = localStorage.getItem(_vek('task_versions'));
           if (ver) editor.versions = JSON.parse(ver);

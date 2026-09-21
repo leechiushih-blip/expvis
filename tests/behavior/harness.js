@@ -40,8 +40,35 @@ class PreloadStub {
 }
 PreloadStub.info = { name: "preload", version: "stub", parameters: {}, data: {} };
 
+// The real pipe plugin POSTs to pipe.jspsych.org. A test must never do that —
+// it would write rows into a real researcher's study, and the filenames it is
+// told to use are random. So this records what the experiment WOULD have sent
+// and ends the trial; what the assertions below it check is the request: the
+// experiment id, the filename, and the payload.
+const pipeCalls = [];
+class PipeStub {
+  constructor(jsPsych) {
+    this.jsPsych = jsPsych;
+  }
+  trial(display_element, trial) {
+    const value = (v) => (typeof v === "function" ? v() : v);
+    pipeCalls.push({
+      action: trial.action,
+      experiment_id: trial.experiment_id,
+      filename: value(trial.filename),
+      data_string: value(trial.data_string),
+    });
+    this.jsPsych.finishTrial({});
+  }
+}
+PipeStub.info = { name: "pipe", version: "stub", parameters: {}, data: {} };
+function resetPipe() {
+  pipeCalls.length = 0;
+}
+
 const PLUGINS = {
   jsPsychPreload: PreloadStub,
+  jsPsychPipe: PipeStub,
   jsPsychHtmlKeyboardResponse: require("@jspsych/plugin-html-keyboard-response"),
   jsPsychHtmlButtonResponse: require("@jspsych/plugin-html-button-response"),
   jsPsychHtmlSliderResponse: require("@jspsych/plugin-html-slider-response"),
@@ -287,6 +314,8 @@ module.exports = {
   loadGenerated,
   runExperiment,
   trialData,
+  pipeCalls,
+  resetPipe,
   flush,
   dispatch,
   keyDown,

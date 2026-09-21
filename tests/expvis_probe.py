@@ -1100,6 +1100,46 @@ function phaseCases() {
   ], {repetitions: 2});
   // …but sampling has nothing to draw from without a table, and jsPsych would
   // ignore it, so it must not be emitted. Gated the same way the badge is.
+  // DataPipe is a PACKAGING choice, not a different experiment: the timeline
+  // gains a save trial and the file has to load the plugin. The behaviour suite
+  // runs the timeline and can say what it sends; the <script> tag that makes
+  // `jsPsychPipe` exist at all is only visible in the built file, which is what
+  // this checks. Nothing here reaches pipe.jspsych.org.
+  (function () {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    addComponent(t.id, 'text', 's');
+    var base = _compileExperiment({});
+    var plainHtml = _buildJsPsychHTML(base.code, base.usedPlugins);
+    var r = _compileExperiment({dataPipe: {experimentId: 'abc123'}});
+    var dpHtml = _buildJsPsychHTML(r.code, r.usedPlugins);
+    out['datapipe is a packaging choice'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      // the default export must not carry any of it
+      defaultHasNoPipeScript: plainHtml.indexOf('plugin-pipe') < 0,
+      defaultHasNoSaveTrial: plainHtml.indexOf('jsPsychPipe') < 0,
+      // …and the DataPipe build must carry both halves
+      loadsThePlugin: dpHtml.indexOf('@jspsych-contrib/plugin-pipe@0.6.0') >= 0,
+      carriesTheTrial: dpHtml.indexOf('type: jsPsychPipe') >= 0 &&
+                       dpHtml.indexOf("experiment_id: 'abc123'") >= 0,
+      // The id is researcher input, so it goes through the same escaper as
+      // everything else. Built with char codes rather than written as a
+      // literal: this string passes through the Python that defines PROBE and
+      // through the JS that runs it, and a backslash written here arrives at
+      // the browser one level short of what it looks like. 39 is the quote
+      // character, 92 is the backslash.
+      idIsEscaped: (function () {
+        var quoteId = 'a' + String.fromCharCode(39) + 'b';
+        var escapedId = 'a' + String.fromCharCode(92, 39) + 'b';
+        return _compileExperiment({dataPipe: {experimentId: quoteId}}).code
+          .indexOf("experiment_id: '" + escapedId + "'") >= 0;
+      })()
+    };
+  })();
+
   runSampled('sample ignored without a table', [
     [['text', {content: 'A'}], ['keyboard', {choices: ['a']}]],
     [['text', {content: 'B'}]]
@@ -2193,6 +2233,11 @@ def cmd_check():
                 for k in ("imageUsesImagePlugin", "htmlUsesHtmlPlugin", "feedbackEmitted",
                           "keyAnswerEmitted", "pluginDoesTheScoring",
                           "withoutFeedbackUnchanged", "severalKeysRefuse"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "datapipe is a packaging choice":
+                for k in ("defaultHasNoPipeScript", "defaultHasNoSaveTrial",
+                          "loadsThePlugin", "carriesTheTrial", "idIsEscaped"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "dropped parameters are named":

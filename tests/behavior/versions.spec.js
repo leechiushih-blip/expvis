@@ -44,8 +44,16 @@ describe("what the tests run against is what the experiment loads", () => {
   const cdn = cdnTable();
 
   test("editor.js still pins a table this can read", () => {
-    // A silent zero would make every assertion below vacuously true.
-    expect(Object.keys(cdn.plugins).length).toBe(23);
+    // A floor, not an exact count. The guard is against a regex that matched
+    // nothing — which would make every assertion below vacuously true — and
+    // pinning the number would turn that guard into a chore that has to be
+    // edited every time a plugin is added, which is how guards get deleted.
+    expect(Object.keys(cdn.plugins).length).toBeGreaterThan(20);
+    // Named, because these two are the ones the table's shape depends on: the
+    // first is emitted for any experiment with assets, the second only when a
+    // DataPipe destination is set.
+    expect(cdn.plugins.jsPsychPreload).toBeTruthy();
+    expect(cdn.plugins.jsPsychPipe).toBeTruthy();
     expect(cdn.core).toBeTruthy();
   });
 
