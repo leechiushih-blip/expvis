@@ -16,6 +16,13 @@
 <div class="header" id="header">
       <div class="logo">ExpVis</div>
       <span style="font-size: 0.75rem; color: var(--text2)">Component-based · Visual · WYSIWYG</span>
+      <!-- Filled from EXPVIS_VERSION at load. Deliberately not written here:
+           two copies of a version number drift, and a wrong version is worse
+           than none. -->
+      <span
+        id="app-version"
+        style="font-size: 0.7rem; color: var(--text2); opacity: 0.8"
+      ></span>
       <div class="header-right">
         <button class="btn btn-outline" id="undo-btn" onclick="undo()" disabled>↩ Undo</button
         ><button class="btn btn-outline" onclick="resetEditor()">New</button
