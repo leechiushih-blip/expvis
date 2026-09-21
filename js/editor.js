@@ -7409,30 +7409,64 @@ function showVersionHistory() {
           var steps = [
             {
               title: '👋 Welcome to ExpVis',
-              desc: 'A <strong>no-code, visual, interactive</strong> online behavioral experiment editor.<br>Drag components → Free layout → Preview → Participants interact directly.<br>From classic paradigms to custom designs.',
+              desc: 'A visual editor that builds <strong>standard jsPsych</strong> experiments — ' +
+                'no server, no build step, no installation.<br><br>' +
+                'What you build here exports as jsPsych code you could have written by hand, ' +
+                'and the file you publish is <strong>byte-for-byte</strong> the same experiment.',
               btn: 'See how it works →',
             },
             {
-              title: '🧩 Component-Based Building',
-              desc: 'The toolbox on the left provides <strong>components</strong> in two categories:<br><br>📺 <strong>Display</strong> — Text, Shape, Image, Animation, Audio, Video, Fixation<br>🎮 <strong>Response</strong> — Keyboard, Button, Slider, Survey Text<br><br>Drag into a trial node to add. Click a node to edit its properties.<br>Preset templates at the bottom for a quick start.',
+              title: '🧩 A trial is one screen',
+              desc: 'A trial compiles to one jsPsych plugin call, so it shows <strong>one screen</strong> ' +
+                'and takes <strong>at most one response</strong>.<br><br>' +
+                'Components stack in order — the order in the list is the order on screen. ' +
+                'To show A then B, use <strong>two trials</strong>.<br><br>' +
+                'A fixation is <em>timed</em>, so it always becomes a trial of its own, ' +
+                'before or after the screen it belongs to.',
+              el: 'canvas-scroll',
+              btn: 'Next →',
+            },
+            {
+              title: '🧰 Four kinds of component',
+              desc: '📺 <strong>Display</strong> — Text, Shape, Image, Audio, Video, Fixation<br>' +
+                '🎮 <strong>Response</strong> — Keyboard, Button, Slider<br>' +
+                '📋 <strong>Survey</strong> — Text, Likert, Multiple Choice, Multi-Select, HTML Form<br>' +
+                '🧩 <strong>Owns the trial</strong> — Animation, Cloze, Free Sort<br><br>' +
+                'The last group brings its own page, so nothing can sit beside it. ' +
+                'Adding one to a screen that already has content gives it a trial of its own, ' +
+                'rather than letting you build something the compiler cannot run.',
               el: 'panel-left',
               btn: 'Next →',
             },
             {
-              title: '🧩 Trial Settings',
-              desc: 'Click a <strong>trial</strong> (not a component) to open its settings:<br>loop count · randomization · branch condition · trial duration · counter.<br>These become jsPsych <strong>node / trial parameters</strong>, not trials.<br><br>Components stack in a responsive flow — click <strong>⛶ Expand</strong> for a full-window layout preview.',
-              el: 'inspector',
+              title: '⚙️ The repeats belong to the phase',
+              desc: 'A <strong>phase</strong> is a named block of trials, and its settings decide how ' +
+                'they run: <strong>repetitions</strong>, <strong>randomize order</strong>, ' +
+                '<strong>sample</strong> (draw a subset), and the <strong>condition table</strong> — ' +
+                'which folds trials of the same shape into one procedure plus a table of values, ' +
+                'the way jsPsych documents a repeated paradigm.<br><br>' +
+                'Two more decide <em>whether</em> a phase runs at all: one that repeats it while a ' +
+                'condition holds, and one that runs it only if a condition holds.',
+              el: 'flow-container',
               btn: 'Next →',
             },
             {
-              title: '🎮 Interactive Fullscreen Preview',
-              desc: 'Fullscreen preview is NOT a static screenshot —<br>participants can <strong>press keys, click buttons, drag sliders, type answers</strong>.<br>Auto-records <strong>reaction times</strong> and accuracy.<br><br>Supports 🔀 branching, 🔄 loop countdown,<br>🎲 randomization, 📊 variable tracking.',
+              title: '▶️ The same experiment, three ways to see it',
+              desc: 'The inline preview; the <strong>Layout Preview</strong>, which opens the trial large ' +
+                'with a zoom control; and the fullscreen runner, which opens the ' +
+                '<strong>actual exported file</strong> and runs it.<br><br>' +
+                'Publish and Code produce the same bytes. At export you also choose where the data ' +
+                'goes: back as a file, into a <strong>JATOS</strong> server, or to <strong>DataPipe</strong>.',
               el: 'header',
               btn: 'Next →',
             },
             {
-              title: '🤖 AI One-Click Generation',
-              desc: 'Not sure where to start?<br>Click <strong>🤖 AI Generate</strong> and describe your experiment in natural language:<br><br><em>"Design a Stroop experiment with red, blue, and green colors, 48 trials"</em><br><br>AI auto-builds the complete experiment structure.<br>Fine-tune it in the visual editor.',
+              title: '🤖 AI generation, if you would rather describe it',
+              desc: 'Click <strong>🤖 AI Generate</strong> and describe the experiment in words:' +
+                '<br><br><em>"Design a Stroop experiment with red, blue and green words, ' +
+                '48 trials, shuffled"</em><br><br>' +
+                'You get an editable experiment on the canvas — the same JSON you would have built ' +
+                'by hand — which you can then change, preview and export like any other.',
               el: 'canvas-toolbar',
               btn: 'Get Started 🚀',
             },
@@ -7440,10 +7474,22 @@ function showVersionHistory() {
           var idx = 0;
           var overlay = document.createElement('div');
           overlay.style.cssText =
-            "position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-family:'Inter','Noto Sans SC',sans-serif";
+            "position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,0.55);font-family:'Inter','Noto Sans SC',sans-serif";
           var card = document.createElement('div');
+          // The card is a SIBLING of the overlay, not a child of it.
+          //
+          // A spotlighted element is lifted to z-index 5001 so that it stays
+          // bright above the dimming overlay. The card has to out-rank that,
+          // and a child cannot out-rank its own stacking context — so while the
+          // card lived inside the overlay, pointing a step at anything the card
+          // covers (the canvas, most obviously) drew that element straight over
+          // the text. Every earlier step happened to point at an edge of the
+          // window, which is why the bug stayed hidden until a step pointed at
+          // the middle.
           card.style.cssText =
-            'background:#fff;border-radius:18px;width:480px;max-width:90vw;padding:36px 40px;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;transition:all 0.3s';
+            'position:fixed;z-index:5002;top:50%;left:50%;transform:translate(-50%,-50%);' +
+            'background:#fff;border-radius:18px;width:480px;max-width:90vw;' +
+            'padding:36px 40px;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;transition:all 0.3s';
           function show() {
             var s = steps[idx];
 
@@ -7494,6 +7540,7 @@ function showVersionHistory() {
                   e.classList.remove('onboard-spotlight', 'onboard-visited');
                 });
                 overlay.remove();
+                card.remove();
                 localStorage.setItem('v3_onboarded', '1');
               } else {
                 show();
@@ -7506,11 +7553,12 @@ function showVersionHistory() {
                   e.classList.remove('onboard-spotlight', 'onboard-visited');
                 });
                 overlay.remove();
+                card.remove();
                 localStorage.setItem('v3_onboarded', '1');
               };
           }
-          overlay.appendChild(card);
           document.body.appendChild(overlay);
+          document.body.appendChild(card);
           show();
         }
       }
