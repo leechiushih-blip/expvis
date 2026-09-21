@@ -1100,6 +1100,95 @@ function phaseCases() {
   ], {repetitions: 2});
   // …but sampling has nothing to draw from without a table, and jsPsych would
   // ignore it, so it must not be emitted. Gated the same way the badge is.
+  // Layout Preview draws the device box at its real pixel size, so a desktop
+  // preset is wider than the window drawing it. The zoom has to make the whole
+  // layout visible without lying about its scale.
+  (function () {
+    resetEditor();
+    addPhase('trials');
+    addTrial(editor.phases[0].id);
+    var t = findTrial(editor.selectedTrial);
+    addComponent(t.id, 'text', 's');
+    editor.device = {name: 'Desktop', icon: '', w: 1280, h: 720};
+
+    expandPreview();
+    var box = document.getElementById('exp-prev-zoom');
+    var frame = document.getElementById('exp-prev-frame');
+    var scroll = document.getElementById('exp-prev-scroll');
+    var overlay = document.getElementById('exp-prev-close');
+    var ov = overlay && overlay.closest('div[style*="z-index:2200"]');
+
+    var devW = editor.device.w, devH = editor.device.h;
+    var availW = scroll.clientWidth - 48;
+    var availH = scroll.clientHeight - 48;
+    var z0 = Number(box.value) / 100;
+    var frameW0 = frame.offsetWidth;
+
+    // Moving it has to move the picture. Deliberately two values that cannot
+    // coincide and cannot coincide with the fitted default either — asserting
+    // "smaller than the default" assumes what the default came out as, and the
+    // window it is computed in is not ours to predict.
+    box.value = '30';
+    box.oninput();
+    var wLow = frame.offsetWidth;
+    box.value = '90';
+    box.oninput();
+    var wHigh = frame.offsetWidth;
+    var zLow = 0.3, zHigh = 0.9;
+
+    // and Fit has to come back
+    document.getElementById('exp-prev-fit').onclick();
+    var zFit = Number(box.value) / 100;
+
+    if (ov) ov.remove();
+
+    // A device SMALLER than the area, which is the only way the cap is
+    // exercised: with a large device the fit is already below 100%%, so an
+    // uncapped scale-up would never show. Without this the assertion below
+    // passes for the wrong reason.
+    // Deliberately smaller than the preview area in BOTH directions — not a
+    // device anyone ships, but the fit is what is under test here, and a
+    // two-dimension fit is the only way to reach the cap. (A real phone is
+    // taller than this window, so it would still be scaled down.)
+    editor.device = {name: 'Tiny', icon: '', w: 320, h: 240};
+    expandPreview();
+    var boxS = document.getElementById('exp-prev-zoom');
+    var ovS = document.getElementById('exp-prev-close');
+    var ovWrap = ovS && ovS.closest('div[style*="z-index:2200"]');
+    var zSmall = Number(boxS.value) / 100;
+    var scrollS = document.getElementById('exp-prev-scroll');
+    var availSmallW = scrollS.clientWidth - 48;
+    var availSmallH = scrollS.clientHeight - 48;
+    if (ovWrap) ovWrap.remove();
+
+    out['layout preview zoom'] = {
+      factored: false, uniform: false, trialsPerNode: [],
+      observedParams: [], expectParams: [], noTokens: true,
+      hasASlider: !!box && box.type === 'range',
+      rangeIsSane: Number(box.min) < 100 && Number(box.max) > 100,
+      // the whole point: at the default, the device box fits in the area
+      defaultFitsWidth: devW * z0 <= availW + 1,
+      defaultFitsHeight: devH * z0 <= availH + 1,
+      // it actually did something — a 1280-wide box in a narrower area cannot
+      // be shown at 100%% and fit
+      defaultIsBelowFullWhenNeeded: (devW <= availW && devH <= availH) || z0 < 1,
+      // The DEFAULT is never above 100%%: a phone blown up to fill a desktop
+      // window stops being a picture of what the participant sees. Sliding up
+      // past it afterwards is the researcher's call. The small device is the
+      // case that exercises it — the area is bigger than the device there.
+      defaultNeverAboveFull: z0 <= 1 && zFit <= 1 && zSmall === 1,
+      // …and the fixture really is roomy enough for the cap to be the thing
+      // under test rather than the fit
+      smallDeviceWouldHaveRoomToGrow: availSmallW > 320 && availSmallH > 240,
+      // the painted footprint follows the zoom, so the scroll area is honest
+      frameFollowsZoom: Math.abs(frameW0 - devW * z0) <= 1 &&
+                        Math.abs(wLow - devW * zLow) <= 1 &&
+                        Math.abs(wHigh - devW * zHigh) <= 1,
+      sliderZoomsBothWays: wHigh > wLow,
+      fitReturnsToTheDefault: zFit === z0
+    };
+  })();
+
   // A model name is the provider's fact, not ours, and the version of it
   // written into this file has a shelf life. These assert the three things
   // that keep an expired copy from becoming a dead end: the field takes
@@ -2298,6 +2387,14 @@ def cmd_check():
                 for k in ("imageUsesImagePlugin", "htmlUsesHtmlPlugin", "feedbackEmitted",
                           "keyAnswerEmitted", "pluginDoesTheScoring",
                           "withoutFeedbackUnchanged", "severalKeysRefuse"):
+                    if not c[k]:
+                        broken_cases.append(f"phase case {name}: {k} is false")
+            if name == "layout preview zoom":
+                for k in ("hasASlider", "rangeIsSane", "defaultFitsWidth",
+                          "defaultFitsHeight", "defaultIsBelowFullWhenNeeded",
+                          "defaultNeverAboveFull", "smallDeviceWouldHaveRoomToGrow",
+                          "frameFollowsZoom", "sliderZoomsBothWays",
+                          "fitReturnsToTheDefault"):
                     if not c[k]:
                         broken_cases.append(f"phase case {name}: {k} is false")
             if name == "an expired model list is not a dead end":

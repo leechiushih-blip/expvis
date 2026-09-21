@@ -3210,7 +3210,7 @@ var _compDefaults = {
         return '<div id="' + id + '" style="display:flex;flex-direction:column;' +
           'justify-content:center;align-items:center;gap:0.9em;width:100%"></div>';
       }
-      function _fillPreviewStage(el, t) {
+      function _fillPreviewStage(el, t, done) {
         el.innerHTML = '<span style="color:var(--text2);font-size:0.7rem">loading plugin…</span>';
         _renderTrialWithPlugin(t, function (html, err) {
           if (!el.parentNode) return;                 // the panel was repainted
@@ -3218,9 +3218,13 @@ var _compDefaults = {
             el.innerHTML = '<span style="color:var(--text2);font-size:0.7rem;' +
               'text-align:center;display:block;padding:12px">Could not render this trial ' +
               'with its plugin:<br>' + _escHtml(err.message) + '</span>';
+            if (done) done();
             return;
           }
           el.innerHTML = html;
+          // The height is only knowable now: the plugin has rendered, and the
+          // content can be taller than the device box.
+          if (done) done();
         });
       }
       function _escHtml(v) {
@@ -3369,13 +3373,31 @@ var _compDefaults = {
              'border-bottom:1px solid var(--border);flex-shrink:0">';
         h += '<span style="font-weight:800;font-size:0.9rem">Layout Preview</span>';
         if (ph) h += '<span style="font-size:0.7rem;color:var(--text2)">' + _phaseLabel(ph) + '</span>';
-        h += '<span style="font-size:0.62rem;color:var(--text2);margin-left:auto">' +
+        h += '<span style="font-size:0.62rem;color:var(--text2)">' +
              _deviceLabel(dev) + ' \u00b7 flow layout \u00b7 same HTML the jsPsych stimulus uses</span>';
+        // The zoom control. A device box is drawn at its real pixel size, so a
+        // desktop preset is wider than the window it is drawn in — and a layout
+        // you have to scroll is not a layout you can judge. The default is the
+        // scale that fits what is on screen.
+        h += '<span style="margin-left:auto;display:flex;align-items:center;gap:6px">' +
+             '<input id="exp-prev-zoom" type="range" min="25" max="200" step="5" value="100" ' +
+             'title="Zoom" style="width:120px;accent-color:var(--accent);cursor:pointer">' +
+             '<span id="exp-prev-zoom-val" style="font-size:0.66rem;color:var(--text2);' +
+             'min-width:34px;text-align:right;font-variant-numeric:tabular-nums">100%</span>' +
+             '<button id="exp-prev-fit" title="Fit to the window" style="border:1px solid var(--border);' +
+             'background:#fff;border-radius:6px;color:var(--text2);cursor:pointer;font-size:0.66rem;' +
+             'padding:2px 7px;font-family:inherit">Fit</button>' +
+             '</span>';
         h += '<button id="exp-prev-close" style="background:none;border:1px solid var(--border);' +
              'border-radius:6px;color:var(--text2);cursor:pointer;font-size:0.8rem;padding:3px 10px;' +
              'font-family:inherit">\u2715</button>';
         h += '</div>';
-        h += '<div style="flex:1;overflow:auto;background:#f4f4f8;padding:24px">';
+        h += '<div id="exp-prev-scroll" style="flex:1;overflow:auto;background:#f4f4f8;padding:24px">';
+        // The frame carries the SCALED footprint. `transform: scale()` shrinks
+        // what is painted but not the box the element still occupies, so
+        // without this the scroll area would stay the unscaled size and the
+        // zoom would only make the picture smaller inside the same emptiness.
+        h += '<div id="exp-prev-frame" style="margin:0 auto;overflow:hidden">';
         // The design canvas: the device's box, with the content centred in it.
         // The export only half-matches this — the width is `experiment_width`,
         // but there is no height over there, so the product centres its content
@@ -3390,13 +3412,61 @@ var _compDefaults = {
              'gap:1.5em;padding:2em;box-sizing:border-box;' +
              'width:' + dev.w + 'px;min-height:' + dev.h + 'px"></div>';
         h += '</div>';
+        h += '</div>';
 
         box.innerHTML = h;
         overlay.appendChild(box);
         document.body.appendChild(overlay);
 
         var stage = document.getElementById('exp-prev-stage');
-        _fillPreviewStage(stage, t);
+        var frame = document.getElementById('exp-prev-frame');
+        var slider = document.getElementById('exp-prev-zoom');
+        var readout = document.getElementById('exp-prev-zoom-val');
+        // Until the researcher touches the slider the zoom keeps following the
+        // window; once they set it, it stays where they put it.
+        var userSetZoom = false;
+
+        function applyZoom() {
+          var z = Number(slider.value) / 100;
+          stage.style.transform = 'scale(' + z + ')';
+          stage.style.transformOrigin = 'top left';
+          // The height is measured unscaled — a transform does not change what
+          // `offsetHeight` reports — and then scaled, so the scroll area is the
+          // size of what is actually painted.
+          frame.style.width = (dev.w * z) + 'px';
+          frame.style.height = (stage.offsetHeight * z) + 'px';
+          readout.textContent = Math.round(Number(slider.value)) + '%';
+        }
+        // Fit, but never above 100%: a phone blown up to fill a desktop window
+        // stops being a picture of what the participant sees.
+        function fitPercent() {
+          var sc = document.getElementById('exp-prev-scroll');
+          if (!sc) return 100;
+          var availW = sc.clientWidth - 48;
+          var availH = sc.clientHeight - 48;
+          if (availW <= 0 || availH <= 0) return 100;
+          var z = Math.min(availW / dev.w, availH / dev.h, 1);
+          return Math.max(25, Math.round(z * 100));
+        }
+        function fit() {
+          slider.value = String(Math.round(fitPercent() / 5) * 5);
+          applyZoom();
+        }
+
+        fit();
+        _fillPreviewStage(stage, t, applyZoom);
+        slider.oninput = function () { userSetZoom = true; applyZoom(); };
+        document.getElementById('exp-prev-fit').onclick = function () {
+          userSetZoom = false;
+          fit();
+        };
+        window.addEventListener('resize', function onResize() {
+          if (!document.body.contains(overlay)) {
+            window.removeEventListener('resize', onResize);
+            return;
+          }
+          if (!userSetZoom) fit();
+        });
         document.getElementById('exp-prev-close').onclick = function () { overlay.remove(); };
         overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
       }
