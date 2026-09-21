@@ -27,3 +27,10 @@ node_modules/
 # 这张对照表是 tests/expvis_probe.py coverage 的生成物 —— 结论在探针里,
 # 文档只是它的另一种呈现,所以同样要进版本控制。必须写在 *.md 之后。
 !docs/JSPsych_TIMELINE_COVERAGE.md
+# The roadmap is the paper's future-directions section, kept out of the paper
+# so it can be corrected. A published tutorial cannot be.
+!ROADMAP.md
+# 这两份是要交出去的文本。和论文草稿不同——草稿可以重写,
+# 回应信和投稿信是记录“当时说了什么”的东西,丢了就补不回来。
+!docs/COVER_LETTER.md
+!docs/RESPONSE_TO_REVIEW.md
