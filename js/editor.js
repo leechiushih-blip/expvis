@@ -14,7 +14,10 @@
 // the editor's header, and the assertion in tests/expvis_probe.py all read
 // this constant — a second copy would drift, and a drifted version number is
 // worse than none.
-var EXPVIS_VERSION = '1.0.0';
+// Set by the maintainer, not by a version bump out of habit: it changes only
+// when they say so. The number a tutorial is written against has to be stable,
+// or the correspondence the review asked for is worthless.
+var EXPVIS_VERSION = '1.0';
 var EXPVIS_REPO = 'https://github.com/leechiushih-blip/expvis';
 
 // ============ AI Provider Configuration ============
