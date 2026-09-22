@@ -7018,8 +7018,6 @@ var _compDefaults = {
         };
       }
 
-      // ============ MULTI-AGENT EXPERIMENT REVIEW ============
-
 function showVersionHistory() {
         var overlay = document.createElement('div');
         overlay.style.cssText =
