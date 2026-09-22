@@ -1,8 +1,25 @@
-# docs/ 整体忽略，但交接文档要进版本控制（否则回滚/换机器就丢了）
+# ---------------------------------------------------------------------------
+# What this repository publishes
+#
+# The editor, the tests that verify it, and the two documents a reader of the
+# paper actually needs: the roadmap of known gaps and the coverage table. Those
+# are named individually below.
+#
+# Everything else under docs/ is working material — notes, drafts, and the
+# correspondence around submission. None of it is published, and the rules at
+# the bottom of this file keep it that way rather than leaving it to be
+# remembered.
+# ---------------------------------------------------------------------------
+
 docs/*
-!docs/HANDOFF.md
-# tests/ 忽略，但回归探针与它的 golden 基线要进版本控制 ——
-# 数据模型重构的唯一安全网，不进 git 就没法复现验证
+# The coverage table is the probe's own output: the conclusion lives in the
+# probe, and this is that conclusion in readable form. The paper's Open
+# Practices statement points at it, so it has to be here.
+!docs/JSPsych_TIMELINE_COVERAGE.md
+
+# tests/ is ignored except the probe and its baseline — the safety net for the
+# data-model work, which cannot be reproduced if it does not travel with the
+# code.
 tests/*
 !tests/expvis_probe.py
 !tests/golden/
@@ -11,29 +28,23 @@ tests/*
 # verification.
 !tests/behavior/
 !tests/setup/
-# node_modules/ is covered by the rule below; this is the dev-only manifest the
-# behavioural tests need. The editor itself still ships as index.html +
-# js/editor.js with no build step and no runtime dependencies.
+
+# The dev-only manifest the behavioural tests need. The editor itself still
+# ships as index.html + js/editor.js, with no build step and no runtime
+# dependencies.
 !package.json
 !package-lock.json
 !jest.config.js
 node_modules/
 .DS_Store
+
+# Word documents never enter the repository, and neither does markdown except
+# where it is named. An allow-list rather than a deny-list: a new draft is
+# ignored by default, so publishing one has to be a decision rather than an
+# oversight.
 *.docx
 *.md
 !README.md
-!docs/HANDOFF.md
-# 这张对照表是 tests/expvis_probe.py coverage 的生成物 —— 结论在探针里,
-# 文档只是它的另一种呈现,所以同样要进版本控制。必须写在 *.md 之后。
-!docs/JSPsych_TIMELINE_COVERAGE.md
 # The roadmap is the paper's future-directions section, kept out of the paper
-# so it can be corrected. A published tutorial cannot be.
+# so that it can be corrected. A published tutorial cannot be.
 !ROADMAP.md
-# 这两份是要交出去的文本。和论文草稿不同——草稿可以重写,
-# 回应信和投稿信是记录“当时说了什么”的东西,丢了就补不回来。
-!docs/COVER_LETTER.md
-!docs/RESPONSE_TO_REVIEW.md
-# V2 是新投稿的草稿。投出去的那一份(R0)是仓库外的 .docx —— docs/*.docx 一律
-# 不进版本控制,所以这里留的是草稿,不是定稿。旧的 PAPER_DRAFT*.md 是被拒稿
-# 那一版的草稿,留着作历史,同样不进版本控制。
-!docs/PAPER_DRAFT_V2.md
