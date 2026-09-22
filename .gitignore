@@ -22,7 +22,6 @@ node_modules/
 *.docx
 *.md
 !README.md
-!data/rating_rubric_CN.md
 !docs/HANDOFF.md
 # 这张对照表是 tests/expvis_probe.py coverage 的生成物 —— 结论在探针里,
 # 文档只是它的另一种呈现,所以同样要进版本控制。必须写在 *.md 之后。
