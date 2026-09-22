@@ -1,21 +1,17 @@
 # ---------------------------------------------------------------------------
 # What this repository publishes
 #
-# The editor, the tests that verify it, and the two documents a reader of the
-# paper actually needs: the roadmap of known gaps and the coverage table. Those
-# are named individually below.
-#
-# Everything else under docs/ is working material — notes, drafts, and the
-# correspondence around submission. None of it is published, and the rules at
-# the bottom of this file keep it that way rather than leaving it to be
-# remembered.
+# The editor and the tests that verify it, plus the roadmap a reader of the
+# paper is sent to. Nothing else. Every rule below is an allow-list: something
+# is published because it is named, not because nobody thought to exclude it.
 # ---------------------------------------------------------------------------
 
+# docs/ is working material — the handoff notes, the paper drafts, the
+# correspondence around submission. None of it is published. The coverage table
+# is written here as well, but it is a generated file: `tests/expvis_probe.py
+# coverage` rewrites it, so the conclusion travels inside the probe rather than
+# in a copy that has to be kept in step with it.
 docs/*
-# The coverage table is the probe's own output: the conclusion lives in the
-# probe, and this is that conclusion in readable form. The paper's Open
-# Practices statement points at it, so it has to be here.
-!docs/JSPsych_TIMELINE_COVERAGE.md
 
 # tests/ is ignored except the probe and its baseline — the safety net for the
 # data-model work, which cannot be reproduced if it does not travel with the

@@ -2704,6 +2704,11 @@ def cmd_coverage():
         "",
     ]
     out = os.path.join(ROOT, "docs", "JSPsych_TIMELINE_COVERAGE.md")
+    # docs/ is not in the repository — it is working material, and the coverage
+    # table is written into it rather than shipped. So on a fresh clone the
+    # directory does not exist, and a bare open() would fail on the one command
+    # whose whole purpose is to be re-runnable.
+    os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as fh:
         fh.write("\n".join(lines))
     print(f"wrote {os.path.relpath(out, ROOT)}  "
