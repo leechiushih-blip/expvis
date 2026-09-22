@@ -1,9 +1,5 @@
 // DataPipe: sending the data somewhere instead of back with the participant.
 //
-// The reviewer's third point was that in-lab-only collection hinders adoption
-// and that the researcher should be able to choose a deployment. JATOS was one
-// answer; DataPipe is the one the review named.
-//
 // Nothing here talks to pipe.jspsych.org. The plugin is a recording stub, so
 // what is asserted is the request the experiment would make. A test that
 // really posted would write rows into somebody's study.
