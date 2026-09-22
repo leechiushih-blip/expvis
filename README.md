@@ -144,6 +144,23 @@ python3 tests/expvis_probe.py check    # text layer: byte-exact baselines + stru
 npm test                               # behavioural layer: each component against real jsPsych
 ```
 
+The probe has three more commands, none of which belong on a push:
+
+```bash
+python3 tests/expvis_probe.py coverage      # write the coverage table, under docs/ (gitignored)
+python3 tests/expvis_probe.py dump stroop   # print one template's generated file
+python3 tests/expvis_probe.py save          # re-record the baselines
+```
+
+`save` is the one to be careful with. It exists for a change that was intended: without
+it, the baselines would have to be edited by hand, which is how a regression gets
+recorded as correct. Run it when the output is supposed to differ and you can say why —
+never to make a red build go green.
+
+`coverage` writes into `docs/`, which is not in the repository — the probe creates the
+directory. The numbers it prints come from the same run as the checks, so the table
+cannot drift from them.
+
 **The text layer** generates each template and compares it byte-for-byte against a stored
 baseline, then asserts what a text match cannot see: which plugin each trial resolves to,
 which parameters were emitted and which deliberately omitted, how many trials each node
