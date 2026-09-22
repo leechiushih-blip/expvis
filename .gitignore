@@ -33,6 +33,7 @@ node_modules/
 # 回应信和投稿信是记录“当时说了什么”的东西,丢了就补不回来。
 !docs/COVER_LETTER.md
 !docs/RESPONSE_TO_REVIEW.md
-# 这是当前在投的那一版论文。旧的 PAPER_DRAFT*.md 是被拒稿那一版的草稿,
-# 留着作历史,不进版本控制。
+# V2 是新投稿的草稿。投出去的那一份(R0)是仓库外的 .docx —— docs/*.docx 一律
+# 不进版本控制,所以这里留的是草稿,不是定稿。旧的 PAPER_DRAFT*.md 是被拒稿
+# 那一版的草稿,留着作历史,同样不进版本控制。
 !docs/PAPER_DRAFT_V2.md
