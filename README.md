@@ -1,66 +1,198 @@
-# ExpVis Editor
+# ExpVis
 
-**A visual, component-based experiment builder that generates jsPsych code, powered by AI.**
+**A visual experiment builder whose output is standard jsPsych.**
 
-ExpVis Editor is a browser-based tool for designing behavioral experiments without writing code. Researchers drag and drop components (text, shapes, keyboard responses, etc.) onto a visual canvas, preview experiments in real time on simulated devices, and export standard jsPsych code. AI-assisted experiment generation and multi-agent review are built in.
+ExpVis is a browser-based editor for behavioral experiments. Researchers assemble
+stimuli, responses and block-level structure on a canvas, preview the result on a
+simulated device, and export a jsPsych experiment. There is no server, no build step
+and no installation: opening `index.html` gives a working editor.
 
-## Quick Start
+It is neither a wrapper around jsPsych nor a system with a representation of its own.
+Its data model **is** jsPsych's timeline model — a block compiles to a timeline node, a
+trial compiles to a plugin invocation, and a component resolves to a jsPsych plugin.
+The visual editor and the code panel edit the same experiment definition, and the file
+it publishes is byte-for-byte the code it exports.
+
+## Quick start
 
 ```bash
 git clone https://github.com/leechiushih-blip/expvis.git
 cd expvis
-open index.html    # That's it — no build step, no dependencies
+open index.html
 ```
 
-Or try the [online demo](https://leechiushih-blip.github.io/expvis/).
+Or use the [online demo](https://leechiushih-blip.github.io/expvis/).
 
-## Features
+## The three-level model
 
-| Category | Feature |
-|----------|---------|
-| **Visual Editor** | Drag-and-drop component assembly, 3-panel layout (toolbox/canvas/inspector) |
-| **17 Components** | Text, shape, image, audio, video, fixation, keyboard, button, slider, click, text input, loop, branch, delay, randomize, variable |
-| **Device Simulation** | 7 presets (iPhone, iPad, Samsung, Desktop...) with realistic bezels |
-| **Three-Preview System** | Inline preview → visual position editor → fullscreen interactive preview |
-| **jsPsych Export** | Generates standard jsPsych timeline code |
-| **AI Generation** | Natural language → experiment structure (DeepSeek API) |
-| **Multi-Agent Review** | Ethics, security, and methodology agents review experiments before publishing |
-| **Templates** | 7 classic paradigms: Stroop, Simon, Flanker, IAT, Digit Span, BART, Ultimatum Game |
-| **Version History** | Save, restore, and delete experiment versions |
+```
+experiment  →  blocks  →  trials  →  components
+               ↓            ↓
+        timeline node   plugin invocation
+```
 
-## Project Structure
+One trial is **one screen** and takes **at most one response component**. This is not a
+simplification ExpVis imposes; it follows from the plugin model, where a trial compiles
+to a single plugin invocation and a plugin renders one screen and defines one response
+mode. Several stimuli may share a screen because they only contribute to it. A second
+response component would require a second plugin, so the editor does not offer one.
+
+## Components
+
+Seventeen types, in three groups. Fields listed are those the editor exposes; the
+generated experiment emits jsPsych's own parameter names.
+
+| Group | Components |
+|---|---|
+| **Stimuli** | `text` `shape` `image` `audio` `video` `fixation` |
+| **Responses** | `keyboard` `button` `slider` `textInput` `likert` `multiChoice` `multiSelect` `htmlForm` |
+| **Whole-trial** | `animation` `cloze` `freeSort` |
+
+A standalone image, audio or video component maps to that medium's own response plugin
+(`jsPsychImageKeyboardResponse`, `jsPsychAudioSliderResponse`, …). Sharing the screen
+with another component routes it through the HTML path instead, and the editor names
+the playback parameters that path cannot carry rather than dropping them silently.
+
+Whole-trial components occupy the trial and cannot be combined with another response.
+
+Filling `correct_text` / `incorrect_text` on a keyboard component moves the trial onto
+jsPsych's own scoring plugin, which compares the response and renders the message
+itself. That places one constraint the editor states when it is reached: such a trial
+must name exactly one correct key, because the plugin scores against a single key.
+
+## Block-level structure
+
+Everything a trial cannot express lives on the block, and all of it is native jsPsych
+node parameters — not substitutes:
+
+| Parameter | What it does |
+|---|---|
+| `repetitions` | runs the block's timeline N times |
+| `sample` | draws a subset, with or without replacement |
+| `randomize_order` | shuffles the order of each run |
+| `conditions` | folds same-shaped trials into one procedure plus a `timeline_variables` table |
+| `loop_function` | repeats while a condition holds |
+| `conditional_function` | runs the block only if a condition holds |
+
+`conditions` is applied **only when the researcher asks for it**, never inferred. Two
+trials that happen to share a shape are indistinguishable in the data model from two
+conditions of one procedure, and a compiler that reads the second from the first is
+asserting an intention nobody expressed.
+
+## Preview, export and data return
+
+Preview offers three views — an inline device preview, a layout preview with zoom, and a
+fullscreen runner. All reuse the same HTML the export produces, so there is no second
+rendering path to drift.
+
+At export time the researcher chooses how participant data returns, because the choice
+changes the artifact rather than the experiment:
+
+- **A standalone HTML file**, or a `.zip` bundling it with its assets (`img/…`)
+- **A JATOS package** (`.jzip`), submitted via `jatos.submitResultData`
+- **DataPipe**, which uploads at the end of the timeline
+
+The JATOS branch is guarded by `window.jatos`, so one file works both on a JATOS server
+and opened from a filesystem.
+
+## AI-assisted generation
+
+A natural-language description produces an editable structure — the same JSON the editor
+stores, loaded onto the canvas as an ordinary experiment. It cannot produce anything the
+editor could not produce by hand.
+
+Four providers are built in — OpenAI, DeepSeek, Anthropic Claude, and Qwen — and any
+OpenAI-compatible endpoint can be added. The model field accepts any string: which models
+exist is a fact the provider owns, and a copy of it inside a static file goes stale. The
+built-in names are suggestions, and a refresh control asks the provider directly which
+models the key can use.
+
+## Templates
+
+Five templates ship with the editor. They are demonstrations of structure rather than
+five finished experiments: each shows one thing the others do not.
+
+| Template | Demonstrates |
+|---|---|
+| **Stroop** | the condition table — one procedure, a `timeline_variables` array, 48 repetitions |
+| **Simon** | scoring and in-trial feedback via jsPsych's scoring plugin |
+| **Flanker** | sampling — define every condition, run a subset |
+| **Branching** | `conditional_function`, and the trap in writing a two-way branch |
+| **Survey** | the survey family, and one trial per screen |
+
+## Versions
+
+Every generated file names the version of ExpVis that wrote it and where to retrieve it:
+
+```
+Generated by ExpVis v1.0.0 on 2026-09-21 | Device: Desktop
+Target: jsPsych v8.3.0
+Editor: https://github.com/leechiushih-blip/expvis (tag v1.0.0)
+```
+
+A published tutorial outlives the software it describes. The version is changed
+deliberately rather than per commit, and the editor's own header reads the same constant.
+
+## Verification
+
+Two automated layers run on every push. Neither needs a browser session or a human
+observer.
+
+```bash
+node --check js/editor.js              # syntax
+python3 tests/expvis_probe.py check    # text layer: byte-exact baselines + structural assertions
+npm test                               # behavioural layer: each component against real jsPsych
+```
+
+**The text layer** generates each template and compares it byte-for-byte against a stored
+baseline, then asserts what a text match cannot see: which plugin each trial resolves to,
+which parameters were emitted and which deliberately omitted, how many trials each node
+collects, that the published artifact equals the exported code. It also maintains a
+coverage table against jsPsych's timeline documentation — of 34 documented mechanisms, 24
+are emitted, 9 are reachable by hand, and 1 cannot be expressed. The table is generated by
+the code that enforces the assertions, so it cannot drift toward optimism.
+
+**The behavioural layer** runs each component against a real jsPsych instance in jsdom,
+drives it with real events, and asserts what was recorded. It found three defects on its
+first run, none of which were visible in the generated source: a form whose default value
+broke string escaping and made the whole file unparseable, a Likert scale that rendered as
+a single radio button, and an audio trial with feedback routed to the image scoring plugin.
+A test that cannot fail is worse than no test, so weakening the behaviour under test and
+confirming the test goes red is treated as part of writing it.
+
+## Project structure
 
 ```
 expvis-editor/
-├── index.html              # Entry point
-├── css/editor.css          # All styles
-├── js/
-│   ├── core.js             # State management, CRUD operations
-│   ├── devices.js          # Device presets and selection
-│   ├── components.js       # (in core.js) Component definitions
-│   ├── dragdrop.js         # Drag and drop system
-│   ├── flow.js             # Flow canvas rendering
-│   ├── renderer.js         # Unified trial HTML renderer (renderTrialHTML)
-│   ├── inspector.js        # Property panel
-│   ├── preview.js          # Inline preview + visual position editor
-│   ├── fullscreen.js       # Fullscreen interactive experiment preview
-│   ├── undo.js             # Undo stack + quick layout
-│   ├── codegen.js          # jsPsych code generation
-│   ├── ai-generate.js      # AI experiment generation (DeepSeek API)
-│   ├── ai-review.js        # Multi-agent experiment review
-│   ├── version.js          # Version history
-│   ├── publish.js          # Experiment publishing
-│   ├── templates.js        # Classic experiment templates
-│   ├── utils.js            # Keyboard shortcuts, context menu
-│   └── onboarding.js       # First-run tutorial
-├── schema/
-│   └── experiment.schema.json  # Experiment data model (JSON Schema)
+├── index.html              # entry point
+├── css/editor.css
+├── js/editor.js            # the entire editor — one file, no modules, no build
+├── tests/
+│   ├── expvis_probe.py     # text layer (headless Chrome, byte-exact goldens)
+│   ├── golden/             # stored baselines
+│   ├── behavior/           # behavioural layer (jest + jsdom)
+│   └── setup/              # loads editor.js into the jsdom global
 ├── examples/
-│   └── stroop.json         # Example: Stroop experiment
-└── tests/
-    └── verify.py           # Validation script
+├── package.json            # dev-only: test dependencies, never shipped
+├── jest.config.js
+└── ROADMAP.md              # known gaps, what each would take
 ```
+
+`index.html` loads exactly one script, `js/editor.js`, and nothing else. Even the `.zip`
+writer is implemented in place rather than pulled in as a dependency.
+
+## Limitations
+
+The largest gap is jsPsych's **extension system**: `mouse-tracking`, `record-video` and
+`webgazer` have no route into a generated experiment at all, because the output carries no
+`extensions` field and the script table bundles no extension packages. A further 29 of
+jsPsych's 52 official plugins cannot be reached, including `call-function` — jsPsych's way
+of running arbitrary code mid-experiment. Nested conditionals, dynamic branching and
+cross-block state still require hand-written code.
+
+The full list, with what each gap would take, is kept in [ROADMAP.md](ROADMAP.md) rather
+than here, so that it can be corrected as the software changes.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE).

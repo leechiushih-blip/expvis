@@ -28,7 +28,7 @@ These are the gaps a researcher would hit, not a wish list.
 
 ## Smaller things
 
-- **The AI import does not validate the shape it is handed.** A phase without
+- **The AI import does not validate the shape it is handed.** A block without
   `timeline` is repaired; a trial without `components` throws, and the message
   the researcher sees is a JavaScript error rather than a sentence.
 - **The coverage table's judgements are hand-reviewed**, not derived. It is
