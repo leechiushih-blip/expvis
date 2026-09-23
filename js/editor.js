@@ -476,11 +476,46 @@ function _parseAIJson(text) {
     try { return JSON.parse(repaired); } catch (e) {}
   }
   var looksTruncated = !/\}\s*$/.test(String(text).trim());
-  throw new Error(
+  throw _formatIssue(
     looksTruncated
       ? 'The AI reply stopped before the end (likely cut off by the model\'s output limit). Raise the token limit or pick a model with a longer output, then retry.'
       : 'The AI reply was not valid JSON (a character inside it breaks the format). Retry, or switch to another model.'
   );
+}
+
+/**
+ * An error worth retrying: the reply arrived, but not as usable JSON. Kept
+ * apart from auth / network / quota failures, which would fail identically on
+ * a second attempt and only waste the researcher's tokens.
+ */
+function _formatIssue(message) {
+  var e = new Error(message);
+  e.formatIssue = true;
+  return e;
+}
+
+/**
+ * Ask the model for an experiment and parse it. A reply that does not parse is
+ * retried once: the model samples, so the same prompt commonly comes back valid
+ * on a second try, and one extra call costs less than making the researcher
+ * re-roll the whole design by hand. The retry is announced rather than silent —
+ * the key is the researcher's and the call is billed to them.
+ */
+function _requestExperiment(pid, mod, messages, maxTokens, onRetry) {
+  function once() {
+    return _callAI(pid, mod, messages, maxTokens).then(function (text) {
+      var m = String(text).match(/\{[\s\S]*\}/);
+      if (!m) throw _formatIssue('The AI reply contained no JSON object.');
+      var exp = _parseAIJson(m[0]);
+      if (!exp.blocks || !Array.isArray(exp.blocks)) throw _formatIssue('The AI reply had no "blocks" array.');
+      return exp;
+    });
+  }
+  return once().catch(function (err) {
+    if (!err || !err.formatIssue) throw err;
+    if (typeof onRetry === 'function') onRetry(err);
+    return once();
+  });
 }
 
 
@@ -561,6 +596,7 @@ var _i18n = {
   'ai.btn.cancel':    {en:'Cancel', zh:'取消'},
   'ai.status.generating': {en:'⏳ Calling API...', zh:'⏳ 正在调用 API...'},
   'ai.status.success': {en:'✅ Experiment generated!', zh:'✅ 实验生成成功！'},
+  'ai.status.retrying': {en:'The reply was not usable JSON — retrying once…', zh:'回复不是有效 JSON — 正在重试一次…'},
   // --- Publish ---
   'publish.config_title': {en:'📋 Publish Settings', zh:'📋 Publish Settings'},
   'publish.target_n':     {en:'👥 Target Participants', zh:'👥 Target Participants'},
@@ -6724,7 +6760,7 @@ var _compDefaults = {
 
           var sysPrompt = _aiSystemPrompt(dev);
 
-          _callAI(pid, mod, [
+          _requestExperiment(pid, mod, [
             {role:'system',content:sysPrompt},
             {role:'user',content:prompt}
           // A component object per trial, and the model echoes the schema back
@@ -6732,12 +6768,11 @@ var _compDefaults = {
           // mid-object and the reply arrived as unparseable JSON — the failure
           // looked like a malformed answer rather than a truncated one. This is
           // a ceiling, not a spend: it costs nothing unless it is used.
-          ], 8192).then(function(text) {
-            var m = text.match(/\{[\s\S]*\}/);
-            if (!m) throw new Error('AI did not return valid JSON');
-            var exp = _parseAIJson(m[0]);
-            if (!exp.blocks || !Array.isArray(exp.blocks)) throw new Error('Response missing blocks array');
-
+          ], 8192, function () {
+            // Say so: a silent second call would spend the researcher's tokens
+            // without them knowing why.
+            statusEl.innerHTML = '<span style="color:var(--amber)">↻ ' + i18n('ai.status.retrying') + '</span>';
+          }).then(function(exp) {
             resetEditor();
             editor.blocks = _adoptBlocks(exp);
             // Migrate first: the loop below reads `ph.timeline`, and an import in
