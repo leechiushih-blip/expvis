@@ -434,7 +434,53 @@ function _aiSystemPrompt(dev) {
   '  ❌ Two response components in one trial → only the first is generated\n' +
   '  ❌ Anything beside an animation / cloze / freeSort → those own the whole trial\n' +
   '  ❌ JSON trailing commas or comments\n' +
-  '  ❌ Single quotes instead of double quotes';
+  '  ❌ Single quotes instead of double quotes\n' +
+  '  ❌ A literal line break inside a string value → write \\n instead; a raw newline ends the string and breaks the whole reply';
+}
+
+// AI replies are JSON but not always valid JSON. The commonest defect is a
+// literal newline where the model should have written \n — that terminates the
+// string early and JSON.parse reports "Unterminated string". Escaping those
+// control characters changes no meaning, so it is attempted before giving up:
+// the alternative is making the researcher re-roll an otherwise fine design.
+function _repairAIJson(text) {
+  var out = '';
+  var inString = false;
+  var escaped = false;
+  for (var i = 0; i < text.length; i++) {
+    var ch = text.charAt(i);
+    if (escaped) { out += ch; escaped = false; continue; }
+    if (ch === '\\') { out += ch; escaped = true; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    if (inString) {
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') { continue; }
+      if (ch === '\t') { out += '\\t'; continue; }
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * Parse an AI reply that is supposed to be JSON.
+ * Tries the text as-is, then with unescaped control characters repaired, and
+ * otherwise throws a message that says which of the two failure modes it is —
+ * a reply cut off by the model's output limit reads very differently from a
+ * malformed one, and they need different next steps from the researcher.
+ */
+function _parseAIJson(text) {
+  try { return JSON.parse(text); } catch (e) {}
+  var repaired = _repairAIJson(text);
+  if (repaired !== text) {
+    try { return JSON.parse(repaired); } catch (e) {}
+  }
+  var looksTruncated = !/\}\s*$/.test(String(text).trim());
+  throw new Error(
+    looksTruncated
+      ? 'The AI reply stopped before the end (likely cut off by the model\'s output limit). Raise the token limit or pick a model with a longer output, then retry.'
+      : 'The AI reply was not valid JSON (a character inside it breaks the format). Retry, or switch to another model.'
+  );
 }
 
 
@@ -6689,7 +6735,7 @@ var _compDefaults = {
           ], 8192).then(function(text) {
             var m = text.match(/\{[\s\S]*\}/);
             if (!m) throw new Error('AI did not return valid JSON');
-            var exp = JSON.parse(m[0]);
+            var exp = _parseAIJson(m[0]);
             if (!exp.blocks || !Array.isArray(exp.blocks)) throw new Error('Response missing blocks array');
 
             resetEditor();
