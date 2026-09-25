@@ -27,7 +27,7 @@ jobs:
       - name: Behavioural tests
         run: npm test -- --ci
 
-      # The text layer: five templates byte-compared against their golden
+      # The text layer: every template byte-compared against its golden
       # files, plus the structural assertions that keep the generated source
       # shaped the way jsPsych expects. Chrome is preinstalled on the runner;
       # tests/expvis_probe.py finds it.

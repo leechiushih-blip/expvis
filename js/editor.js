@@ -3863,9 +3863,9 @@ var _compDefaults = {
 
       // ============ Templates ============
       function loadTemplate(name) {
-        // Five STRUCTURE demonstrations, one per mechanism the editor now has.
+        // Six STRUCTURE demonstrations, one per mechanism the editor now has.
         //
-        // They are not five finished experiments. Each shows one thing the
+        // They are not six finished experiments. Each shows one thing the
         // current system can do that the others do not, so that a researcher
         // can open the one closest to their design, see how it is built, and
         // edit it. They used to demonstrate four components that no longer
@@ -4092,6 +4092,92 @@ var _compDefaults = {
               button_label: 'Finish',
             });
           });
+          return finishTemplate();
+        }
+
+        if (name === 'bart') {
+          // The one mechanism no other template shows. Stroop is the condition
+          // table, Simon is scoring, Flanker is sampling, Branching is
+          // `conditional_function`, Survey is the survey family — and this is
+          // `loop_function`: a block that repeats itself while a condition
+          // holds. One pass of the loop is one pump.
+          //
+          // Two things are written as JavaScript rather than assembled from
+          // components, and both are the reason BART needs a plugin in the
+          // reference implementation. A custom `stimulus` replaces the screen,
+          // which the trial row badges out loud; the buttons are still the
+          // plugin's, because `stimulus` is only what it draws above them.
+          //
+          // The pop point is drawn inside `stimulus` rather than in `on_start`,
+          // which is where it belongs and does not work. jsPsych evaluates a
+          // function-valued parameter during `processParameters`, and
+          // `processParameters` runs BEFORE `on_start` — so for a parameter
+          // whose declared type is HTML and not FUNCTION, the screen is already
+          // built by the time the hook fires. The draw is guarded on the state
+          // instead: a balloon that is still being pumped keeps its threshold,
+          // and one that has popped or been collected starts a new draw.
+          addBlockWith('Instructions', instructions(
+            'Balloon task\n\n' +
+            'Pump the balloon to earn 5 points a pump.\n' +
+            'Collect before it pops, or the balloon takes the points with it.'));
+          addBlockWith('Balloons', function (ph) {
+            var t = trialIn(ph.id);
+            addComponent(t.id, 'button', 'r');
+            sc(t, 0, {choices: ['Pump', 'Collect'], prompt: ''});
+            t.custom = [
+              {
+                name: 'stimulus',
+                src: [
+                  'function () {',
+                  '      // A balloon still being pumped keeps its threshold; one that',
+                  '      // ended starts the next draw. Drawn unguarded this would redraw',
+                  '      // on every pump, and a balloon whose pop point moves is not a',
+                  '      // balloon.',
+                  '      var b = window.__bart;',
+                  '      if (!b || b.state !== "pumping") {',
+                  '        b = window.__bart = {',
+                  '          threshold: 2 + Math.floor(Math.random() * 6),',
+                  '          pumps: 0,',
+                  '          state: "pumping"',
+                  '        };',
+                  '      }',
+                  '      var w = 70 + b.pumps * 11, h = 90 + b.pumps * 16;',
+                  '      return \'<div style="text-align:center;font-family:sans-serif">\' +',
+                  '        \'<div style="width:\' + w + \'px;height:\' + h + \'px;\' +',
+                  '        \'background:#e11d48;border-radius:50%;margin:24px auto"></div>\' +',
+                  '        \'<div style="font-size:20px;font-weight:600">\' +',
+                  '        b.pumps + \' pumps</div></div>\';',
+                  '    }',
+                ].join('\n'),
+              },
+              {
+                name: 'on_finish',
+                src: [
+                  'function (data) {',
+                  '      var b = window.__bart;',
+                  '      if (data.response === 1) {',
+                  '        b.state = "collected";',
+                  '        data.points = b.pumps * 5;',
+                  '      } else {',
+                  '        b.pumps += 1;',
+                  '        if (b.pumps >= b.threshold) { b.state = "popped"; data.points = 0; }',
+                  '      }',
+                  '      data.pumps_total = b.pumps;',
+                  '      data.popped = b.state === "popped";',
+                  '      data.threshold = b.threshold;',
+                  '      // What the loop below reads: it can only see the trial that just',
+                  '      // finished, so the decision has to be written onto that row.',
+                  '      data.keep_pumping = b.state === "pumping";',
+                  '    }',
+                ].join('\n'),
+              },
+            ];
+            // The loop test is negated by the compiler, so "stop once
+            // keep_pumping is false" is the spelling.
+            ph.loop = {field: 'keep_pumping', op: 'is', value: 'false'};
+            ph.repetitions = 5;
+          });
+          addBlockWith('Done', ending('Thank you — that is the end of the task.'));
           return finishTemplate();
         }
 
@@ -7353,6 +7439,15 @@ function showVersionHistory() {
           blocks: [
             'Instructions',
             'Questions: a scale, a choice and a free-text question — three trials, because a trial shows one screen and takes one response',
+          ],
+        },
+        bart: {
+          name: 'Balloon Task',
+          icon: '\u{1F388}',
+          blocks: [
+            'Instructions',
+            'Balloons: one button trial under a loop function, so one pass of the block is one pump. The balloon and the running score are drawn by a custom stimulus parameter — the one place a template asks for JavaScript',
+            'Done',
           ],
         },
       };

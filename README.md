@@ -109,8 +109,8 @@ models the key can use.
 
 ## Templates
 
-Five templates ship with the editor. They are demonstrations of structure rather than
-five finished experiments: each shows one thing the others do not.
+Six templates ship with the editor. They are demonstrations of structure rather than
+six finished experiments: each shows one thing the others do not.
 
 | Template | Demonstrates |
 |---|---|
@@ -119,6 +119,7 @@ five finished experiments: each shows one thing the others do not.
 | **Flanker** | sampling — define every condition, run a subset |
 | **Branching** | `conditional_function`, and the trap in writing a two-way branch |
 | **Survey** | the survey family, and one trial per screen |
+| **Balloon Task** | `loop_function` — one pass of the block is one pump — with the balloon drawn by a custom `stimulus` parameter |
 
 ## Versions
 

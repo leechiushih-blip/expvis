@@ -44,9 +44,9 @@ def _find_chrome():
 CHROME = _find_chrome()
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GOLDEN = os.path.join(ROOT, "tests", "golden")
-# The five structure demonstrations. Renamed from branch-demo /
-# randomize-demo, which were named after components that no longer exist.
-TEMPLATES = ["stroop", "simon", "flanker", "branching", "survey"]
+# The six structure demonstrations, one per mechanism. Renamed from branch-demo
+# / randomize-demo, which were named after components that no longer exist.
+TEMPLATES = ["stroop", "simon", "flanker", "branching", "survey", "bart"]
 
 # Injected into the editor page. Runs each template, generates code, and leaves
 # the result in a <pre id="PROBE_OUT"> for --dump-dom to pick up.
@@ -1608,7 +1608,7 @@ function blockCases() {
   return out;
 }
 
-// Media is the one path none of the five templates touches — no template has an
+// Media is the one path none of the six templates touches — no template has an
 // image, a sound or a video — so nothing here was covered before. jsPsych's
 // Preload plugin is only useful if it runs before the trials that need the
 // asset, and the asset is declared as a variable the preload trial refers to, so
@@ -2569,9 +2569,12 @@ def cmd_check():
         # Invariants that must hold whatever the bytes are.
         # A node-level parameter is a claim about the template's purpose, so
         # which ones are allowed depends on the template. `branching` exists to
-        # demonstrate conditional_function; everywhere else one appearing means
-        # something started emitting that nobody asked for.
-        allowed = {"branching": ["conditional_function"]}.get(name, [])
+        # demonstrate conditional_function, `bart` to demonstrate loop_function;
+        # everywhere else one appearing means something started emitting that
+        # nobody asked for. Adding a template that demonstrates a third one is
+        # meant to mean adding it here, not deleting the check.
+        allowed = {"branching": ["conditional_function"],
+                   "bart": ["loop_function"]}.get(name, [])
         stray = [p for p in struct["observedParams"] if p not in allowed]
         if stray:
             broken.append(f"{name}: node-level parameter(s) {stray} "
