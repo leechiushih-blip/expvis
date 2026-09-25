@@ -6602,7 +6602,7 @@ var _compDefaults = {
         box.style.cssText =
           'background:#1e1e2e;border-radius:12px;width:680px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3)';
         box.innerHTML =
-          '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.08)"><span style="color:#cdd6f4;font-weight:700;font-size:0.9rem">📋 jsPsych Code</span><div style="display:flex;gap:8px"><button id="code-copy-btn" style="padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#a6adc8;cursor:pointer;font-size:0.75rem;transition:all 0.15s">📋 Copy</button><button id="code-close-btn" style="padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#a6adc8;cursor:pointer;font-size:0.75rem">✕</button></div></div><textarea id="code-editor-area" style="flex:1;background:#181825;color:#cdd6f4;border:none;padding:16px 20px;font-family:\'JetBrains Mono\',\'Fira Code\',monospace;font-size:0.78rem;line-height:1.6;resize:none;min-height:420px;outline:none;tab-size:2" spellcheck="false">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.08)"><span style="color:#cdd6f4;font-weight:700;font-size:0.9rem">📋 jsPsych Code</span><div style="display:flex;gap:8px"><button id="code-download-btn" style="padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#a6adc8;cursor:pointer;font-size:0.75rem;transition:all 0.15s">⬇ Download</button><button id="code-copy-btn" style="padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#a6adc8;cursor:pointer;font-size:0.75rem;transition:all 0.15s">📋 Copy</button><button id="code-close-btn" style="padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#a6adc8;cursor:pointer;font-size:0.75rem">✕</button></div></div><textarea id="code-editor-area" style="flex:1;background:#181825;color:#cdd6f4;border:none;padding:16px 20px;font-family:\'JetBrains Mono\',\'Fira Code\',monospace;font-size:0.78rem;line-height:1.6;resize:none;min-height:420px;outline:none;tab-size:2" spellcheck="false" readonly>' +
           code +
           '</textarea>';
         overlay.appendChild(box);
@@ -6612,6 +6612,13 @@ var _compDefaults = {
         };
         document.getElementById('code-close-btn').onclick = function () {
           overlay.remove();
+        };
+        // The panel shows the file; this is how it leaves. Same name the export
+        // uses, so a file taken from here and one taken from the toolbar are
+        // recognisably the same thing.
+        document.getElementById('code-download-btn').onclick = function () {
+          var name = (editor.projectName || 'experiment').replace(/[^a-zA-Z0-9_-]/g, '_');
+          _downloadBlob(new Blob([code], {type: 'text/html'}), name + '.html');
         };
         document.getElementById('code-copy-btn').onclick = function () {
           var ta = document.getElementById('code-editor-area');
