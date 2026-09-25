@@ -2199,9 +2199,12 @@ var _compDefaults = {
           'display:flex;align-items:center;justify-content:space-between">' +
           '<span style="font-size:0.66rem;text-transform:uppercase;letter-spacing:0.05em;' +
           'color:var(--text2);font-weight:700">Trial parameters' +
-          '<span style="text-transform:none;letter-spacing:0;font-weight:400"> · run once per screen</span>' +
+          '<span style="display:block;text-transform:none;letter-spacing:0;font-weight:400;' +
+          'margin-top:2px">run once per screen</span>' +
           '</span>' +
-          '<button onclick="_addCustom(\'' + t.id + '\')" style="background:none;border:1px solid ' +
+          // `flex-shrink:0` so a longer subtitle pushes the label's own line, not
+          // the button off the row.
+          '<button onclick="_addCustom(\'' + t.id + '\')" style="flex-shrink:0;background:none;border:1px solid ' +
           'var(--border);color:var(--accent);cursor:pointer;font-size:0.66rem;padding:2px 8px;' +
           'border-radius:4px;font-family:inherit">+ Add</button></div>';
         // Where a parameter written here ends up. The two areas are identical to
@@ -6259,10 +6262,11 @@ var _compDefaults = {
             'justify-content:space-between">' +
             '<span style="font-size:0.66rem;text-transform:uppercase;letter-spacing:0.05em;' +
             'color:var(--text2);font-weight:700">Block parameters' +
-            '<span style="text-transform:none;letter-spacing:0;font-weight:400"> · run once for the whole block</span>' +
+            '<span style="display:block;text-transform:none;letter-spacing:0;font-weight:400;' +
+            'margin-top:2px">run once for the whole block</span>' +
             '</span>' +
             '<button type="button" onclick="_addNodeCustom(\'' + ph.id + '\')" ' +
-            'style="background:none;border:1px solid var(--border);color:var(--accent);' +
+            'style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--accent);' +
             'cursor:pointer;font-size:0.66rem;padding:2px 8px;border-radius:4px;' +
             'font-family:inherit">+ Add</button></div>';
           // The twin of the line in Trial Settings. Same shape, different object
