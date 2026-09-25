@@ -25,6 +25,14 @@ These are the gaps a researcher would hit, not a wish list.
 | **Animation cannot be scored** | Its `response` is an array — the frame sequence — and `correctKey` is read only on the keyboard path | A "press when you see the target frame" design needs `on_finish` written by hand |
 | **One screen per trial** | One plugin runs per trial, so one response component and one screen | Two stimuli shown one after the other is two trials, not one |
 | **`render_on_canvas` for the IAT family** | No canvas rendering path | `canvas_size` is `[height, width]`, in that order, which is a silent trap for anyone adding it |
+| **No scope shared between trials** | A trial's parameters are emitted inside the trial and a block's inside the node, so two trials cannot share a helper function and there is nowhere to declare a variable that outlives one trial. The workaround is to attach it to `window`, which is what the Balloon Task template does | an experiment-level code block, emitted once before the timeline and in scope for every custom parameter. The design question is what it may contain: the rest of the schema is held to "the model cannot produce what the editor cannot", and arbitrary JavaScript is not that |
+| **Complex logic is hand-written** | Nested conditionals, dynamic branching, and state shared across blocks are not expressible through node parameters, and `call-function` — the plugin that would run them — is unreachable | the code block above covers the mechanism; what is undecided is which of these deserve an interface of their own rather than a text field |
+
+## What the canvas does not show
+
+| What | Why it matters | What it would take |
+|---|---|---|
+| **A block's settings are not on its face** | Stroop, Simon and Flanker all badge their trials block *1 procedure × N conditions*. What separates Simon from Flanker is in-trial feedback against sampling, and both live in the settings dialog — so two blocks that behave differently look the same on the canvas, and the editor's own overview figure had to name the mechanism in a label because the picture could not | summarise the parameters that are set beside the mode badge: `repetitions: 48`, `sample: 2 of 4` |
 
 ## Smaller things
 
