@@ -6,11 +6,11 @@
 # is published because it is named, not because nobody thought to exclude it.
 # ---------------------------------------------------------------------------
 
-# docs/ is working material — the handoff notes, the paper drafts, the
-# correspondence around submission. None of it is published. The coverage table
-# is written here as well, but it is a generated file: `tests/expvis_probe.py
-# coverage` rewrites it, so the conclusion travels inside the probe rather than
-# in a copy that has to be kept in step with it.
+# docs/ is working material — drafting, figures and notes that belong with the
+# project rather than with this repository. None of it is published. The
+# coverage table is written here as well, but it is a generated file:
+# `tests/expvis_probe.py coverage` rewrites it, so the conclusion travels
+# inside the probe rather than in a copy that has to be kept in step with it.
 docs/*
 
 # tests/ is ignored except the probe and its baseline — the safety net for the

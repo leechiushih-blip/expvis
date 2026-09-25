@@ -1393,7 +1393,8 @@ function blockCases() {
     // The split argument is DOUBLED on purpose: PROBE goes through a Python
     // percent-format, where an undoubled escape becomes a real newline in the
     // JS source, cutting the statement in half and stopping the editor from
-    // loading at all. See the escape traps in HANDOFF.
+    // loading at all. Every backslash inside the JavaScript embedded in this
+    // file has to be read twice, and for the same reason.
     schema.split('\\n').forEach(function (line) {
       if (line.indexOf('{type:') < 0 || line.indexOf(':') < 0) return;
       var m = line.match(/([A-Za-z]+):\s*\{type:"([A-Za-z]+)"/);
