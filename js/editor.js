@@ -2198,10 +2198,18 @@ var _compDefaults = {
         h += '<div style="padding-bottom:8px;border-bottom:1px solid var(--border);margin:14px 0 10px;' +
           'display:flex;align-items:center;justify-content:space-between">' +
           '<span style="font-size:0.66rem;text-transform:uppercase;letter-spacing:0.05em;' +
-          'color:var(--text2);font-weight:700">Custom Parameters</span>' +
+          'color:var(--text2);font-weight:700">Trial parameters' +
+          '<span style="text-transform:none;letter-spacing:0;font-weight:400"> · run once per screen</span>' +
+          '</span>' +
           '<button onclick="_addCustom(\'' + t.id + '\')" style="background:none;border:1px solid ' +
           'var(--border);color:var(--accent);cursor:pointer;font-size:0.66rem;padding:2px 8px;' +
           'border-radius:4px;font-family:inherit">+ Add</button></div>';
+        // Where a parameter written here ends up. The two areas are identical to
+        // look at and land in different objects — this is the difference shown
+        // rather than described.
+        h += '<p style="font-size:0.63rem;color:var(--text2);font-family:ui-monospace,Menlo,monospace;' +
+          'line-height:1.6;margin:0 0 10px;white-space:pre-wrap">lands in the trial: ' +
+          '{ type: jsPsych…, stimulus: …, <b>&lt;name&gt;</b>: &lt;your code&gt; }</p>';
         if (!rows.length) {
           h += '<p style="font-size:0.66rem;color:var(--text2);line-height:1.5;margin:0 0 4px">' +
             'For parameters a field cannot express — a <code>stimulus</code> built at run time, ' +
@@ -2217,7 +2225,8 @@ var _compDefaults = {
             'style="' + _SET_INPUT_CSS + ';flex:1;font-family:ui-monospace,Menlo,monospace">' +
             '<button onclick="_removeCustom(\'' + t.id + '\',' + i + ')" title="Remove" ' +
             'style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;' +
-            'opacity:0.5;padding:0 4px">✕</button></div>';
+            'opacity:0.5;padding:0 4px">✕</button></div>' +
+            _paramWarnHtml('trial', t.id, i, row.name);
           h += '<textarea spellcheck="false" placeholder="function () { … }" ' +
             'onchange="_setCustom(\'' + t.id + '\',' + i + ',\'src\',this.value)" ' +
             'style="width:100%;height:76px;padding:6px 8px;border:1px solid var(--border);' +
@@ -2369,6 +2378,7 @@ var _compDefaults = {
             return;
           }
           row.name = v;
+          _updateParamWarn('trial', t.id, i, v);
         } else {
           var src = String(value);
           if (src.trim()) {
@@ -2390,6 +2400,65 @@ var _compDefaults = {
       // The block dialog is an overlay, so renderAll() does not repaint it.
       // These handlers need the dialog's own repaint, which it registers here.
       var _repaintBlockSettings = null;
+      // Which level a parameter belongs to. The two custom-parameter areas look
+      // identical and mean different things, and jsPsych ignores a parameter it
+      // does not recognise — so writing a block parameter on a trial, or a trial
+      // hook on a block, does nothing at all. No error, no warning, and the
+      // experiment quietly does not do what was written. Both namespaces are
+      // small and fixed, so the mistake can be named when it is made.
+      //
+      // The trial list holds the parameters every plugin has whatever the plugin
+      // is, which is what makes it knowable here without knowing the plugin.
+      var _NODE_PARAM_NAMES = [
+        'timeline', 'timeline_variables', 'name', 'repetitions', 'loop_function',
+        'conditional_function', 'randomize_order', 'sample',
+        'on_timeline_start', 'on_timeline_finish',
+      ];
+      var _TRIAL_PARAM_NAMES = [
+        'type', 'data', 'on_start', 'on_finish', 'on_load', 'post_trial_gap', 'extensions',
+      ];
+
+      // The sentence to show when the name belongs at the other level, or null.
+      // Silent for a name it does not know at either level: that is probably a
+      // plugin's own parameter, and this cannot know those.
+      function _misplacedParam(name, level) {
+        var n = String(name || '').trim();
+        if (!n) return null;
+        var here = level === 'node' ? _NODE_PARAM_NAMES : _TRIAL_PARAM_NAMES;
+        var there = level === 'node' ? _TRIAL_PARAM_NAMES : _NODE_PARAM_NAMES;
+        if (here.indexOf(n) >= 0 || there.indexOf(n) < 0) return null;
+        if (level === 'node') {
+          return n + ' is a trial parameter — it runs once per screen, not once for ' +
+            'the block, and jsPsych never reads it on a node. The node hooks are ' +
+            'on_timeline_start and on_timeline_finish.';
+        }
+        return n + ' is a block parameter — it runs once for the whole block, not ' +
+          'once per screen. It belongs in this block’s ⚙ Settings, under ' +
+          'Block parameters.';
+      }
+
+      // The warning slot under a parameter name. Rendered on repaint and then
+      // updated in place by the setter, because the setter deliberately does not
+      // repaint: a repaint on every keystroke takes the focus with it, which is
+      // why the whole panel is built as one string of per-value handlers.
+      function _paramWarnId(level, ownerId, i) {
+        return (level === 'node' ? 'nwarn-' : 'twarn-') + ownerId + '-' + i;
+      }
+      function _updateParamWarn(level, ownerId, i, name) {
+        var el = document.getElementById(_paramWarnId(level, ownerId, i));
+        if (!el) return;
+        var msg = _misplacedParam(name, level);
+        el.textContent = msg || '';
+        el.style.display = msg ? 'block' : 'none';
+      }
+      function _paramWarnHtml(level, ownerId, i, name) {
+        var msg = _misplacedParam(name, level);
+        return '<div id="' + _paramWarnId(level, ownerId, i) + '" style="' +
+          (msg ? '' : 'display:none;') +
+          'margin-top:6px;font-size:0.64rem;color:var(--amber);line-height:1.5">' +
+          (msg ? _escAttr(msg) : '') + '</div>';
+      }
+
       // Both custom-parameter controls take an EXPRESSION, because the value is
       // emitted as `key: <text>`. The mistake people make is a statement — an
       // `if (…) { … }`, a bare `return` — and "Unexpected token 'if'" does not
@@ -2515,6 +2584,7 @@ var _compDefaults = {
             return;
           }
           row.name = v;
+          _updateParamWarn('node', ph.id, i, v);
         } else {
           var src = String(value);
           if (src.trim()) {
@@ -6188,11 +6258,19 @@ var _compDefaults = {
           h += '<div style="padding-bottom:8px;display:flex;align-items:center;' +
             'justify-content:space-between">' +
             '<span style="font-size:0.66rem;text-transform:uppercase;letter-spacing:0.05em;' +
-            'color:var(--text2);font-weight:700">Node Parameters</span>' +
+            'color:var(--text2);font-weight:700">Block parameters' +
+            '<span style="text-transform:none;letter-spacing:0;font-weight:400"> · run once for the whole block</span>' +
+            '</span>' +
             '<button type="button" onclick="_addNodeCustom(\'' + ph.id + '\')" ' +
             'style="background:none;border:1px solid var(--border);color:var(--accent);' +
             'cursor:pointer;font-size:0.66rem;padding:2px 8px;border-radius:4px;' +
             'font-family:inherit">+ Add</button></div>';
+          // The twin of the line in Trial Settings. Same shape, different object
+          // — the whole difficulty with these two areas is that nothing shows
+          // which one a name lands in.
+          h += '<p style="font-size:0.63rem;color:var(--text2);font-family:ui-monospace,Menlo,monospace;' +
+            'line-height:1.6;margin:0 0 8px;white-space:pre-wrap">lands in the block’s node: ' +
+            '{ timeline: […], <b>&lt;name&gt;</b>: &lt;your code&gt; }</p>';
           if (!nodeRows.length) {
             h += '<p style="font-size:0.66rem;color:var(--text2);line-height:1.5;margin:0">' +
               'Parameters of this node rather than of a trial — <code>loop_function</code> ' +
@@ -6209,7 +6287,8 @@ var _compDefaults = {
               'style="' + _SET_INPUT_CSS + ';flex:1;font-family:ui-monospace,Menlo,monospace">' +
               '<button type="button" onclick="_removeNodeCustom(\'' + ph.id + '\',' + i + ')" ' +
               'title="Remove" style="background:none;border:none;color:var(--red);' +
-              'cursor:pointer;font-size:0.7rem;opacity:0.5;padding:0 4px">✕</button></div>';
+              'cursor:pointer;font-size:0.7rem;opacity:0.5;padding:0 4px">✕</button></div>' +
+              _paramWarnHtml('node', ph.id, i, row.name);
             h += '<textarea spellcheck="false" placeholder="function (data) { … }" ' +
               'onchange="_setNodeCustom(\'' + ph.id + '\',' + i + ',\'src\',this.value)" ' +
               'style="width:100%;height:76px;padding:6px 8px;border:1px solid var(--border);' +
